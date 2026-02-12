@@ -1,36 +1,98 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# EngHub v2
 
-## Getting Started
+Plataforma centralizada de ferramentas de engenharia.
 
-First, run the development server:
+## Stack
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+- **Frontend:** Next.js 14, React, TypeScript, Tailwind CSS, shadcn/ui
+- **Auth:** Clerk
+- **Backend:** FastAPI, Python 3.11
+- **Deploy:** Vercel (frontend) + Railway (backend)
+
+## Estrutura
+
+```
+enghub-v2/
+├── src/                    # Frontend Next.js
+│   ├── app/
+│   │   ├── dashboard/      # Páginas protegidas
+│   │   ├── sign-in/        # Login (Clerk)
+│   │   └── sign-up/        # Cadastro (Clerk)
+│   └── components/
+│       ├── layout/         # Header, Sidebar, Shell
+│       └── ui/             # shadcn/ui components
+├── backend/                # API FastAPI
+│   ├── app/
+│   │   ├── routers/        # Endpoints
+│   │   ├── services/       # Lógica de negócio
+│   │   └── models/         # Schemas Pydantic
+│   ├── Dockerfile
+│   └── requirements.txt
+└── package.json
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Configuração
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### 1. Frontend
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+# Instalar dependências
+npm install
 
-## Learn More
+# Configurar variáveis de ambiente
+# Edite .env.local com suas chaves do Clerk
 
-To learn more about Next.js, take a look at the following resources:
+# Executar em desenvolvimento
+npm run dev
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### 2. Backend
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```bash
+cd backend
 
-## Deploy on Vercel
+# Criar ambiente virtual
+python -m venv venv
+source venv/bin/activate  # Linux/Mac
+# ou: venv\Scripts\activate  # Windows
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+# Instalar dependências
+pip install -r requirements.txt
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+# Configurar variáveis de ambiente
+cp .env.example .env
+# Edite .env com sua GOOGLE_API_KEY
+
+# Executar em desenvolvimento
+uvicorn app.main:app --reload
+```
+
+## Configuração do Clerk
+
+1. Crie uma conta em [clerk.com](https://clerk.com)
+2. Crie uma nova aplicação
+3. Copie `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` e `CLERK_SECRET_KEY`
+4. Cole no arquivo `.env.local`
+
+## Features
+
+| Feature | Status | Descrição |
+|---------|--------|-----------|
+| Tradutor AI | Live | Tradução com Google Gemini |
+| Extrator de Tabelas | Beta | Extrai tabelas de PDFs para Excel |
+| PDF para Word | Beta | Converte PDFs para DOCX |
+| RAG Chat | Dev | Chat com documentos (em desenvolvimento) |
+
+## Deploy
+
+### Frontend (Vercel)
+
+```bash
+vercel deploy
+```
+
+### Backend (Railway)
+
+1. Conecte o repositório ao Railway
+2. Configure as variáveis de ambiente
+3. Deploy automático via push
