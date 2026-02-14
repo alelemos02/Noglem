@@ -1,4 +1,4 @@
-# EngHub v2
+# Julia v2
 
 Plataforma centralizada de ferramentas de engenharia.
 
@@ -12,7 +12,7 @@ Plataforma centralizada de ferramentas de engenharia.
 ## Estrutura
 
 ```
-enghub-v2/
+julia/
 ├── src/                    # Frontend Next.js
 │   ├── app/
 │   │   ├── dashboard/      # Páginas protegidas

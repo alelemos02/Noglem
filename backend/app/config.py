@@ -6,9 +6,9 @@ load_dotenv()
 
 class Settings:
     # API Settings
-    API_TITLE = "EngHub API"
+    API_TITLE = "Julia API"
     API_VERSION = "2.0.0"
-    API_DESCRIPTION = "Backend unificado para o EngHub"
+    API_DESCRIPTION = "Backend unificado para o Julia"
 
     # CORS
     CORS_ORIGINS = [
@@ -16,7 +16,7 @@ class Settings:
         "http://localhost:3001",
         "https://noglem.com.br",
         "https://www.noglem.com.br",
-        "https://enghub-v2.vercel.app",
+        "https://julia.vercel.app",
     ]
 
     # Google Gemini
@@ -37,8 +37,8 @@ class Settings:
     ALLOWED_EXTENSIONS = {".pdf"}
 
     # Paths
-    UPLOAD_DIR = os.getenv("UPLOAD_DIR", "/tmp/enghub-uploads")
-    OUTPUT_DIR = os.getenv("OUTPUT_DIR", "/tmp/enghub-outputs")
+    UPLOAD_DIR = os.getenv("UPLOAD_DIR", "/tmp/julia-uploads")
+    OUTPUT_DIR = os.getenv("OUTPUT_DIR", "/tmp/julia-outputs")
 
 
 settings = Settings()
