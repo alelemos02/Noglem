@@ -9,12 +9,13 @@ Essas instruções foram geradas automaticamente para facilitar o deploy da apli
 **Ação Necessária:**
 1. Acesse o painel do [Clerk Dashboard](https://dashboard.clerk.com/) e gere novas chaves (`Publishable Key` e `Secret Key`) para o ambiente de Produção.
 2. Acesse o [Google AI Studio](https://aistudio.google.com/) e gere uma nova API Key.
-3. Use a `INTERNAL_API_KEY` gerada abaixo para a comunicação segura entre Frontend e Backend.
+3. Gere uma `INTERNAL_API_KEY` forte para a comunicação segura entre Frontend e Backend.
 
-### Chave Interna Gerada Segura
-Copie este valor exato para ambos os ambientes (Vercel e Railway):
-```
-a1246d7e32ca34a567882f833f13c2c48a22d49d575319b3c20b897883a2b432
+### Chave Interna
+Gere uma chave aleatória e use o mesmo valor em ambos os ambientes (Vercel e Railway).
+Exemplo de geração no terminal:
+```bash
+openssl rand -hex 32
 ```
 
 ---
@@ -29,7 +30,7 @@ a1246d7e32ca34a567882f833f13c2c48a22d49d575319b3c20b897883a2b432
 | Variável | Valor | Descrição |
 |---|---|---|
 | `GOOGLE_API_KEY` | *(Sua nova chave do Google)* | API do Gemini |
-| `INTERNAL_API_KEY` | `a1246d7e32ca34a567882f833f13c2c48a22d49d575319b3c20b897883a2b432` | Chave de segurança interna |
+| `INTERNAL_API_KEY` | *(gere com `openssl rand -hex 32`)* | Chave de segurança interna |
 | `UPLOAD_DIR` | `/tmp/julia-uploads` | Diretório temporário |
 | `OUTPUT_DIR` | `/tmp/julia-outputs` | Diretório temporário |
 | `RATE_LIMIT_TRANSLATE_PER_MIN` | `30` | Limite de traduções |
@@ -51,12 +52,12 @@ a1246d7e32ca34a567882f833f13c2c48a22d49d575319b3c20b897883a2b432
 
 | Variável | Valor | Descrição |
 |---|---|---|
-| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | `pk_test_cHJlc2VudC1nYXJmaXNoLTgzLmNsZXJrLmFjY291bnRzLmRldiQ` | Chave pública (Dev) |
-| `CLERK_SECRET_KEY` | `sk_test_xPXCwykExEY05CSIhAc5aYc6YJ8tPE3lXC0dw8gOpj` | Chave secreta (Dev) |
+| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | *(sua chave Clerk Publishable)* | Chave pública |
+| `CLERK_SECRET_KEY` | *(sua chave Clerk Secret)* | Chave secreta |
 | `NEXT_PUBLIC_CLERK_SIGN_IN_URL` | `/sign-in` | Rota de login |
 | `NEXT_PUBLIC_CLERK_SIGN_UP_URL` | `/sign-up` | Rota de cadastro |
 | `NEXT_PUBLIC_API_URL` | *(URL do Railway, sem a barra final)* | Ex: `https://julia-backend.up.railway.app` |
-| `INTERNAL_API_KEY` | `a1246d7e32ca34a567882f833f13c2c48a22d49d575319b3c20b897883a2b432` | Chave de segurança interna |
+| `INTERNAL_API_KEY` | *(mesmo valor do Railway)* | Chave de segurança interna |
 
 6. Faça o Deploy.
 
