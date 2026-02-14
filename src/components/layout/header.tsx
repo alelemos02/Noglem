@@ -30,9 +30,9 @@ export function Header({ onMenuClick }: HeaderProps) {
 
         <div className="flex items-center gap-2">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-            <span className="text-sm font-bold">E</span>
+            <span className="text-sm font-bold">J</span>
           </div>
-          <span className="text-lg font-semibold">EngHub</span>
+          <span className="text-lg font-semibold">Julia</span>
         </div>
       </div>
 

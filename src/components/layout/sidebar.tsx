@@ -91,7 +91,7 @@ export function Sidebar({ className }: SidebarProps) {
 
       <div className="border-t border-border p-4">
         <p className="text-xs text-muted-foreground">
-          EngHub v2.0.0
+          Julia v2.0.0
         </p>
       </div>
     </aside>

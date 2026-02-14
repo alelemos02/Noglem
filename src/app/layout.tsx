@@ -10,7 +10,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "EngHub - Portal de Engenharia",
+  title: "Julia - Portal de Engenharia",
   description: "Plataforma centralizada de ferramentas de engenharia - Tradução AI, Extração de PDFs e Conversão de documentos",
   keywords: ["engenharia", "ferramentas", "pdf", "tradução", "IA", "documentos"],
 };
@@ -39,7 +39,7 @@ export default function RootLayout({
               </div>
               <h1 className="text-2xl font-bold">Configuração Necessária</h1>
               <p className="text-muted-foreground">
-                Para usar o EngHub, você precisa configurar as chaves do Clerk.
+                Para usar o Julia, você precisa configurar as chaves do Clerk.
               </p>
               <div className="rounded-lg border border-border bg-muted p-4 text-left text-sm">
                 <p className="mb-2 font-medium">Passos:</p>

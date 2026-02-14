@@ -36,9 +36,9 @@ export default async function HomePage() {
         <div className="container mx-auto flex h-16 items-center justify-between px-4">
           <div className="flex items-center gap-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-              <span className="text-sm font-bold">E</span>
+              <span className="text-sm font-bold">J</span>
             </div>
-            <span className="text-lg font-semibold">EngHub</span>
+            <span className="text-lg font-semibold">Julia</span>
           </div>
           <div className="flex items-center gap-4">
             <Link href="/sign-in">
@@ -57,7 +57,7 @@ export default async function HomePage() {
           Ferramentas de Engenharia em um só lugar
         </h1>
         <p className="mt-6 max-w-2xl text-lg text-muted-foreground">
-          EngHub é sua plataforma centralizada para ferramentas de engenharia.
+          Julia é sua plataforma centralizada para ferramentas de engenharia.
           Traduza documentos e extraia dados de PDFs com IA.
         </p>
         <div className="mt-10 flex gap-4">
@@ -103,7 +103,7 @@ export default async function HomePage() {
       {/* Footer */}
       <footer className="border-t border-border py-8">
         <div className="container mx-auto px-4 text-center text-sm text-muted-foreground">
-          <p>&copy; {new Date().getFullYear()} EngHub. Todos os direitos reservados.</p>
+          <p>&copy; {new Date().getFullYear()} Julia. Todos os direitos reservados.</p>
         </div>
       </footer>
     </div>

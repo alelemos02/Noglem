@@ -1,4 +1,4 @@
-# EngHub Backend API
+# Julia Backend API
 FROM python:3.11-slim
 
 # Variáveis de ambiente
@@ -23,7 +23,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Criar diretórios para uploads e outputs
-RUN mkdir -p /tmp/enghub-uploads /tmp/enghub-outputs
+RUN mkdir -p /tmp/julia-uploads /tmp/julia-outputs
 
 # Expor porta
 EXPOSE 8000
