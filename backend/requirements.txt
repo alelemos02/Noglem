@@ -15,3 +15,15 @@ python-docx>=1.1.0
 # Data Processing
 pandas>=2.2.0
 openpyxl>=3.1.2
+
+# RAG & Database
+sqlalchemy>=2.0.0
+langchain>=0.1.0
+langchain-community>=0.0.10
+langchain-openai>=0.0.5
+langchain-chroma>=0.1.0
+chromadb>=0.4.22
+pysqlite3-binary>=0.5.0; sys_platform == 'linux'
+pdf2image>=1.17.0
+pytesseract>=0.3.10
+flashrank>=0.2.0

@@ -39,6 +39,10 @@ class Settings:
     # Paths
     UPLOAD_DIR = os.getenv("UPLOAD_DIR", "/tmp/julia-uploads")
     OUTPUT_DIR = os.getenv("OUTPUT_DIR", "/tmp/julia-outputs")
+    # Base dir for data persistence
+    BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    DATA_DIR = os.path.join(BASE_DIR, "data")
+    CHROMA_DB_DIR = os.getenv("CHROMA_DB_DIR", os.path.join(DATA_DIR, "chroma_db"))
 
 
 settings = Settings()
