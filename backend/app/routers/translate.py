@@ -21,15 +21,18 @@ async def translate_text(
         raise HTTPException(status_code=400, detail="Texto não pode estar vazio")
 
     try:
-        translated = await gemini_service.translate(
+        result = await gemini_service.translate(
             text=request.text,
             source_lang=request.source_lang,
             target_lang=request.target_lang,
+            improve_mode=request.improve_mode,
         )
 
         return TranslateResponse(
             original_text=request.text,
-            translated_text=translated,
+            translated_text=result.get("translated_text", ""),
+            improved_text=result.get("improved_text"),
+            detected_language=result.get("detected_language"),
             source_lang=request.source_lang,
             target_lang=request.target_lang,
         )

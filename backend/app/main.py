@@ -3,7 +3,13 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.routers import translate, pdf
+from app.routers import translate, pdf, rag
+from app.database import engine, Base
+# Importar modelos para garantir que o SQLAlchemy os conheça antes de criar tabelas
+import app.models.rag_models
+
+# Criar tabelas do banco de dados (SQLite)
+Base.metadata.create_all(bind=engine)
 
 # Criar diretórios necessários
 os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
@@ -44,11 +50,7 @@ async def health_check():
 # Registrar routers
 app.include_router(translate.router, prefix="/api/translate", tags=["Translate"])
 app.include_router(pdf.router, prefix="/api/pdf", tags=["PDF"])
-
-
-# Para RAG (futuro)
-# from app.routers import rag
-# app.include_router(rag.router, prefix="/api/rag", tags=["RAG"])
+app.include_router(rag.router, prefix="/api/rag", tags=["RAG"])
 
 if __name__ == "__main__":
     import uvicorn

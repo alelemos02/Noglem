@@ -1,0 +1,8 @@
+/* ==========================================================================
+   JulIA Design System - Token Entry Point
+   Importar apenas este arquivo no globals.css de cada projeto
+   ========================================================================== */
+
+@import './colors.css';
+@import './typography.css';
+@import './spacing.css';

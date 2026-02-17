@@ -6,13 +6,15 @@ from fastapi.responses import FileResponse
 from app.config import settings
 from app.dependencies.rate_limit import enforce_pdf_rate_limit
 from app.dependencies.security import require_internal_api_key
-from app.models.schemas import ExtractResponse, ConvertResponse
+from app.models.schemas import ExtractResponse, ConvertResponse, FormatResponse
 from app.services.pdf_extract_service import PdfExtractService
 from app.services.pdf_convert_service import PdfConvertService
+from app.services.word_format_service import WordFormatService
 
 router = APIRouter(dependencies=[Depends(require_internal_api_key)])
 extract_service = PdfExtractService()
 convert_service = PdfConvertService()
+format_service = WordFormatService()
 
 
 def validate_pdf(file: UploadFile):
@@ -145,6 +147,7 @@ async def convert_to_word(
 @router.get("/download/{file_id}")
 async def download_converted(
     file_id: str,
+    filename: str = "converted.docx",
     _: None = Depends(enforce_pdf_rate_limit),
 ):
     """
@@ -158,5 +161,59 @@ async def download_converted(
     return FileResponse(
         docx_path,
         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        filename="converted.docx",
+        filename=filename,
     )
+
+
+def validate_docx(file: UploadFile):
+    """Valida se o arquivo é um DOCX válido."""
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="Nome do arquivo não fornecido")
+
+    ext = os.path.splitext(file.filename)[1].lower()
+    if ext != ".docx":
+        raise HTTPException(
+            status_code=400, detail=f"Tipo de arquivo inválido. Esperado .docx, recebido: {ext}"
+        )
+
+
+@router.post("/format", response_model=FormatResponse)
+async def format_docx(
+    file: UploadFile = File(...),
+    _: None = Depends(enforce_pdf_rate_limit),
+):
+    """
+    Formata e limpa um documento Word (.docx).
+    """
+    validate_docx(file)
+
+    file_id = str(uuid.uuid4())
+    temp_docx = os.path.join(settings.UPLOAD_DIR, f"{file_id}.docx")
+    output_docx = os.path.join(settings.OUTPUT_DIR, f"{file_id}.docx")
+
+    try:
+        # Salvar upload
+        content = await file.read()
+        original_size = len(content)
+
+        with open(temp_docx, "wb") as f:
+            f.write(content)
+
+        # Formatar
+        format_service.format_document(temp_docx, output_docx)
+
+        formatted_size = os.path.getsize(output_docx)
+
+        return FormatResponse(
+            filename=file.filename or "document.docx",
+            original_size=original_size,
+            formatted_size=formatted_size,
+            download_url=f"/api/pdf/download/{file_id}?filename=formatted.docx",
+        )
+
+    except Exception as e:
+        # Limpar arquivos em caso de erro
+        for path in [temp_docx, output_docx]:
+            if os.path.exists(path):
+                os.remove(path)
+        raise HTTPException(status_code=500, detail=f"Erro na formatação: {str(e)}")
