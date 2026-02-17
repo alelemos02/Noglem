@@ -34,7 +34,7 @@ class Settings:
 
     # File Upload
     MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB
-    ALLOWED_EXTENSIONS = {".pdf"}
+    ALLOWED_EXTENSIONS = {".pdf", ".docx"}
 
     # Paths
     UPLOAD_DIR = os.getenv("UPLOAD_DIR", "/tmp/julia-uploads")

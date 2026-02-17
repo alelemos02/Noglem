@@ -7,11 +7,14 @@ class TranslateRequest(BaseModel):
     text: str
     source_lang: str = "auto"
     target_lang: str = "en"
+    improve_mode: bool = False
 
 
 class TranslateResponse(BaseModel):
     original_text: str
     translated_text: str
+    improved_text: Optional[str] = None
+    detected_language: Optional[str] = None
     source_lang: str
     target_lang: str
 
@@ -31,11 +34,17 @@ class ExtractResponse(BaseModel):
     tables: List[TableData]
 
 
-# PDF Conversion Models
 class ConvertResponse(BaseModel):
     filename: str
     original_size: int
     converted_size: int
+    download_url: str
+
+
+class FormatResponse(BaseModel):
+    filename: str
+    original_size: int
+    formatted_size: int
     download_url: str
 
 

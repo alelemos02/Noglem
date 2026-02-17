@@ -1,6 +1,9 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+/* JulIA Design System tokens */
+@import "../../../_design-system/tokens/index.css";
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
