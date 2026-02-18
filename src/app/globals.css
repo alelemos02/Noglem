@@ -1,154 +1,252 @@
+@import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
 @import "tailwindcss";
 @import "tw-animate-css";
 
-/* ==========================================================================
-   JulIA Design System - Typography Tokens (INLINED)
-   ========================================================================== */
-@import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
-
-@plugin "tailwindcss-animate";
-
 @custom-variant dark (&:is(.dark *));
 
+/* ==========================================================================
+   Tailwind v4 Theme Registration
+   Maps JulIA Design System tokens to Tailwind utility classes
+   ========================================================================== */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-  --color-sidebar-ring: var(--sidebar-ring);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar: var(--sidebar);
-  --color-chart-5: var(--chart-5);
-  --color-chart-4: var(--chart-4);
-  --color-chart-3: var(--chart-3);
-  --color-chart-2: var(--chart-2);
-  --color-chart-1: var(--chart-1);
-  --color-ring: var(--ring);
-  --color-input: var(--input);
-  --color-border: var(--border);
-  --color-destructive: var(--destructive);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-accent: var(--accent);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-muted: var(--muted);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-secondary: var(--secondary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-primary: var(--primary);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-popover: var(--popover);
-  --color-card-foreground: var(--card-foreground);
-  --color-card: var(--card);
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
-  --radius-2xl: calc(var(--radius) + 8px);
-  --radius-3xl: calc(var(--radius) + 12px);
-  --radius-4xl: calc(var(--radius) + 16px);
-}
-
-/* 
-   Mapeamento JulIA Design System -> Shadcn API 
-   O Design System é nativamente Dark Mode no :root
-*/
-
-:root {
-  /* Font families */
+  /* ---- Font Families ---- */
+  --font-sans: 'Inter', sans-serif;
   --font-brand: 'Rajdhani', sans-serif;
   --font-heading: 'Space Grotesk', sans-serif;
   --font-body: 'Inter', sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
 
-  /* Font sizes */
-  --text-xs: 0.75rem;
-  --text-sm: 0.875rem;
-  --text-base: 1rem;
-  --text-lg: 1.125rem;
-  --text-xl: 1.25rem;
-  --text-2xl: 1.5rem;
-  --text-3xl: 1.875rem;
-  --text-4xl: 2.25rem;
-  --text-5xl: 3rem;
+  /* ---- Design System Colors ---- */
+  --color-bg-primary: var(--color-bg-primary);
+  --color-bg-secondary: var(--color-bg-secondary);
+  --color-bg-tertiary: var(--color-bg-tertiary);
+  --color-bg-elevated: var(--color-bg-elevated);
+  --color-bg-overlay: var(--color-bg-overlay);
 
-  /* Spacing */
+  --color-surface: var(--color-surface);
+  --color-surface-hover: var(--color-surface-hover);
+  --color-surface-active: var(--color-surface-active);
+
+  --color-border: var(--color-border);
+  --color-border-hover: var(--color-border-hover);
+  --color-border-focus: var(--color-border-focus);
+
+  --color-text-primary: var(--color-text-primary);
+  --color-text-secondary: var(--color-text-secondary);
+  --color-text-tertiary: var(--color-text-tertiary);
+  --color-text-disabled: var(--color-text-disabled);
+  --color-text-inverse: var(--color-text-inverse);
+
+  --color-accent: var(--color-accent);
+  --color-accent-hover: var(--color-accent-hover);
+  --color-accent-active: var(--color-accent-active);
+  --color-accent-muted: var(--color-accent-muted);
+  --color-accent-text: var(--color-accent-text);
+
+  --color-success: var(--color-success);
+  --color-success-muted: var(--color-success-muted);
+  --color-success-text: var(--color-success-text);
+
+  --color-warning: var(--color-warning);
+  --color-warning-muted: var(--color-warning-muted);
+  --color-warning-text: var(--color-warning-text);
+
+  --color-error: var(--color-error);
+  --color-error-muted: var(--color-error-muted);
+  --color-error-text: var(--color-error-text);
+
+  --color-info: var(--color-info);
+  --color-info-muted: var(--color-info-muted);
+  --color-info-text: var(--color-info-text);
+
+  /* ---- Shadcn Compat Colors ---- */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  /* ---- Border Radius ---- */
   --radius-sm: 2px;
   --radius-md: 4px;
   --radius-lg: 8px;
   --radius-xl: 12px;
+
+  /* ---- Shadows ---- */
+  --shadow-sm: var(--shadow-sm);
+  --shadow-md: var(--shadow-md);
+  --shadow-lg: var(--shadow-lg);
+  --shadow-xl: var(--shadow-xl);
+  --shadow-accent: var(--shadow-accent);
+
+  /* ---- Animations ---- */
+  --animate-fade-in: fade-in var(--duration-normal) var(--easing-out);
+  --animate-fade-in-up: fade-in-up var(--duration-slow) var(--easing-out);
+  --animate-shimmer: shimmer 1.5s infinite linear;
+}
+
+/* ---- Keyframes ---- */
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+/* ==========================================================================
+   JulIA Design System - Token Values
+   Dark Mode (default) in :root, Light Mode override below
+   ========================================================================== */
+:root {
+  /* ---- Typography ---- */
+  --font-brand: 'Rajdhani', sans-serif;
+  --font-heading: 'Space Grotesk', sans-serif;
+  --font-body: 'Inter', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  /* ---- Spacing (base 4px) ---- */
+  --space-0: 0;
+  --space-0-5: 0.125rem;
+  --space-1: 0.25rem;
+  --space-1-5: 0.375rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
+  --space-20: 5rem;
+  --space-24: 6rem;
+
+  /* ---- Border Radius ---- */
   --radius: 0.5rem;
-  /* Default for Shadcn components */
+
+  /* ---- Z-Index ---- */
+  --z-base: 0;
+  --z-dropdown: 100;
+  --z-sticky: 200;
+  --z-fixed: 300;
+  --z-modal-backdrop: 400;
+  --z-modal: 500;
+  --z-popover: 600;
+  --z-tooltip: 700;
+  --z-toast: 800;
+
+  /* ---- Transitions ---- */
+  --duration-fast: 100ms;
+  --duration-normal: 200ms;
+  --duration-slow: 300ms;
+  --easing-default: cubic-bezier(0.4, 0, 0.2, 1);
+  --easing-in: cubic-bezier(0.4, 0, 1, 1);
+  --easing-out: cubic-bezier(0, 0, 0.2, 1);
+
+  /* ---- Shadows (Dark Mode) ---- */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.6);
+  --shadow-accent: 0 0 0 3px rgba(255, 77, 45, 0.25);
 
   /* ==========================================================================
      COLORS - Dark Mode (Default)
      ========================================================================== */
-  /* Background layers */
   --color-bg-primary: #0A0A0C;
   --color-bg-secondary: #111114;
   --color-bg-tertiary: #18181C;
   --color-bg-elevated: #1E1E24;
   --color-bg-overlay: rgba(0, 0, 0, 0.6);
 
-  /* Surface */
   --color-surface: #16161A;
   --color-surface-hover: #1C1C22;
   --color-surface-active: #222228;
 
-  /* Border */
   --color-border: #2A2A32;
   --color-border-hover: #3A3A44;
   --color-border-focus: #FF4D2D;
 
-  /* Text */
   --color-text-primary: #F0F0F2;
   --color-text-secondary: #A0A0AA;
   --color-text-tertiary: #6E6E7A;
   --color-text-disabled: #444450;
   --color-text-inverse: #0A0A0C;
 
-  /* Accent (Racing Red/Orange) */
   --color-accent: #FF4D2D;
   --color-accent-hover: #FF6347;
   --color-accent-active: #E0401F;
   --color-accent-muted: rgba(255, 77, 45, 0.15);
   --color-accent-text: #FF6347;
 
-  /* Semantic - Error */
-  --color-error: #EF4444;
+  --color-success: #22C55E;
+  --color-success-muted: rgba(34, 197, 94, 0.15);
+  --color-success-text: #4ADE80;
 
-  /* ----------------------------------------------------
-     SHADCN VARIABLES MAPPING
-     ---------------------------------------------------- */
+  --color-warning: #EAB308;
+  --color-warning-muted: rgba(234, 179, 8, 0.15);
+  --color-warning-text: #FACC15;
+
+  --color-error: #EF4444;
+  --color-error-muted: rgba(239, 68, 68, 0.15);
+  --color-error-text: #F87171;
+
+  --color-info: #3B82F6;
+  --color-info-muted: rgba(59, 130, 246, 0.15);
+  --color-info-text: #60A5FA;
+
+  /* ---- Shadcn Variable Mapping ---- */
   --background: var(--color-bg-primary);
   --foreground: var(--color-text-primary);
-
   --card: var(--color-surface);
   --card-foreground: var(--color-text-primary);
-
   --popover: var(--color-surface);
   --popover-foreground: var(--color-text-primary);
-
   --primary: var(--color-accent);
   --primary-foreground: #FFFFFF;
-  /* Accent text usually needs white */
-
   --secondary: var(--color-bg-tertiary);
   --secondary-foreground: var(--color-text-primary);
-
   --muted: var(--color-bg-elevated);
   --muted-foreground: var(--color-text-secondary);
-
   --accent: var(--color-surface-hover);
   --accent-foreground: var(--color-text-primary);
-
   --destructive: var(--color-error);
   --destructive-foreground: var(--color-text-primary);
-
   --border: var(--color-border);
   --input: var(--color-bg-tertiary);
   --ring: var(--color-accent);
@@ -174,45 +272,58 @@
 /* Light Mode Override */
 .light,
 [data-theme="light"] {
-  /* Background layers */
   --color-bg-primary: #FAFAFA;
   --color-bg-secondary: #F4F4F5;
   --color-bg-tertiary: #E8E8EC;
   --color-bg-elevated: #FFFFFF;
   --color-bg-overlay: rgba(0, 0, 0, 0.3);
 
-  /* Surface */
   --color-surface: #FFFFFF;
   --color-surface-hover: #F4F4F5;
   --color-surface-active: #E8E8EC;
 
-  /* Border */
   --color-border: #D4D4D8;
   --color-border-hover: #A1A1AA;
   --color-border-focus: #D93A1F;
 
-  /* Text */
   --color-text-primary: #18181B;
   --color-text-secondary: #52525B;
   --color-text-tertiary: #A1A1AA;
   --color-text-disabled: #D4D4D8;
   --color-text-inverse: #FAFAFA;
 
-  /* Accent (Darker for Light Mode) */
   --color-accent: #D93A1F;
   --color-accent-hover: #B83216;
   --color-accent-active: #A02B12;
   --color-accent-muted: rgba(217, 58, 31, 0.1);
   --color-accent-text: #D93A1F;
 
-  /* Semantic - Error */
-  --color-error: #DC2626;
+  --color-success: #16A34A;
+  --color-success-muted: rgba(22, 163, 74, 0.1);
+  --color-success-text: #15803D;
 
-  /* Re-bind Shadcn vars for Light Mode context if needed 
-     (Since we use var(--color-...) in :root, overriding --color-... here is enough!)
-  */
+  --color-warning: #CA8A04;
+  --color-warning-muted: rgba(202, 138, 4, 0.1);
+  --color-warning-text: #A16207;
+
+  --color-error: #DC2626;
+  --color-error-muted: rgba(220, 38, 38, 0.1);
+  --color-error-text: #B91C1C;
+
+  --color-info: #2563EB;
+  --color-info-muted: rgba(37, 99, 235, 0.1);
+  --color-info-text: #1D4ED8;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.15);
+  --shadow-accent: 0 0 0 3px rgba(217, 58, 31, 0.2);
 }
 
+/* ==========================================================================
+   Base Layer
+   ========================================================================== */
 @layer base {
   * {
     @apply border-border outline-ring/50;
@@ -221,16 +332,9 @@
   body {
     @apply bg-background text-foreground;
     font-family: var(--font-body);
-    /* Apply Inter by default */
   }
 
-  h1,
-  h2,
-  h3,
-  h4,
-  h5,
-  h6 {
+  h1, h2, h3, h4, h5, h6 {
     font-family: var(--font-heading);
-    /* Apply Space Grotesk for headings */
   }
 }

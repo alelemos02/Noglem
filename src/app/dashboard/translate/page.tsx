@@ -81,8 +81,8 @@ export default function TranslatePage() {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-blue-500/10">
-          <Languages className="h-6 w-6 text-blue-500" />
+        <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-info-muted">
+          <Languages className="h-6 w-6 text-info" />
         </div>
         <div>
           <h1 className="text-2xl font-bold">Tradutor AI</h1>
@@ -96,7 +96,7 @@ export default function TranslatePage() {
       {/* Controls */}
       <div className="flex items-center justify-between rounded-lg border bg-card p-4 shadow-sm">
         <div className="flex items-center gap-3">
-          <Sparkles className={`h-5 w-5 ${improveMode ? "text-amber-500" : "text-muted-foreground"}`} />
+          <Sparkles className={`h-5 w-5 ${improveMode ? "text-warning" : "text-muted-foreground"}`} />
           <div>
             <h3 className="font-medium text-sm">Modo de Melhoria (Improve Mode)</h3>
             <p className="text-xs text-muted-foreground">Reescreve o texto original para maior fluidez antes de traduzir.</p>
@@ -109,7 +109,7 @@ export default function TranslatePage() {
             checked={improveMode}
             onChange={(e) => setImproveMode(e.target.checked)}
           />
-          <div className="peer h-6 w-11 rounded-full bg-input after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:bg-background after:transition-all after:content-[''] peer-checked:bg-blue-600 peer-checked:after:translate-x-full peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-ring peer-focus:ring-offset-2"></div>
+          <div className="peer h-6 w-11 rounded-full bg-input after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:bg-background after:transition-all after:content-[''] peer-checked:bg-accent peer-checked:after:translate-x-full peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-ring peer-focus:ring-offset-2"></div>
         </label>
       </div>
 
@@ -173,8 +173,8 @@ export default function TranslatePage() {
 
             {/* Improved Text Section (Optional) */}
             {improveMode && improvedText && (
-              <div className="rounded-md border border-amber-500/20 bg-amber-500/5 p-3">
-                <p className="mb-1 text-xs font-semibold text-amber-600 flex items-center gap-1">
+              <div className="rounded-md border border-warning/20 bg-warning-muted p-3">
+                <p className="mb-1 text-xs font-semibold text-warning-text flex items-center gap-1">
                   <Sparkles className="h-3 w-3" /> Texto Melhorado (Original Refinado):
                 </p>
                 <p className="text-sm text-foreground/90 italic">{improvedText}</p>
@@ -196,7 +196,7 @@ export default function TranslatePage() {
                   onClick={() => handleCopy(translatedText)}
                 >
                   {copied ? (
-                    <Check className="h-4 w-4 text-green-500" />
+                    <Check className="h-4 w-4 text-success" />
                   ) : (
                     <Copy className="h-4 w-4" />
                   )}
@@ -209,7 +209,7 @@ export default function TranslatePage() {
 
       {/* Error Message */}
       {error && (
-        <div className="rounded-lg border border-red-500/50 bg-red-500/10 p-4 text-center text-sm text-red-500">
+        <div className="rounded-lg border border-error/50 bg-error-muted p-4 text-center text-sm text-error-text">
           {error}
         </div>
       )}

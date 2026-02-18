@@ -24,7 +24,7 @@ const tools = [
     icon: Languages,
     href: "/dashboard/translate",
     status: "live" as const,
-    color: "bg-blue-500/10 text-blue-500",
+    color: "bg-info-muted text-info",
   },
   {
     id: "pdf-extractor",
@@ -33,7 +33,7 @@ const tools = [
     icon: Table,
     href: "/dashboard/pdf-extractor",
     status: "beta" as const,
-    color: "bg-green-500/10 text-green-500",
+    color: "bg-success-muted text-success",
   },
   {
     id: "pdf-converter",
@@ -42,12 +42,12 @@ const tools = [
     icon: FileText,
     href: "/dashboard/pdf-converter",
     status: "beta" as const,
-    color: "bg-orange-500/10 text-orange-500",
+    color: "bg-warning-muted text-warning",
   },
 ];
 
 const statusConfig = {
-  live: { label: "Live", variant: "default" as const },
+  live: { label: "Live", variant: "success" as const },
   beta: { label: "Beta", variant: "secondary" as const },
 };
 
@@ -72,7 +72,7 @@ export default async function DashboardPage() {
         {tools.map((tool) => (
           <Card
             key={tool.id}
-            className="group relative overflow-hidden transition-all hover:border-primary/50 hover:shadow-lg"
+            className="group relative overflow-hidden transition-all hover:border-accent/50 hover:shadow-lg"
           >
             <CardHeader>
               <div className="flex items-start justify-between">
@@ -81,7 +81,7 @@ export default async function DashboardPage() {
                 >
                   <tool.icon className="h-6 w-6" />
                 </div>
-                <Badge variant={statusConfig[tool.status].variant}>
+                <Badge variant={statusConfig[tool.status].variant} dot>
                   {statusConfig[tool.status].label}
                 </Badge>
               </div>
@@ -101,7 +101,7 @@ export default async function DashboardPage() {
       </div>
 
       {/* Quick Stats */}
-      <div className="rounded-xl border border-border bg-card p-6">
+      <div className="rounded-lg border border-border bg-card p-6">
         <h2 className="mb-4 text-lg font-semibold">Atividade Recente</h2>
         <p className="text-sm text-muted-foreground">
           Nenhuma atividade registrada ainda. Comece usando uma das ferramentas acima!

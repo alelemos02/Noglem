@@ -1,20 +1,85 @@
 import * as React from "react"
-
 import { cn } from "@/lib/utils"
 
-function Input({ className, type, ...props }: React.ComponentProps<"input">) {
-  return (
+export interface InputProps extends React.ComponentProps<"input"> {
+  label?: string
+  error?: string
+  hint?: string
+}
+
+function Input({
+  label,
+  error,
+  hint,
+  className,
+  id,
+  type,
+  ...props
+}: InputProps) {
+  const inputId = id ?? label?.toLowerCase().replace(/\s+/g, "-")
+
+  const inputElement = (
     <input
       type={type}
+      id={inputId}
       data-slot="input"
       className={cn(
-        "file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input h-9 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm",
-        "focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]",
-        "aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive",
+        "h-10 w-full min-w-0 rounded-md px-3 text-sm font-body",
+        "bg-surface border border-border text-text-primary",
+        "placeholder:text-text-tertiary",
+        "transition-colors",
+        "hover:border-border-hover",
+        "focus:outline-none focus:border-border-focus focus:ring-1 focus:ring-accent",
+        "disabled:opacity-50 disabled:cursor-not-allowed",
+        "file:text-foreground file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium",
+        error && "border-error focus:border-error focus:ring-error",
         className
       )}
+      aria-invalid={!!error}
+      aria-describedby={
+        error
+          ? `${inputId}-error`
+          : hint
+            ? `${inputId}-hint`
+            : undefined
+      }
       {...props}
     />
+  )
+
+  if (!label && !error && !hint) {
+    return inputElement
+  }
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      {label && (
+        <label
+          htmlFor={inputId}
+          className="text-sm font-medium font-heading text-text-secondary"
+        >
+          {label}
+        </label>
+      )}
+
+      {inputElement}
+
+      {error && (
+        <p
+          id={`${inputId}-error`}
+          className="text-xs text-error-text"
+          role="alert"
+        >
+          {error}
+        </p>
+      )}
+
+      {!error && hint && (
+        <p id={`${inputId}-hint`} className="text-xs text-text-tertiary">
+          {hint}
+        </p>
+      )}
+    </div>
   )
 }
 

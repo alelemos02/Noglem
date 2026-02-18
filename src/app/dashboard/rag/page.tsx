@@ -17,7 +17,6 @@ import {
   SheetClose,
 } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
-import { formatDate } from "@/lib/utils"; // Assuming utility exists or I'll implement inline formatting
 
 interface Collection {
   id: string;

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { Logo } from "@/components/ui/logo";
 import { Languages, Table, FileText, ArrowRight } from "lucide-react";
 
 const features = [
@@ -9,16 +10,19 @@ const features = [
     title: "Tradutor AI",
     description: "Traduza textos técnicos com precisão usando inteligência artificial",
     icon: Languages,
+    color: "bg-info-muted text-info",
   },
   {
     title: "Extrator de Tabelas",
     description: "Extraia tabelas de PDFs e exporte para Excel automaticamente",
     icon: Table,
+    color: "bg-success-muted text-success",
   },
   {
     title: "PDF para Word",
     description: "Converta seus PDFs para documentos Word editáveis",
     icon: FileText,
+    color: "bg-warning-muted text-warning",
   },
 ];
 
@@ -34,12 +38,7 @@ export default async function HomePage() {
       {/* Header */}
       <header className="border-b border-border">
         <div className="container mx-auto flex h-16 items-center justify-between px-4">
-          <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-              <span className="text-sm font-bold">J</span>
-            </div>
-            <span className="text-lg font-semibold">Julia</span>
-          </div>
+          <Logo variant="full" size="sm" />
           <div className="flex items-center gap-4">
             <Link href="/sign-in">
               <Button variant="ghost">Entrar</Button>
@@ -57,7 +56,7 @@ export default async function HomePage() {
           Ferramentas de Engenharia em um só lugar
         </h1>
         <p className="mt-6 max-w-2xl text-lg text-muted-foreground">
-          Julia é sua plataforma centralizada para ferramentas de engenharia.
+          Jul/IA é sua plataforma centralizada para ferramentas de engenharia.
           Traduza documentos e extraia dados de PDFs com IA.
         </p>
         <div className="mt-10 flex gap-4">
@@ -85,10 +84,10 @@ export default async function HomePage() {
             {features.map((feature) => (
               <div
                 key={feature.title}
-                className="rounded-xl border border-border bg-card p-6 transition-colors hover:border-primary/50"
+                className="rounded-lg border border-border bg-card p-6 transition-colors hover:border-accent/50"
               >
-                <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10">
-                  <feature.icon className="h-6 w-6 text-primary" />
+                <div className={`mb-4 flex h-12 w-12 items-center justify-center rounded-lg ${feature.color}`}>
+                  <feature.icon className="h-6 w-6" />
                 </div>
                 <h3 className="mb-2 text-lg font-semibold">{feature.title}</h3>
                 <p className="text-sm text-muted-foreground">
@@ -103,7 +102,7 @@ export default async function HomePage() {
       {/* Footer */}
       <footer className="border-t border-border py-8">
         <div className="container mx-auto px-4 text-center text-sm text-muted-foreground">
-          <p>&copy; {new Date().getFullYear()} Julia. Todos os direitos reservados.</p>
+          <p>&copy; {new Date().getFullYear()} Jul/IA. Todos os direitos reservados.</p>
         </div>
       </footer>
     </div>

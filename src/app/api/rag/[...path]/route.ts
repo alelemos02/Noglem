@@ -5,20 +5,21 @@ import { API_URL, buildBackendAuthHeaders } from "@/lib/backend";
 // Catch-all route handler for RAG API
 // Maps /api/rag/* to Backend /api/rag/*
 
-async function handler(request: NextRequest, { params }: { params: { path: string[] } }) {
+async function handler(request: NextRequest, { params }: { params: Promise<{ path: string[] }> }) {
     try {
         const { userId } = await auth();
         if (!userId) {
             return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
         }
 
-        const path = params.path.join("/");
+        const { path: pathSegments } = await params;
+        const path = pathSegments.join("/");
         const url = `${API_URL}/api/rag/${path}`;
         const searchParams = request.nextUrl.searchParams.toString();
         const finalUrl = searchParams ? `${url}?${searchParams}` : url;
 
         // Headers
-        const headers = buildBackendAuthHeaders(userId);
+        const headers = buildBackendAuthHeaders(userId) as Record<string, string>;
 
         // Content-Type handling for FormData/JSON
         const contentType = request.headers.get("content-type");
@@ -89,7 +90,7 @@ async function handler(request: NextRequest, { params }: { params: { path: strin
         return NextResponse.json(data);
 
     } catch (error) {
-        console.error(`Proxy Error [${request.method} /api/rag/${params.path.join("/")}]:`, error);
+        console.error(`Proxy Error [${request.method} /api/rag/...]:`, error);
         return NextResponse.json(
             { error: "Erro de comunicação com o backend." },
             { status: 503 }

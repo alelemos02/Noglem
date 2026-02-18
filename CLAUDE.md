@@ -5,21 +5,33 @@ Siga TODAS as convencoes abaixo. Sem excecao.
 
 ## Design System
 
-O design system compartilhado fica em `_design-system/` (um nivel acima da raiz do projeto, dentro de `01_ACTIVE/`).
+O design system de referencia fica em `src/design-system/`.
+Os componentes ativos ficam em `src/components/ui/` e ja integram o design system.
+Tokens CSS ficam em `src/app/globals.css` (registrados via `@theme inline` para Tailwind v4).
 
 ### Imports obrigatorios
 
 ```tsx
 // Componentes
-import { Button, Card, Input, Badge, Table, Logo } from '../_design-system/components/ui'
+import { Button } from '@/components/ui/button'
+import { Card, CardHeader, CardContent, CardFooter } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
+import { Logo } from '@/components/ui/logo'
+import { Skeleton } from '@/components/ui/skeleton'
 
 // Utilitario de classes
-import { cn } from '../_design-system/lib/utils'
+import { cn } from '@/lib/utils'
 ```
 
 ### Regras visuais
 
-1. **Cores:** usar APENAS os tokens CSS definidos em `_design-system/tokens/colors.css`. Nunca hardcodar cores.
+1. **Cores:** usar APENAS os tokens CSS definidos em `globals.css`. Nunca hardcodar cores (nada de `bg-blue-500`, `text-green-500` etc.).
+   - Semanticas: `bg-info-muted text-info`, `bg-success-muted text-success`, `bg-warning-muted text-warning`, `bg-error-muted text-error`
+   - Surface: `bg-surface`, `bg-surface-hover`, `bg-surface-active`
+   - Background: `bg-bg-primary`, `bg-bg-secondary`, `bg-bg-tertiary`
+   - Text: `text-text-primary`, `text-text-secondary`, `text-text-tertiary`
+   - Accent: `bg-accent`, `text-accent`, `bg-accent-muted`
 2. **Accent (#FF4D2D):** usar com moderacao. Apenas para CTAs, links, indicadores criticos.
 3. **Numeros:** SEMPRE com `font-mono tabular-nums`. Sem excecao.
 4. **Border radius:** maximo `rounded-lg` (8px). NUNCA `rounded-full` em containers.
@@ -32,20 +44,19 @@ import { cn } from '../_design-system/lib/utils'
 
 ### Componentes disponiveis
 
-- `Button` - variantes: primary, secondary, ghost, danger | tamanhos: sm, md, lg | prop: loading
+- `Button` - variantes: default/primary, secondary/outline, ghost, danger/destructive, link | tamanhos: sm, default/md, lg, icon | prop: loading, asChild
 - `Input` - props: label, error, hint
-- `Card`, `CardHeader`, `CardContent`, `CardFooter` - prop: interactive
-- `Badge` - variantes: default, success, warning, error, info | prop: dot
-- `Table`, `TableHeader`, `TableBody`, `TableRow`, `TableHead`, `TableCell`, `TableCellNumeric`
-- `Skeleton` - shimmer loader
+- `Card`, `CardHeader`, `CardContent`, `CardFooter`, `CardTitle`, `CardDescription`, `CardAction` - prop: interactive
+- `Badge` - variantes: default, success, warning, error, info, secondary, outline | prop: dot, asChild
 - `Logo` - variantes: full ("Jul/IA"), compact ("J/"), tagline | tamanhos: sm, md, lg
+- `Skeleton` - shimmer loader
 
 ### Stack
 
-- Next.js 14+ (App Router)
-- React 18+
+- Next.js 16+ (App Router)
+- React 19+
 - TypeScript strict
-- Tailwind CSS com preset JulIA
+- Tailwind CSS v4 com tokens JulIA via @theme
 
 ### Tom
 

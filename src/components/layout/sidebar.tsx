@@ -80,7 +80,7 @@ export function Sidebar({ className }: SidebarProps) {
                   <Badge
                     variant={
                       item.badge === "Live"
-                        ? "default"
+                        ? "success"
                         : item.badge === "Beta"
                           ? "secondary"
                           : "outline"

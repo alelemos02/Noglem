@@ -131,7 +131,7 @@ export default function PdfConverterPage() {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <div className={`flex h-12 w-12 items-center justify-center rounded-lg ${mode === "convert" ? "bg-orange-500/10 text-orange-500" : "bg-blue-600/10 text-blue-600"}`}>
+        <div className={`flex h-12 w-12 items-center justify-center rounded-lg ${mode === "convert" ? "bg-warning-muted text-warning" : "bg-info-muted text-info"}`}>
           {mode === "convert" ? <FileText className="h-6 w-6" /> : <FileType className="h-6 w-6" />}
         </div>
         <div>
@@ -179,7 +179,7 @@ export default function PdfConverterPage() {
           >
             {file ? (
               <div className="flex flex-col items-center gap-2">
-                {mode === "convert" ? <FileText className="h-12 w-12 text-orange-500" /> : <FileType className="h-12 w-12 text-blue-600" />}
+                {mode === "convert" ? <FileText className="h-12 w-12 text-warning" /> : <FileType className="h-12 w-12 text-info" />}
                 <p className="font-medium">{file.name}</p>
                 <p className="text-sm text-muted-foreground">
                   {(file.size / 1024 / 1024).toFixed(2)} MB
@@ -219,7 +219,7 @@ export default function PdfConverterPage() {
 
       {/* Error Message */}
       {error && (
-        <div className="rounded-lg border border-red-500/50 bg-red-500/10 p-4 text-center text-sm text-red-500">
+        <div className="rounded-lg border border-error/50 bg-error-muted p-4 text-center text-sm text-error-text">
           {error}
         </div>
       )}
@@ -238,7 +238,7 @@ export default function PdfConverterPage() {
               </div>
             ) : result ? (
               <div className="flex flex-col items-center gap-4">
-                <CheckCircle className="h-12 w-12 text-green-500" />
+                <CheckCircle className="h-12 w-12 text-success" />
                 <p className="font-medium">{mode === "convert" ? "Conversão concluída!" : "Formatação concluída!"}</p>
                 <div className="flex items-center gap-6 text-sm text-muted-foreground">
                   <span>Original: {formatSize(result.original_size)}</span>

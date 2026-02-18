@@ -1,13 +1,24 @@
 import * as React from "react"
-
 import { cn } from "@/lib/utils"
 
-function Card({ className, ...props }: React.ComponentProps<"div">) {
+/* ---------- Card Root (JulIA Design System) ---------- */
+
+export interface CardProps extends React.ComponentProps<"div"> {
+  interactive?: boolean
+}
+
+function Card({ interactive = false, className, ...props }: CardProps) {
   return (
     <div
       data-slot="card"
       className={cn(
-        "bg-card text-card-foreground flex flex-col gap-6 rounded-xl border py-6 shadow-sm",
+        "rounded-lg border border-border bg-card text-card-foreground flex flex-col gap-6 py-6 shadow-sm",
+        "transition-colors",
+        interactive && [
+          "cursor-pointer",
+          "hover:border-border-hover hover:bg-surface-hover",
+          "active:bg-surface-active",
+        ],
         className
       )}
       {...props}
@@ -32,7 +43,7 @@ function CardTitle({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="card-title"
-      className={cn("leading-none font-semibold", className)}
+      className={cn("leading-none font-heading font-semibold", className)}
       {...props}
     />
   )

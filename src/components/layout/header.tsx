@@ -3,6 +3,7 @@
 import { UserButton } from "@clerk/nextjs";
 import { Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Logo } from "@/components/ui/logo";
 import {
   Tooltip,
   TooltipContent,
@@ -28,12 +29,8 @@ export function Header({ onMenuClick }: HeaderProps) {
           <span className="sr-only">Menu</span>
         </Button>
 
-        <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-            <span className="text-sm font-bold">J</span>
-          </div>
-          <span className="text-lg font-semibold">Julia</span>
-        </div>
+        <Logo variant="compact" size="sm" />
+        <span className="text-lg font-heading font-semibold">Jul/IA</span>
       </div>
 
       <div className="flex items-center gap-4">

@@ -120,8 +120,8 @@ export default function PdfExtractorPage() {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-green-500/10">
-          <Table className="h-6 w-6 text-green-500" />
+        <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-success-muted">
+          <Table className="h-6 w-6 text-success" />
         </div>
         <div>
           <h1 className="text-2xl font-bold">Extrator de Tabelas</h1>
@@ -153,7 +153,7 @@ export default function PdfExtractorPage() {
           >
             {file ? (
               <div className="flex flex-col items-center gap-2">
-                <FileText className="h-12 w-12 text-green-500" />
+                <FileText className="h-12 w-12 text-success" />
                 <p className="font-medium">{file.name}</p>
                 <p className="text-sm text-muted-foreground">
                   {(file.size / 1024 / 1024).toFixed(2)} MB
@@ -193,7 +193,7 @@ export default function PdfExtractorPage() {
 
       {/* Error Message */}
       {error && (
-        <div className="rounded-lg border border-red-500/50 bg-red-500/10 p-4 text-center text-sm text-red-500">
+        <div className="rounded-lg border border-error/50 bg-error-muted p-4 text-center text-sm text-error-text">
           {error}
         </div>
       )}
