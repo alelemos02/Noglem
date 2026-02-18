@@ -1,8 +1,10 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
-/* JulIA Design System tokens */
-@import "../../_design-system/tokens/index.css";
+/* ==========================================================================
+   JulIA Design System - Typography Tokens (INLINED)
+   ========================================================================== */
+@import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 
 @plugin "tailwindcss-animate";
 
@@ -57,10 +59,71 @@
 */
 
 :root {
-  /* Configurações Base */
-  --radius: 0.5rem;
+  /* Font families */
+  --font-brand: 'Rajdhani', sans-serif;
+  --font-heading: 'Space Grotesk', sans-serif;
+  --font-body: 'Inter', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
 
-  /* Mapeamento de Cores (Default = Dark Mode do Design System) */
+  /* Font sizes */
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.25rem;
+  --text-2xl: 1.5rem;
+  --text-3xl: 1.875rem;
+  --text-4xl: 2.25rem;
+  --text-5xl: 3rem;
+
+  /* Spacing */
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius: 0.5rem;
+  /* Default for Shadcn components */
+
+  /* ==========================================================================
+     COLORS - Dark Mode (Default)
+     ========================================================================== */
+  /* Background layers */
+  --color-bg-primary: #0A0A0C;
+  --color-bg-secondary: #111114;
+  --color-bg-tertiary: #18181C;
+  --color-bg-elevated: #1E1E24;
+  --color-bg-overlay: rgba(0, 0, 0, 0.6);
+
+  /* Surface */
+  --color-surface: #16161A;
+  --color-surface-hover: #1C1C22;
+  --color-surface-active: #222228;
+
+  /* Border */
+  --color-border: #2A2A32;
+  --color-border-hover: #3A3A44;
+  --color-border-focus: #FF4D2D;
+
+  /* Text */
+  --color-text-primary: #F0F0F2;
+  --color-text-secondary: #A0A0AA;
+  --color-text-tertiary: #6E6E7A;
+  --color-text-disabled: #444450;
+  --color-text-inverse: #0A0A0C;
+
+  /* Accent (Racing Red/Orange) */
+  --color-accent: #FF4D2D;
+  --color-accent-hover: #FF6347;
+  --color-accent-active: #E0401F;
+  --color-accent-muted: rgba(255, 77, 45, 0.15);
+  --color-accent-text: #FF6347;
+
+  /* Semantic - Error */
+  --color-error: #EF4444;
+
+  /* ----------------------------------------------------
+     SHADCN VARIABLES MAPPING
+     ---------------------------------------------------- */
   --background: var(--color-bg-primary);
   --foreground: var(--color-text-primary);
 
@@ -72,7 +135,7 @@
 
   --primary: var(--color-accent);
   --primary-foreground: #FFFFFF;
-  /* Accent text usually needs white or color-text-inverse */
+  /* Accent text usually needs white */
 
   --secondary: var(--color-bg-tertiary);
   --secondary-foreground: var(--color-text-primary);
@@ -88,11 +151,9 @@
 
   --border: var(--color-border);
   --input: var(--color-bg-tertiary);
-  /* Inputs darker/lighter depending on design */
   --ring: var(--color-accent);
-  /* Focus ring = Accent */
 
-  /* Charts - Mantendo OKLCH original ou adaptando se tiver tokens */
+  /* Charts */
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);
   --chart-3: oklch(0.398 0.07 227.392);
@@ -113,11 +174,42 @@
 /* Light Mode Override */
 .light,
 [data-theme="light"] {
-  /* O CSS do Design System define variáveis em [data-theme="light"]. 
-     O arquivo tokens/colors.css deve ser carregado e funcionar.
-     Mas precisamos garantir que Shadcn as leia. 
-     Como mappedamos --background: var(--color-bg-primary),
-     e --color-bg-primary muda no light mode, tudo deve funcionar automaticamente!
+  /* Background layers */
+  --color-bg-primary: #FAFAFA;
+  --color-bg-secondary: #F4F4F5;
+  --color-bg-tertiary: #E8E8EC;
+  --color-bg-elevated: #FFFFFF;
+  --color-bg-overlay: rgba(0, 0, 0, 0.3);
+
+  /* Surface */
+  --color-surface: #FFFFFF;
+  --color-surface-hover: #F4F4F5;
+  --color-surface-active: #E8E8EC;
+
+  /* Border */
+  --color-border: #D4D4D8;
+  --color-border-hover: #A1A1AA;
+  --color-border-focus: #D93A1F;
+
+  /* Text */
+  --color-text-primary: #18181B;
+  --color-text-secondary: #52525B;
+  --color-text-tertiary: #A1A1AA;
+  --color-text-disabled: #D4D4D8;
+  --color-text-inverse: #FAFAFA;
+
+  /* Accent (Darker for Light Mode) */
+  --color-accent: #D93A1F;
+  --color-accent-hover: #B83216;
+  --color-accent-active: #A02B12;
+  --color-accent-muted: rgba(217, 58, 31, 0.1);
+  --color-accent-text: #D93A1F;
+
+  /* Semantic - Error */
+  --color-error: #DC2626;
+
+  /* Re-bind Shadcn vars for Light Mode context if needed 
+     (Since we use var(--color-...) in :root, overriding --color-... here is enough!)
   */
 }
 
@@ -128,5 +220,17 @@
 
   body {
     @apply bg-background text-foreground;
+    font-family: var(--font-body);
+    /* Apply Inter by default */
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: var(--font-heading);
+    /* Apply Space Grotesk for headings */
   }
 }
