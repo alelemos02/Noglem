@@ -7,6 +7,7 @@ import {
   Table,
   FileText,
   Home,
+  Brain,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -23,6 +24,12 @@ const menuItems = [
     href: "/dashboard/translate",
     icon: Languages,
     badge: "Live",
+  },
+  {
+    title: "Conhecimento (RAG)",
+    href: "/dashboard/rag",
+    icon: Brain,
+    badge: "Beta",
   },
   {
     title: "Extrator de Tabelas",
@@ -75,8 +82,8 @@ export function Sidebar({ className }: SidebarProps) {
                       item.badge === "Live"
                         ? "default"
                         : item.badge === "Beta"
-                        ? "secondary"
-                        : "outline"
+                          ? "secondary"
+                          : "outline"
                     }
                     className="text-xs"
                   >
