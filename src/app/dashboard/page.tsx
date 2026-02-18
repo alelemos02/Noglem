@@ -1,112 +1,69 @@
 import Link from "next/link";
-import { currentUser } from "@clerk/nextjs/server";
-import {
-  Languages,
-  Table,
-  FileText,
-  ArrowRight,
-} from "lucide-react";
+import { getToolsByCategory, tools } from "@/lib/tools-registry";
 import {
   Card,
   CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
 } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 
-const tools = [
-  {
-    id: "translate",
-    title: "Tradutor AI",
-    description: "Traduza textos técnicos com precisão usando Google Gemini",
-    icon: Languages,
-    href: "/dashboard/translate",
-    status: "live" as const,
-    color: "bg-info-muted text-info",
-  },
-  {
-    id: "pdf-extractor",
-    title: "Extrator de Tabelas",
-    description: "Extraia tabelas de PDFs e exporte para Excel",
-    icon: Table,
-    href: "/dashboard/pdf-extractor",
-    status: "beta" as const,
-    color: "bg-success-muted text-success",
-  },
-  {
-    id: "pdf-converter",
-    title: "PDF para Word",
-    description: "Converta PDFs para documentos Word editáveis",
-    icon: FileText,
-    href: "/dashboard/pdf-converter",
-    status: "beta" as const,
-    color: "bg-warning-muted text-warning",
-  },
-];
-
-const statusConfig = {
-  live: { label: "Live", variant: "success" as const },
-  beta: { label: "Beta", variant: "secondary" as const },
-};
-
-export default async function DashboardPage() {
-  const user = await currentUser();
-  const firstName = user?.firstName || "Usuário";
+export default function DashboardPage() {
+  const grouped = getToolsByCategory();
 
   return (
     <div className="space-y-8">
-      {/* Welcome Section */}
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">
-          Olá, {firstName}!
+      {/* Header */}
+      <div className="flex items-baseline justify-between">
+        <h1 className="text-2xl font-heading font-bold tracking-tight">
+          Ferramentas
         </h1>
-        <p className="mt-2 text-muted-foreground">
-          Escolha uma ferramenta para começar
-        </p>
+        <span className="text-sm text-text-secondary font-mono tabular-nums">
+          {tools.length} ferramentas
+        </span>
       </div>
 
-      {/* Tools Grid */}
-      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-2">
-        {tools.map((tool) => (
-          <Card
-            key={tool.id}
-            className="group relative overflow-hidden transition-all hover:border-accent/50 hover:shadow-lg"
-          >
-            <CardHeader>
-              <div className="flex items-start justify-between">
-                <div
-                  className={`flex h-12 w-12 items-center justify-center rounded-lg ${tool.color}`}
-                >
-                  <tool.icon className="h-6 w-6" />
-                </div>
-                <Badge variant={statusConfig[tool.status].variant} dot>
-                  {statusConfig[tool.status].label}
-                </Badge>
-              </div>
-              <CardTitle className="mt-4">{tool.title}</CardTitle>
-              <CardDescription>{tool.description}</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Link href={tool.href}>
-                <Button className="w-full gap-2">
-                  Acessar
-                  <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
-                </Button>
+      {/* Category sections */}
+      {grouped.map(({ category, tools: categoryTools }) => (
+        <section key={category.id} className="space-y-3">
+          {/* Category header */}
+          <div className="flex items-center gap-2">
+            <div
+              className={`flex h-6 w-6 items-center justify-center rounded ${category.color}`}
+            >
+              <category.icon className="h-3.5 w-3.5" />
+            </div>
+            <h2 className="text-sm font-heading font-semibold text-text-secondary uppercase tracking-wider">
+              {category.label}
+            </h2>
+            <span className="text-xs text-text-tertiary font-mono tabular-nums">
+              ({categoryTools.length})
+            </span>
+          </div>
+
+          {/* Tools grid */}
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {categoryTools.map((tool) => (
+              <Link key={tool.id} href={tool.href}>
+                <Card interactive className="h-full">
+                  <CardContent className="flex items-start gap-3 p-4">
+                    <div
+                      className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded ${category.color}`}
+                    >
+                      <tool.icon className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <h3 className="font-heading font-semibold text-sm leading-tight">
+                        {tool.title}
+                      </h3>
+                      <p className="mt-1 text-xs text-text-secondary leading-relaxed">
+                        {tool.description}
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
               </Link>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      {/* Quick Stats */}
-      <div className="rounded-lg border border-border bg-card p-6">
-        <h2 className="mb-4 text-lg font-semibold">Atividade Recente</h2>
-        <p className="text-sm text-muted-foreground">
-          Nenhuma atividade registrada ainda. Comece usando uma das ferramentas acima!
-        </p>
-      </div>
+            ))}
+          </div>
+        </section>
+      ))}
     </div>
   );
 }
