@@ -3,7 +3,7 @@ import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/ui/logo";
-import { Languages, Table, FileText, ArrowRight } from "lucide-react";
+import { Languages, Table, FileText, ArrowRight, FileCheck, MessageSquare, Users, ShieldCheck, GitCompare, FileSpreadsheet } from "lucide-react";
 
 const features = [
   {
@@ -23,6 +23,42 @@ const features = [
     description: "Converta seus PDFs para documentos Word editáveis",
     icon: FileText,
     color: "bg-warning-muted text-warning",
+  },
+  {
+    title: "Parecer Técnico",
+    description: "Análise e comparação de documentação da engenharia versus documentos dos fornecedores",
+    icon: FileCheck,
+    color: "bg-info-muted text-info",
+  },
+  {
+    title: "Responder Comentários",
+    description: "Analise, associe e responda aos comentários do cliente usando classificação e IA",
+    icon: MessageSquare,
+    color: "bg-accent-muted text-accent",
+  },
+  {
+    title: "Resumo de Reunião",
+    description: "Faça o resumo completo, crie a ata e organize os responsáveis a partir da transcrição",
+    icon: Users,
+    color: "bg-success-muted text-success",
+  },
+  {
+    title: "Consistência de Projeto",
+    description: "Análise de consistência para levantar problemas conceituais e sugerir melhorias",
+    icon: ShieldCheck,
+    color: "bg-warning-muted text-warning",
+  },
+  {
+    title: "Comparar Projetos",
+    description: "A IA analisa todos os documentos referência para sugerir melhorias em novos projetos",
+    icon: GitCompare,
+    color: "bg-info-muted text-info",
+  },
+  {
+    title: "Folha de Dados",
+    description: "A partir de documentos de referência, elabore rapidamente a folha de dados do projeto",
+    icon: FileSpreadsheet,
+    color: "bg-accent-muted text-accent",
   },
 ];
 

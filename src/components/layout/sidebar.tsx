@@ -8,6 +8,12 @@ import {
   FileText,
   Home,
   Brain,
+  FileCheck,
+  MessageSquare,
+  Users,
+  ShieldCheck,
+  GitCompare,
+  FileSpreadsheet,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -42,6 +48,42 @@ const menuItems = [
     href: "/dashboard/pdf-converter",
     icon: FileText,
     badge: "Beta",
+  },
+  {
+    title: "Parecer Técnico",
+    href: "/dashboard/parecer-tecnico",
+    icon: FileCheck,
+    badge: "Em breve",
+  },
+  {
+    title: "Responder Comentários",
+    href: "/dashboard/responder-comentarios",
+    icon: MessageSquare,
+    badge: "Em breve",
+  },
+  {
+    title: "Resumo de Reunião",
+    href: "/dashboard/resumo-reuniao",
+    icon: Users,
+    badge: "Em breve",
+  },
+  {
+    title: "Consistência de Projeto",
+    href: "/dashboard/consistencia-projeto",
+    icon: ShieldCheck,
+    badge: "Em breve",
+  },
+  {
+    title: "Comparar Projetos",
+    href: "/dashboard/comparar-projetos",
+    icon: GitCompare,
+    badge: "Em breve",
+  },
+  {
+    title: "Folha de Dados",
+    href: "/dashboard/elaboracao-folha-dados",
+    icon: FileSpreadsheet,
+    badge: "Em breve",
   },
 ];
 
