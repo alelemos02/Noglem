@@ -13,11 +13,11 @@ function Card({ interactive = false, className, ...props }: CardProps) {
       data-slot="card"
       className={cn(
         "rounded-lg border border-border bg-card text-card-foreground flex flex-col gap-6 py-6 shadow-sm",
-        "transition-colors",
+        "transition-all duration-200",
         interactive && [
           "cursor-pointer",
-          "hover:border-border-hover hover:bg-surface-hover",
-          "active:bg-surface-active",
+          "hover:border-border-hover hover:bg-surface-hover hover:-translate-y-0.5 hover:shadow-md",
+          "active:bg-surface-active active:translate-y-0 active:shadow-sm",
         ],
         className
       )}

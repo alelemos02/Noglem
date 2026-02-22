@@ -2,90 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  Languages,
-  Table,
-  FileText,
-  Home,
-  Brain,
-  FileCheck,
-  MessageSquare,
-  Users,
-  ShieldCheck,
-  GitCompare,
-  FileSpreadsheet,
-} from "lucide-react";
+import { Home } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
-
-const menuItems = [
-  {
-    title: "Dashboard",
-    href: "/dashboard",
-    icon: Home,
-  },
-  {
-    title: "Tradutor AI",
-    href: "/dashboard/translate",
-    icon: Languages,
-    badge: "Live",
-  },
-  {
-    title: "Conhecimento (RAG)",
-    href: "/dashboard/rag",
-    icon: Brain,
-    badge: "Beta",
-  },
-  {
-    title: "Extrator de Tabelas",
-    href: "/dashboard/pdf-extractor",
-    icon: Table,
-    badge: "Beta",
-  },
-  {
-    title: "PDF para Word",
-    href: "/dashboard/pdf-converter",
-    icon: FileText,
-    badge: "Beta",
-  },
-  {
-    title: "Parecer Técnico",
-    href: "/dashboard/parecer-tecnico",
-    icon: FileCheck,
-    badge: "Em breve",
-  },
-  {
-    title: "Responder Comentários",
-    href: "/dashboard/responder-comentarios",
-    icon: MessageSquare,
-    badge: "Em breve",
-  },
-  {
-    title: "Resumo de Reunião",
-    href: "/dashboard/resumo-reuniao",
-    icon: Users,
-    badge: "Em breve",
-  },
-  {
-    title: "Consistência de Projeto",
-    href: "/dashboard/consistencia-projeto",
-    icon: ShieldCheck,
-    badge: "Em breve",
-  },
-  {
-    title: "Comparar Projetos",
-    href: "/dashboard/comparar-projetos",
-    icon: GitCompare,
-    badge: "Em breve",
-  },
-  {
-    title: "Folha de Dados",
-    href: "/dashboard/elaboracao-folha-dados",
-    icon: FileSpreadsheet,
-    badge: "Em breve",
-  },
-];
+import { tools, getStatusBadgeProps } from "@/lib/tools-registry";
 
 interface SidebarProps {
   className?: string;
@@ -103,35 +24,67 @@ export function Sidebar({ className }: SidebarProps) {
     >
       <ScrollArea className="flex-1 px-3 py-4">
         <nav className="space-y-1">
-          {menuItems.map((item) => {
-            const isActive = pathname === item.href;
+          {/* Dashboard */}
+          <Link
+            href="/dashboard"
+            className={cn(
+              "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors border-l-2",
+              pathname === "/dashboard"
+                ? "border-accent bg-surface-active text-text-primary"
+                : "border-transparent text-sidebar-foreground hover:bg-surface-hover hover:text-text-primary"
+            )}
+          >
+            <Home className="h-4 w-4" />
+            <span className="flex-1">Dashboard</span>
+          </Link>
+
+          {/* Separator */}
+          <div className="!my-3 border-t border-border" />
+
+          {/* Tools */}
+          {tools.map((tool) => {
+            const isActive = pathname === tool.href;
+            const isComingSoon = tool.status === "coming_soon";
+            const badgeProps = getStatusBadgeProps(tool.status);
+
+            if (isComingSoon) {
+              return (
+                <div
+                  key={tool.id}
+                  className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-text-disabled cursor-default border-l-2 border-transparent"
+                >
+                  <tool.icon className="h-4 w-4" />
+                  <span className="flex-1 truncate">{tool.title}</span>
+                  <Badge
+                    variant={badgeProps.variant}
+                    className="text-[10px] px-1.5 py-0"
+                  >
+                    {badgeProps.label}
+                  </Badge>
+                </div>
+              );
+            }
+
             return (
               <Link
-                key={item.href}
-                href={item.href}
+                key={tool.id}
+                href={tool.href}
                 className={cn(
-                  "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                  "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors border-l-2",
                   isActive
-                    ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                    : "text-sidebar-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground"
+                    ? "border-accent bg-surface-active text-text-primary"
+                    : "border-transparent text-sidebar-foreground hover:bg-surface-hover hover:text-text-primary"
                 )}
               >
-                <item.icon className="h-4 w-4" />
-                <span className="flex-1">{item.title}</span>
-                {item.badge && (
-                  <Badge
-                    variant={
-                      item.badge === "Live"
-                        ? "success"
-                        : item.badge === "Beta"
-                          ? "secondary"
-                          : "outline"
-                    }
-                    className="text-xs"
-                  >
-                    {item.badge}
-                  </Badge>
-                )}
+                <tool.icon className="h-4 w-4" />
+                <span className="flex-1 truncate">{tool.title}</span>
+                <Badge
+                  variant={badgeProps.variant}
+                  dot={badgeProps.dot}
+                  className="text-[10px] px-1.5 py-0"
+                >
+                  {badgeProps.label}
+                </Badge>
               </Link>
             );
           })}
@@ -139,8 +92,8 @@ export function Sidebar({ className }: SidebarProps) {
       </ScrollArea>
 
       <div className="border-t border-border p-4">
-        <p className="text-xs text-muted-foreground">
-          Julia v2.0.0
+        <p className="text-xs text-muted-foreground font-mono tabular-nums">
+          Jul/IA v2.0.0
         </p>
       </div>
     </aside>

@@ -29,8 +29,7 @@ export function Header({ onMenuClick }: HeaderProps) {
           <span className="sr-only">Menu</span>
         </Button>
 
-        <Logo variant="compact" size="sm" />
-        <span className="text-lg font-heading font-semibold">Jul/IA</span>
+        <Logo variant="full" size="sm" />
       </div>
 
       <div className="flex items-center gap-4">

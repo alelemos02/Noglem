@@ -24,16 +24,19 @@ export interface Category {
   label: string;
   icon: LucideIcon;
   color: string;
+  borderColor: string;
 }
 
 export const categories: Category[] = [
-  { id: "documentacao", label: "Documentação", icon: FileText, color: "bg-info-muted text-info" },
-  { id: "conhecimento", label: "Conhecimento", icon: BookOpen, color: "bg-accent-muted text-accent" },
-  { id: "analise", label: "Análise", icon: BarChart3, color: "bg-success-muted text-success" },
-  { id: "instrumentacao", label: "Instrumentação", icon: Gauge, color: "bg-warning-muted text-warning" },
+  { id: "documentacao", label: "Documentação", icon: FileText, color: "bg-info-muted text-info", borderColor: "border-info" },
+  { id: "conhecimento", label: "Conhecimento", icon: BookOpen, color: "bg-accent-muted text-accent", borderColor: "border-accent" },
+  { id: "analise", label: "Análise", icon: BarChart3, color: "bg-success-muted text-success", borderColor: "border-success" },
+  { id: "instrumentacao", label: "Instrumentação", icon: Gauge, color: "bg-warning-muted text-warning", borderColor: "border-warning" },
 ];
 
 // ── Tool definitions ──────────────────────────────────────────────────
+
+export type ToolStatus = "live" | "beta" | "coming_soon";
 
 export interface Tool {
   id: string;
@@ -42,6 +45,7 @@ export interface Tool {
   icon: LucideIcon;
   href: string;
   category: CategoryId;
+  status: ToolStatus;
 }
 
 export const tools: Tool[] = [
@@ -52,6 +56,7 @@ export const tools: Tool[] = [
     icon: Languages,
     href: "/dashboard/translate",
     category: "documentacao",
+    status: "live",
   },
   {
     id: "pdf-extractor",
@@ -60,6 +65,7 @@ export const tools: Tool[] = [
     icon: Table,
     href: "/dashboard/pdf-extractor",
     category: "documentacao",
+    status: "beta",
   },
   {
     id: "pdf-converter",
@@ -68,6 +74,7 @@ export const tools: Tool[] = [
     icon: FileText,
     href: "/dashboard/pdf-converter",
     category: "documentacao",
+    status: "beta",
   },
   {
     id: "rag",
@@ -76,6 +83,7 @@ export const tools: Tool[] = [
     icon: Brain,
     href: "/dashboard/rag",
     category: "conhecimento",
+    status: "beta",
   },
   {
     id: "parecer-tecnico",
@@ -84,6 +92,7 @@ export const tools: Tool[] = [
     icon: FileCheck,
     href: "/dashboard/parecer-tecnico",
     category: "analise",
+    status: "coming_soon",
   },
   {
     id: "responder-comentarios",
@@ -92,6 +101,7 @@ export const tools: Tool[] = [
     icon: MessageSquare,
     href: "/dashboard/responder-comentarios",
     category: "documentacao",
+    status: "coming_soon",
   },
   {
     id: "resumo-reuniao",
@@ -100,6 +110,7 @@ export const tools: Tool[] = [
     icon: Users,
     href: "/dashboard/resumo-reuniao",
     category: "documentacao",
+    status: "coming_soon",
   },
   {
     id: "consistencia-projeto",
@@ -108,6 +119,7 @@ export const tools: Tool[] = [
     icon: ShieldCheck,
     href: "/dashboard/consistencia-projeto",
     category: "analise",
+    status: "coming_soon",
   },
   {
     id: "comparar-projetos",
@@ -116,6 +128,7 @@ export const tools: Tool[] = [
     icon: GitCompare,
     href: "/dashboard/comparar-projetos",
     category: "analise",
+    status: "coming_soon",
   },
   {
     id: "elaboracao-folha-dados",
@@ -124,6 +137,7 @@ export const tools: Tool[] = [
     icon: FileSpreadsheet,
     href: "/dashboard/elaboracao-folha-dados",
     category: "instrumentacao",
+    status: "coming_soon",
   },
 ];
 
@@ -136,4 +150,20 @@ export function getToolsByCategory(): { category: Category; tools: Tool[] }[] {
       tools: tools.filter((t) => t.category === cat.id),
     }))
     .filter((group) => group.tools.length > 0);
+}
+
+/** Maps ToolStatus to Badge variant and label for consistent display */
+export function getStatusBadgeProps(status: ToolStatus): {
+  variant: "success" | "info" | "secondary";
+  label: string;
+  dot: boolean;
+} {
+  switch (status) {
+    case "live":
+      return { variant: "success", label: "Live", dot: true };
+    case "beta":
+      return { variant: "info", label: "Beta", dot: false };
+    case "coming_soon":
+      return { variant: "secondary", label: "Em breve", dot: false };
+  }
 }
