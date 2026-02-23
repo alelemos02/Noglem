@@ -8,8 +8,8 @@ from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.messages import HumanMessage, AIMessage
 from app.config import settings
-from app.services.rag.vector_store import vector_store_service
-from app.services.rag.rerank_service import rerank_service
+from app.services.rag.vector_store import get_vector_store_service
+from app.services.rag.rerank_service import get_rerank_service
 
 logger = logging.getLogger(__name__)
 
@@ -74,7 +74,7 @@ class RAGService:
         k_final: int = 7
     ) -> List:
         """Retrieve documents and rerank them."""
-        retriever = vector_store_service.as_retriever(
+        retriever = get_vector_store_service().as_retriever(
             doc_id=doc_id,
             collection_id=collection_id,
             k=k_initial,
@@ -90,7 +90,7 @@ class RAGService:
 
         reranked_docs = []
         try:
-            reranked_docs = rerank_service.rerank(question, initial_docs, top_k=k_final)
+            reranked_docs = get_rerank_service().rerank(question, initial_docs, top_k=k_final)
             logger.info(f"Reranked to top {len(reranked_docs)} documents")
 
             # Safety net for low scores
@@ -234,4 +234,12 @@ class RAGService:
 
         logger.info("Streaming completed")
 
-rag_service = RAGService()
+# Lazy singleton — only instantiated on first access
+_rag_service = None
+
+
+def get_rag_service() -> RAGService:
+    global _rag_service
+    if _rag_service is None:
+        _rag_service = RAGService()
+    return _rag_service

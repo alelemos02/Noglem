@@ -1,13 +1,17 @@
 from langchain_chroma import Chroma
 from app.config import settings
-from app.services.rag.embedding_service import embedding_service
+from app.services.rag.embedding_service import get_embedding_service
 from typing import List
 from langchain_core.documents import Document
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 class VectorStoreService:
     def __init__(self):
         self.persist_directory = settings.CHROMA_DB_DIR
-        self.embedding_function = embedding_service.get_embeddings()
+        self.embedding_function = get_embedding_service().get_embeddings()
         
         # Initialize Chroma
         self.vector_db = Chroma(
@@ -87,4 +91,12 @@ class VectorStoreService:
         except Exception as e:
             print(f"Error deleting from vector store: {e}")
 
-vector_store_service = VectorStoreService()
+# Lazy singleton — only instantiated on first access
+_vector_store_service = None
+
+
+def get_vector_store_service() -> VectorStoreService:
+    global _vector_store_service
+    if _vector_store_service is None:
+        _vector_store_service = VectorStoreService()
+    return _vector_store_service

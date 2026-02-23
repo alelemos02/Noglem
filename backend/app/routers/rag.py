@@ -26,8 +26,8 @@ from app.models.rag_schemas import (
 # Services
 from app.services.rag.rag_pdf_service import rag_pdf_service
 from app.services.rag.chunk_service import chunk_service
-from app.services.rag.vector_store import vector_store_service
-from app.services.rag.rag_service import rag_service
+from app.services.rag.vector_store import get_vector_store_service
+from app.services.rag.rag_service import get_rag_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -82,7 +82,7 @@ def delete_collection(
     
     if doc_ids:
         # Remove from Vector Store
-        vector_store_service.delete_documents(doc_ids)
+        get_vector_store_service().delete_documents(doc_ids)
     
     # 2. Delete Collection Directory (Files)
     collection_dir = os.path.join(settings.UPLOAD_DIR, collection_id)
@@ -170,7 +170,7 @@ async def upload_document_to_collection(
             chunk.metadata["filename"] = file.filename
 
         # Index
-        vector_store_service.add_documents(chunks)
+        get_vector_store_service().add_documents(chunks)
         
         # Update Status
         db_doc.status = DocumentStatus.READY
@@ -200,7 +200,7 @@ def delete_document(
         raise HTTPException(status_code=404, detail="Document not found")
 
     # Delete from Vector Store
-    vector_store_service.delete_documents([document_id])
+    get_vector_store_service().delete_documents([document_id])
 
     # Delete File from Disk
     if doc.original_path and os.path.exists(doc.original_path):
@@ -318,7 +318,7 @@ def send_message(chat_id: str, message: ChatMessageCreate, db: Session = Depends
     chat_history = _get_chat_history(db, chat_id, limit=10)
 
     # 3. Generate AI Response
-    ai_response_text = rag_service.get_answer(
+    ai_response_text = get_rag_service().get_answer(
         question=message.content,
         collection_id=chat.collection_id,
         chat_history=chat_history
@@ -370,7 +370,7 @@ async def send_message_stream(
     async def generate():
         full_response = ""
         try:
-            for chunk in rag_service.stream_answer(
+            for chunk in get_rag_service().stream_answer(
                 question=message.content,
                 collection_id=chat.collection_id,
                 chat_history=chat_history

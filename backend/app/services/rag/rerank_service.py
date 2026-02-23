@@ -52,4 +52,12 @@ class RerankService:
 
         return reranked_docs
 
-rerank_service = RerankService()
+# Lazy singleton — only instantiated on first access
+_rerank_service = None
+
+
+def get_rerank_service() -> RerankService:
+    global _rerank_service
+    if _rerank_service is None:
+        _rerank_service = RerankService()
+    return _rerank_service
