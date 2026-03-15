@@ -1,0 +1,9 @@
+from app.models.usuario import Usuario  # noqa: F401
+from app.models.parecer import Parecer  # noqa: F401
+from app.models.documento import Documento  # noqa: F401
+from app.models.item_parecer import ItemParecer  # noqa: F401
+from app.models.recomendacao import Recomendacao  # noqa: F401
+from app.models.revisao import RevisaoParecer  # noqa: F401
+from app.models.audit_log import AuditLog  # noqa: F401
+from app.models.cache_analise import CacheAnalise  # noqa: F401
+from app.models.mensagem_chat import MensagemChat  # noqa: F401
