@@ -27,6 +27,7 @@ COPY ./app ./app
 COPY ./alembic ./alembic
 COPY ./alembic.ini ./alembic.ini
 COPY ./run.py ./run.py
+COPY ./start.sh ./start.sh
 
 # Stage 2: Runner
 FROM python:3.11-slim
