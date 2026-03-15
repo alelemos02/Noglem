@@ -32,6 +32,17 @@ class Settings:
     RATE_LIMIT_TRANSLATE_PER_MIN = int(os.getenv("RATE_LIMIT_TRANSLATE_PER_MIN", "30"))
     RATE_LIMIT_PDF_PER_MIN = int(os.getenv("RATE_LIMIT_PDF_PER_MIN", "5"))
 
+    # Microsoft Graph (Email RAG)
+    MICROSOFT_CLIENT_ID = os.getenv("MICROSOFT_CLIENT_ID", "")
+    MICROSOFT_CLIENT_SECRET = os.getenv("MICROSOFT_CLIENT_SECRET", "")
+    MICROSOFT_TENANT_ID = os.getenv("MICROSOFT_TENANT_ID", "common")
+    MICROSOFT_REDIRECT_URI = os.getenv("MICROSOFT_REDIRECT_URI", "http://localhost:3000/api/email/callback")
+    MICROSOFT_SCOPES = ["Mail.Read", "User.Read", "offline_access"]
+
+    # Email RAG — Embeddings locais
+    EMAIL_EMBEDDING_MODEL = os.getenv("EMAIL_EMBEDDING_MODEL", "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
+    EMAIL_CHROMA_COLLECTION = os.getenv("EMAIL_CHROMA_COLLECTION", "email_rag_collection")
+
     # File Upload
     MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB
     ALLOWED_EXTENSIONS = {".pdf", ".docx"}

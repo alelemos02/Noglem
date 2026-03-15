@@ -83,4 +83,3 @@ async def enforce_pdf_rate_limit(
     )
     if not allowed:
         _raise_limit_exceeded(retry_after)
-
