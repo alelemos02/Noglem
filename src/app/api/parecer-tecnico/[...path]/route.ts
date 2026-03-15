@@ -3,6 +3,7 @@ import { auth } from "@clerk/nextjs/server";
 
 // PATEC backend URL (separate from main backend)
 const PATEC_URL = process.env.PATEC_API_URL || "http://localhost:8000";
+const INTERNAL_API_KEY = process.env.INTERNAL_API_KEY || "";
 
 async function handler(
   request: NextRequest,
@@ -19,9 +20,10 @@ async function handler(
     const searchParams = request.nextUrl.searchParams.toString();
     const url = `${PATEC_URL}/api/${path}${searchParams ? `?${searchParams}` : ""}`;
 
-    // Build headers - pass through content-type but not multipart boundary
+    // Build headers - auth + content-type passthrough
     const headers: Record<string, string> = {
       "X-User-Id": userId,
+      ...(INTERNAL_API_KEY && { "X-Internal-API-Key": INTERNAL_API_KEY }),
     };
 
     const contentType = request.headers.get("content-type");

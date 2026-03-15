@@ -44,6 +44,9 @@ class Settings(BaseSettings):
     MAX_FILE_SIZE_MB: int = 50
     DOCUMENT_ENCRYPTION_KEY: str = ""
 
+    # Internal API Key (shared with Next.js proxy for secure communication)
+    INTERNAL_API_KEY: str = ""
+
     # CORS
     CORS_ORIGINS: list[str] = [
         "http://localhost:3000",

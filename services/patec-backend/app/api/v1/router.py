@@ -1,11 +1,12 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
+from app.core.deps import require_internal_api_key
 from app.api.v1.endpoints import (
     auth, pareceres, documentos, analise, itens,
     exportacoes, revisoes, estimativa, auditoria, chat,
 )
 
-api_router = APIRouter()
+api_router = APIRouter(dependencies=[Depends(require_internal_api_key)])
 api_router.include_router(auth.router)
 api_router.include_router(pareceres.router)
 api_router.include_router(documentos.router)
