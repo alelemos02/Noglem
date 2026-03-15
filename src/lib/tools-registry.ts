@@ -12,6 +12,7 @@ import {
   ShieldCheck,
   GitCompare,
   FileSpreadsheet,
+  Mail,
   type LucideIcon,
 } from "lucide-react";
 
@@ -86,13 +87,22 @@ export const tools: Tool[] = [
     status: "beta",
   },
   {
+    id: "emails",
+    title: "Email RAG",
+    description: "Conecte seu Microsoft 365 e consulte emails com IA",
+    icon: Mail,
+    href: "/dashboard/emails",
+    category: "conhecimento",
+    status: "beta",
+  },
+  {
     id: "parecer-tecnico",
     title: "Parecer Técnico",
     description: "Análise e comparação de documentação da engenharia versus documentos dos fornecedores",
     icon: FileCheck,
     href: "/dashboard/parecer-tecnico",
     category: "analise",
-    status: "coming_soon",
+    status: "beta",
   },
   {
     id: "responder-comentarios",
