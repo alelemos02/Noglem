@@ -1,0 +1,50 @@
+# Local development stack: PostgreSQL + Redis + PATEC API + Celery Worker
+# Usage: docker compose up -d
+version: "3.8"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: patec
+      POSTGRES_PASSWORD: patec
+      POSTGRES_DB: patec
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://patec:patec@postgres:5432/patec
+      DATABASE_URL_SYNC: postgresql+psycopg2://patec:patec@postgres:5432/patec
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      - postgres
+      - redis
+    command: >
+      sh -c "alembic upgrade head && python run.py"
+
+  worker:
+    build: .
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://patec:patec@postgres:5432/patec
+      DATABASE_URL_SYNC: postgresql+psycopg2://patec:patec@postgres:5432/patec
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      - postgres
+      - redis
+    command: celery -A app.worker worker --loglevel=info --concurrency=2
+
+volumes:
+  pgdata:

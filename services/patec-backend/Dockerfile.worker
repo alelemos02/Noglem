@@ -1,0 +1,29 @@
+FROM python:3.11-slim
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
+
+WORKDIR /app
+
+# Install runtime + build deps
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+    build-essential \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install dependencies
+COPY pyproject.toml ./
+RUN pip install --upgrade pip \
+    && python -c "import tomllib; open('requirements.txt', 'w').write('\n'.join(tomllib.load(open('pyproject.toml', 'rb'))['project']['dependencies']))" \
+    && pip install -r requirements.txt
+
+# Copy app code
+COPY ./app ./app
+COPY ./run.py ./run.py
+
+# Non-root user
+RUN useradd -m appuser && chown -R appuser:appuser /app
+USER appuser
+
+CMD ["celery", "-A", "app.worker", "worker", "--loglevel=info", "--concurrency=2"]
