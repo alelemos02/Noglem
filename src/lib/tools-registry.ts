@@ -93,7 +93,7 @@ export const tools: Tool[] = [
     icon: Mail,
     href: "/dashboard/emails",
     category: "conhecimento",
-    status: "beta",
+    status: "coming_soon",
   },
   {
     id: "parecer-tecnico",
