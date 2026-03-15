@@ -1,4 +1,5 @@
 from pydantic_settings import BaseSettings
+from pydantic import model_validator
 
 
 class Settings(BaseSettings):
@@ -8,6 +9,16 @@ class Settings(BaseSettings):
     # Database
     DATABASE_URL: str = "postgresql+asyncpg://patec:patec@localhost:5432/patec"
     DATABASE_URL_SYNC: str = "postgresql+psycopg2://patec:patec@localhost:5432/patec"
+
+    @model_validator(mode="after")
+    def fix_database_urls(self):
+        """Auto-convert Railway-style postgresql:// to driver-specific URLs."""
+        url = self.DATABASE_URL
+        if url.startswith("postgresql://") or url.startswith("postgres://"):
+            base = url.replace("postgres://", "postgresql://", 1)
+            self.DATABASE_URL = base.replace("postgresql://", "postgresql+asyncpg://", 1)
+            self.DATABASE_URL_SYNC = base.replace("postgresql://", "postgresql+psycopg2://", 1)
+        return self
 
     # Redis
     REDIS_URL: str = "redis://localhost:6379/0"
