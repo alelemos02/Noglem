@@ -141,6 +141,15 @@ export const tools: Tool[] = [
     status: "coming_soon",
   },
   {
+    id: "pid-extractor",
+    title: "Extrator de P&ID",
+    description: "Extraia instrumentos de P&IDs vetoriais e gere o Instrument Index",
+    icon: Gauge,
+    href: "/dashboard/pid-extractor",
+    category: "instrumentacao",
+    status: "beta",
+  },
+  {
     id: "elaboracao-folha-dados",
     title: "Elaboração de Folha de Dados",
     description: "A partir de documentos de referência, elabore rapidamente a folha de dados",

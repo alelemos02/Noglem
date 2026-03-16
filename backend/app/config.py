@@ -31,6 +31,7 @@ class Settings:
     # Rate limits (requests per minute per user)
     RATE_LIMIT_TRANSLATE_PER_MIN = int(os.getenv("RATE_LIMIT_TRANSLATE_PER_MIN", "30"))
     RATE_LIMIT_PDF_PER_MIN = int(os.getenv("RATE_LIMIT_PDF_PER_MIN", "5"))
+    RATE_LIMIT_PID_PER_MIN = int(os.getenv("RATE_LIMIT_PID_PER_MIN", "5"))
 
     # Microsoft Graph (Email RAG)
     MICROSOFT_CLIENT_ID = os.getenv("MICROSOFT_CLIENT_ID", "")

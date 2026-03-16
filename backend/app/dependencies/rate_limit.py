@@ -83,3 +83,17 @@ async def enforce_pdf_rate_limit(
     )
     if not allowed:
         _raise_limit_exceeded(retry_after)
+
+
+async def enforce_pid_rate_limit(
+    request: Request,
+    x_user_id: str | None = Header(default=None),
+):
+    user = _identity(request, x_user_id)
+    allowed, retry_after = limiter.allow(
+        key=f"pid:{user}",
+        limit=settings.RATE_LIMIT_PID_PER_MIN,
+        window_seconds=60,
+    )
+    if not allowed:
+        _raise_limit_exceeded(retry_after)

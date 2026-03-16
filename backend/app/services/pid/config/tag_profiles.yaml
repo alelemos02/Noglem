@@ -1,0 +1,42 @@
+profiles:
+  promon:
+    name: "PROMON / Nacional"
+    description: "Tags com área + separador (ex: 122-PIT-0115A)"
+    # Pattern: {area}-{isa_type}-{number}{qualifier}
+    tag_pattern: '(?P<area>\d{3})-(?P<isa_type>[A-Z]{2,5})-(?P<number>\d{3,5})(?P<qualifier>[A-Z]?\d?)'
+    separator: "-"
+    has_area_prefix: true
+    examples:
+      - "122-PIT-0115A"
+      - "PIC-0215"
+      - "122-FCV-0301"
+      - "122-LSHH-0105"
+    # Equipment tag pattern for this project
+    equipment_pattern: '(?P<equip_id>\d{3,6})-(?P<equip_type>[A-Z]{1,4})\d{2}[A-Z]{0,2}'
+
+  technip:
+    name: "Technip / Internacional"
+    description: "Tags sem separador tipo-equipamento (ex: FTW504AC-1)"
+    # Pattern: {isa_type}{equipment}-{suffix}
+    tag_pattern: '(?P<isa_type>[A-Z]{2,5})(?P<equipment>W\d{3}[A-Z]*\d*)-(?P<suffix>[A-Z]?\d+)'
+    separator: ""
+    has_area_prefix: false
+    examples:
+      - "FTW504AC-1"
+      - "PSVW504AC2-1"
+      - "FICW503AC-1"
+      - "XVW503AC-FW1"
+    equipment_pattern: '(?P<equip_id>W\d{3}[A-Z]*\d*)'
+
+# Default profile to use
+default_profile: "promon"
+
+# Word merge settings for reconstructing fragmented tags
+word_merge:
+  max_horizontal_gap: 5.0  # pixels - merge words closer than this
+  max_vertical_gap: 3.0    # pixels - words on same line tolerance
+
+# Spatial engine settings
+spatial:
+  tag_equipment_max_distance: 200.0  # max distance to associate tag with equipment
+  zone_divisions: 4  # divide page into NxN zones
