@@ -27,7 +27,7 @@ async function handler(
     };
 
     const contentType = request.headers.get("content-type");
-    if (contentType && !contentType.includes("multipart/form-data")) {
+    if (contentType) {
       headers["Content-Type"] = contentType;
     }
 
