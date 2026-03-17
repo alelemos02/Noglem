@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
-import { MessageSquare, Send, Upload, FileText, Trash2, ArrowLeft } from "lucide-react";
+import { useState, useRef, useEffect, use } from "react";
+import { MessageSquare, Send, Upload, FileText, Trash2, ArrowLeft, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -15,15 +15,33 @@ interface Message {
     sources?: string[];
 }
 
-export default function RagCollectionPage({ params }: { params: { collectionId: string } }) {
+interface BackendDocument {
+    id: string;
+    collection_id: string;
+    filename: string;
+    status: "uploaded" | "processing" | "ready" | "failed";
+    has_ocr: boolean;
+    created_at: string;
+}
+
+interface CollectionData {
+    id: string;
+    name: string;
+    created_at: string;
+    documents: BackendDocument[];
+}
+
+export default function RagCollectionPage({ params }: { params: Promise<{ collectionId: string }> }) {
+    const { collectionId } = use(params);
     const router = useRouter();
     const [messages, setMessages] = useState<Message[]>([]);
     const [input, setInput] = useState("");
     const [isLoading, setIsLoading] = useState(false);
-    const [documents, setDocuments] = useState<string[]>([]);
+    const [collection, setCollection] = useState<CollectionData | null>(null);
+    const [documents, setDocuments] = useState<BackendDocument[]>([]);
+    const [isUploading, setIsUploading] = useState(false);
+    const [chatId, setChatId] = useState<string | null>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
-
-    const { collectionId } = params;
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -33,18 +51,93 @@ export default function RagCollectionPage({ params }: { params: { collectionId: 
         scrollToBottom();
     }, [messages]);
 
-    const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // Load collection and documents on mount
+    useEffect(() => {
+        async function loadCollection() {
+            try {
+                const res = await fetch(`/api/rag/collections/${collectionId}`);
+                if (res.ok) {
+                    const data: CollectionData = await res.json();
+                    setCollection(data);
+                    setDocuments(data.documents || []);
+                }
+            } catch (error) {
+                console.error("Erro ao carregar coleção:", error);
+            }
+        }
+        loadCollection();
+    }, [collectionId]);
+
+    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = e.target.files;
-        if (files) {
-            const newDocs = Array.from(files).map((f) => f.name);
-            setDocuments((prev) => [...prev, ...newDocs]);
-            // TODO: Implement real upload to collectionId
+        if (!files || files.length === 0) return;
+
+        setIsUploading(true);
+        try {
+            for (const file of Array.from(files)) {
+                const formData = new FormData();
+                formData.append("file", file);
+
+                const res = await fetch(`/api/rag/collections/${collectionId}/documents`, {
+                    method: "POST",
+                    body: formData,
+                });
+
+                if (res.ok) {
+                    const newDoc: BackendDocument = await res.json();
+                    setDocuments((prev) => [...prev, newDoc]);
+                } else {
+                    const error = await res.json().catch(() => ({ detail: "Erro ao enviar arquivo" }));
+                    console.error("Upload failed:", error);
+                    alert(`Erro ao enviar ${file.name}: ${error.detail || "Erro desconhecido"}`);
+                }
+            }
+        } catch (error) {
+            console.error("Erro no upload:", error);
+        } finally {
+            setIsUploading(false);
+            // Reset the input so the same file can be uploaded again
+            e.target.value = "";
         }
     };
 
-    const handleRemoveDocument = (index: number) => {
-        setDocuments((prev) => prev.filter((_, i) => i !== index));
-        // TODO: Implement real delete
+    const handleRemoveDocument = async (doc: BackendDocument) => {
+        try {
+            const res = await fetch(`/api/rag/collections/${collectionId}/documents/${doc.id}`, {
+                method: "DELETE",
+            });
+
+            if (res.ok || res.status === 204) {
+                setDocuments((prev) => prev.filter((d) => d.id !== doc.id));
+            } else {
+                console.error("Erro ao remover documento");
+            }
+        } catch (error) {
+            console.error("Erro ao remover documento:", error);
+        }
+    };
+
+    const ensureChatSession = async (): Promise<string | null> => {
+        if (chatId) return chatId;
+
+        try {
+            const res = await fetch("/api/rag/chats", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ collection_id: collectionId }),
+            });
+
+            if (res.ok) {
+                const session = await res.json();
+                setChatId(session.id);
+                return session.id;
+            }
+            console.error("Erro ao criar sessão de chat");
+            return null;
+        } catch (error) {
+            console.error("Erro ao criar sessão de chat:", error);
+            return null;
+        }
     };
 
     const handleSend = async () => {
@@ -57,28 +150,68 @@ export default function RagCollectionPage({ params }: { params: { collectionId: 
         };
 
         setMessages((prev) => [...prev, userMessage]);
+        const currentInput = input;
         setInput("");
         setIsLoading(true);
 
         try {
-            // TODO: Connect to Real RAG API
-            // POST /api/rag/chats/{chatId}/messages
-            await new Promise((resolve) => setTimeout(resolve, 1500));
+            const sessionId = await ensureChatSession();
+            if (!sessionId) {
+                setMessages((prev) => [
+                    ...prev,
+                    {
+                        id: (Date.now() + 1).toString(),
+                        role: "assistant",
+                        content: "Erro: não foi possível criar a sessão de chat. Tente novamente.",
+                    },
+                ]);
+                return;
+            }
 
-            const assistantMessage: Message = {
-                id: (Date.now() + 1).toString(),
-                role: "assistant",
-                content: `Resposta simulada para a coleção ${collectionId}.\n\nEm breve estarei conectado ao backend real!`,
-                sources: documents.length > 0 ? [documents[0]] : undefined,
-            };
+            const res = await fetch(`/api/rag/chats/${sessionId}/messages`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ role: "user", content: currentInput }),
+            });
 
-            setMessages((prev) => [...prev, assistantMessage]);
+            if (res.ok) {
+                const aiMsg = await res.json();
+                const assistantMessage: Message = {
+                    id: aiMsg.id,
+                    role: "assistant",
+                    content: aiMsg.content,
+                    sources: documents
+                        .filter((d) => d.status === "ready")
+                        .map((d) => d.filename),
+                };
+                setMessages((prev) => [...prev, assistantMessage]);
+            } else {
+                const error = await res.json().catch(() => ({ detail: "Erro desconhecido" }));
+                setMessages((prev) => [
+                    ...prev,
+                    {
+                        id: (Date.now() + 1).toString(),
+                        role: "assistant",
+                        content: `Erro ao processar sua pergunta: ${error.detail || "Tente novamente."}`,
+                    },
+                ]);
+            }
         } catch (error) {
             console.error("Erro ao enviar mensagem:", error);
+            setMessages((prev) => [
+                ...prev,
+                {
+                    id: (Date.now() + 1).toString(),
+                    role: "assistant",
+                    content: "Erro de comunicação com o servidor. Verifique sua conexão.",
+                },
+            ]);
         } finally {
             setIsLoading(false);
         }
     };
+
+    const collectionName = collection?.name || collectionId;
 
     return (
         <div className="flex h-[calc(100vh-8rem)] flex-col space-y-4">
@@ -91,7 +224,7 @@ export default function RagCollectionPage({ params }: { params: { collectionId: 
                     <MessageSquare className="h-6 w-6 text-primary" />
                 </div>
                 <div>
-                    <h1 className="text-2xl font-bold">Workspace: {collectionId}</h1>
+                    <h1 className="text-2xl font-bold font-heading">Workspace: {collectionName}</h1>
                     <p className="text-muted-foreground">
                         Adicione documentos a esta coleção para começar.
                     </p>
@@ -105,15 +238,20 @@ export default function RagCollectionPage({ params }: { params: { collectionId: 
                         <CardTitle className="text-base">Documentos Ativos</CardTitle>
                     </CardHeader>
                     <CardContent className="flex-1 overflow-hidden flex flex-col space-y-4">
-                        <label className="flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-muted-foreground/25 p-4 transition-colors hover:border-primary/50 hover:bg-muted/50">
-                            <Upload className="h-4 w-4" />
-                            <span className="text-sm">Adicionar PDF</span>
+                        <label className={`flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-muted-foreground/25 p-4 transition-colors hover:border-primary/50 hover:bg-muted/50 ${isUploading ? "pointer-events-none opacity-50" : ""}`}>
+                            {isUploading ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                                <Upload className="h-4 w-4" />
+                            )}
+                            <span className="text-sm">{isUploading ? "Enviando..." : "Adicionar PDF"}</span>
                             <input
                                 type="file"
                                 accept=".pdf"
                                 multiple
                                 onChange={handleFileUpload}
                                 className="hidden"
+                                disabled={isUploading}
                             />
                         </label>
 
@@ -124,18 +262,26 @@ export default function RagCollectionPage({ params }: { params: { collectionId: 
                                         Nenhum documento nesta coleção.
                                     </p>
                                 ) : (
-                                    documents.map((doc, index) => (
+                                    documents.map((doc) => (
                                         <div
-                                            key={index}
+                                            key={doc.id}
                                             className="flex items-center gap-2 rounded-lg bg-muted p-2 group"
                                         >
                                             <FileText className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
-                                            <span className="flex-1 truncate text-sm">{doc}</span>
+                                            <div className="flex-1 min-w-0">
+                                                <span className="block truncate text-sm">{doc.filename}</span>
+                                                {doc.status === "processing" && (
+                                                    <span className="text-[10px] text-warning">Processando...</span>
+                                                )}
+                                                {doc.status === "failed" && (
+                                                    <span className="text-[10px] text-error">Falhou</span>
+                                                )}
+                                            </div>
                                             <Button
                                                 variant="ghost"
                                                 size="icon"
                                                 className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
-                                                onClick={() => handleRemoveDocument(index)}
+                                                onClick={() => handleRemoveDocument(doc)}
                                             >
                                                 <Trash2 className="h-3 w-3 text-destructive" />
                                             </Button>
@@ -156,7 +302,7 @@ export default function RagCollectionPage({ params }: { params: { collectionId: 
                                 {messages.length === 0 ? (
                                     <div className="flex h-full flex-col items-center justify-center py-20 text-center opacity-50">
                                         <MessageSquare className="h-16 w-16 mb-4" />
-                                        <h3 className="text-lg font-medium">Chat Vazio</h3>
+                                        <h3 className="text-lg font-medium font-heading">Chat Vazio</h3>
                                         <p>Carregue um PDF ao lado e comece a perguntar.</p>
                                     </div>
                                 ) : (
