@@ -40,7 +40,7 @@ class Settings(BaseSettings):
     ENABLE_LLM_SELF_REVIEW: bool = False
 
     # RAG - Retrieval Augmented Generation
-    GEMINI_EMBEDDING_MODEL: str = "text-embedding-004"
+    GEMINI_EMBEDDING_MODEL: str = "gemini-embedding-001"
     RAG_CHUNK_SIZE: int = 1500
     RAG_CHUNK_OVERLAP: int = 200
     RAG_TOP_K: int = 15

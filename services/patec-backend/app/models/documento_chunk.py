@@ -24,7 +24,7 @@ class DocumentoChunk(Base):
         ForeignKey("pareceres.id", ondelete="CASCADE"), nullable=False
     )
     conteudo: Mapped[str] = mapped_column(Text, nullable=False)
-    embedding = mapped_column(Vector(768) if Vector else Text, nullable=False)
+    embedding = mapped_column(Vector(3072) if Vector else Text, nullable=False)
     page_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
     chunk_index: Mapped[int] = mapped_column(Integer, nullable=False)
     chunk_type: Mapped[str] = mapped_column(String(20), default="text")

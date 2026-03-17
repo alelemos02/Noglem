@@ -1,6 +1,6 @@
 """Gemini Embedding Service for PATEC RAG.
 
-Uses the Gemini text-embedding-004 model to generate 768-dimensional embeddings
+Uses the Gemini gemini-embedding-001 model to generate 3072-dimensional embeddings
 for document chunks (RETRIEVAL_DOCUMENT) and search queries (RETRIEVAL_QUERY).
 """
 
@@ -17,7 +17,7 @@ from app.core.config import settings
 logger = logging.getLogger(__name__)
 
 GEMINI_EMBEDDING_URL = (
-    "https://generativelanguage.googleapis.com/v1/models/"
+    "https://generativelanguage.googleapis.com/v1beta/models/"
     "{model}:batchEmbedContents"
 )
 
