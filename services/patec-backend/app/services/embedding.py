@@ -1,6 +1,6 @@
 """Gemini Embedding Service for PATEC RAG.
 
-Uses the Gemini gemini-embedding-001 model to generate 3072-dimensional embeddings
+Uses the Gemini gemini-embedding-001 model to generate 768-dimensional embeddings (reduced from 3072)
 for document chunks (RETRIEVAL_DOCUMENT) and search queries (RETRIEVAL_QUERY).
 """
 
@@ -77,12 +77,16 @@ async def _embed_batch(
     """Embed a single batch (up to 100 texts) with retry logic."""
     url = GEMINI_EMBEDDING_URL.format(model=model)
 
+    # Use outputDimensionality to reduce from 3072 to 768 (HNSW index limit is 2000)
+    embedding_dim = 768
+
     payload = {
         "requests": [
             {
                 "model": f"models/{model}",
                 "content": {"parts": [{"text": text}]},
                 "taskType": task_type,
+                "outputDimensionality": embedding_dim,
             }
             for text in texts
         ]
