@@ -31,13 +31,21 @@ async function handler(
       headers["Content-Type"] = contentType;
     }
 
-    const options: RequestInit = {
+    // Read body upfront to avoid "duplex option is required" error
+    let body: BodyInit | undefined;
+    if (!["GET", "HEAD"].includes(request.method)) {
+      if (contentType?.includes("multipart/form-data")) {
+        body = await request.arrayBuffer();
+      } else {
+        body = await request.text();
+      }
+    }
+
+    const response = await fetch(backendUrl.toString(), {
       method: request.method,
       headers,
-      body: ["GET", "HEAD"].includes(request.method) ? undefined : request.body,
-    };
-
-    const response = await fetch(backendUrl.toString(), options);
+      body,
+    });
 
     // SSE streaming (chat)
     if (response.headers.get("content-type")?.includes("text/event-stream")) {

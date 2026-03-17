@@ -31,10 +31,20 @@ async function handler(
       headers["Content-Type"] = contentType;
     }
 
+    // Read body upfront to avoid "duplex option is required" error when streaming
+    let body: BodyInit | undefined;
+    if (request.method !== "GET" && request.method !== "HEAD") {
+      if (contentType?.includes("multipart/form-data")) {
+        body = await request.arrayBuffer();
+      } else {
+        body = await request.text();
+      }
+    }
+
     const response = await fetch(url, {
       method: request.method,
       headers,
-      body: request.method !== "GET" && request.method !== "HEAD" ? request.body : undefined,
+      body,
     });
 
     // Handle SSE streaming responses

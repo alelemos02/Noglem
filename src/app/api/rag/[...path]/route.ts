@@ -32,22 +32,21 @@ async function handler(request: NextRequest, { params }: { params: Promise<{ pat
             // NextJS Request body is a stream. We can pass it directly?
         }
 
-        const options: RequestInit = {
+        // Read body upfront to avoid "duplex option is required" error
+        let body: BodyInit | undefined;
+        if (request.method !== "GET" && request.method !== "HEAD") {
+            if (contentType?.includes("multipart/form-data")) {
+                body = await request.arrayBuffer();
+            } else {
+                body = await request.text();
+            }
+        }
+
+        const response = await fetch(finalUrl, {
             method: request.method,
-            headers: headers,
-            // Default body handling
-            body: request.body,
-            // Important for streaming responses if backend streams (like chat)
-            // duplex: 'half' is required for streaming uploads in some fetch implementations, 
-            // but here we are streaming passing through.
-        };
-
-        // Special handling for FormData if needed, but usually passing request.body works if we don't consume it.
-        // However, NextRequest body might be consumed already?
-
-        // Let's rely on standard fetch behavior with body stream.
-
-        const response = await fetch(finalUrl, options);
+            headers,
+            body,
+        });
 
         // Handle Streaming Responses (SSE)
         if (response.headers.get("content-type")?.includes("text/event-stream")) {
