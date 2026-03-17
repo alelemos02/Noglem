@@ -17,7 +17,7 @@ from app.core.config import settings
 logger = logging.getLogger(__name__)
 
 GEMINI_EMBEDDING_URL = (
-    "https://generativelanguage.googleapis.com/v1beta/models/"
+    "https://generativelanguage.googleapis.com/v1/models/"
     "{model}:batchEmbedContents"
 )
 
