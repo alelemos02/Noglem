@@ -6,6 +6,7 @@ import httpx
 
 from app.core.config import settings
 from app.models.documento import Documento
+from app.models.documento_chunk import DocumentoChunk
 from app.models.item_parecer import ItemParecer
 from app.models.mensagem_chat import MensagemChat
 from app.models.parecer import Parecer
@@ -29,8 +30,8 @@ O parecer tecnico ja foi gerado e esta disponivel como contexto na primeira mens
 3. Quando o especialista questionar uma classificacao, cite EXCLUSIVAMENTE o trecho exato e a localizacao (documento, pagina, secao) nos documentos da engenharia que originou o requisito
 4. Se o especialista solicitar alteracoes, discuta tecnicamente antes de concordar - voce pode concordar se o argumento tecnico for valido
 5. Voce pode sugerir reclassificacoes se convencido pelo argumento tecnico do especialista
-6. Nao invente informacoes que nao estejam nos documentos originais analisados
-7. Se questionado sobre algo fora do escopo dos documentos, informe claramente que a informacao nao consta nos documentos analisados
+6. NUNCA invente informacoes que nao estejam nos documentos originais analisados. Se voce nao encontrar uma informacao especifica no texto dos documentos fornecidos, diga EXPLICITAMENTE que nao encontrou - NUNCA fabrique dados como TAGs, numeros de serie, especificacoes ou valores que nao estejam literalmente no texto dos documentos
+7. Se questionado sobre algo fora do escopo dos documentos, informe claramente que a informacao nao consta nos documentos analisados. Quando citar qualquer dado (TAGs, valores, especificacoes), COPIE o texto exato do documento - nunca parafraseie ou reconstrua de memoria
 8. Seja objetivo e direto nas respostas, mas sem perder profundidade tecnica
 9. Se um requisito que voce classificou nao estiver explicitamente nos documentos da engenharia, RECONHECA IMEDIATAMENTE o erro: informe que o item nao tem base documental e proponha sua remocao ou reclassificacao como D (Informacao Ausente do Fornecedor nao se aplica - neste caso, o item deve ser REMOVIDO por nao ter origem na documentacao da engenharia)
 10. NUNCA use boas praticas de engenharia, normas implicitas ou conhecimento proprio como fundamento para criar ou manter um item do parecer. O fundamento DEVE ser sempre o texto literal dos documentos da engenharia fornecidos.
@@ -59,9 +60,15 @@ def build_chat_context(
     documentos: list[Documento],
     mensagens: list[MensagemChat],
     nova_mensagem: str,
-    incluir_documentos: bool = False,
+    retrieved_chunks: list[DocumentoChunk] | None = None,
+    include_full_text: bool = False,
 ) -> tuple[str, list[dict]]:
-    """Build system prompt and contents array for Gemini multi-turn chat."""
+    """Build system prompt and contents array for Gemini multi-turn chat.
+
+    When retrieved_chunks is provided (RAG mode), uses semantically relevant
+    chunks instead of full document text. Falls back to full text when
+    chunks are not available or for table regeneration.
+    """
 
     eng_docs = [d for d in documentos if d.tipo == "engenharia"]
     forn_docs = [d for d in documentos if d.tipo == "fornecedor"]
@@ -102,8 +109,26 @@ def build_chat_context(
         "\n".join(f"- {r.texto}" for r in recomendacoes) or "N/A",
     ]
 
-    # Include full document text for table regeneration
-    if incluir_documentos:
+    # Include document content: either RAG chunks (preferred) or full text (fallback)
+    if retrieved_chunks and not include_full_text:
+        # RAG mode: include only semantically relevant chunks
+        context_parts.extend([
+            "",
+            "## TRECHOS RELEVANTES DOS DOCUMENTOS (recuperados por relevancia semantica)",
+            "Os trechos abaixo foram selecionados automaticamente como os mais relevantes "
+            "para a pergunta atual. Cite SEMPRE o documento e pagina ao referenciar informacoes.",
+            "Se a informacao necessaria nao estiver nestes trechos, informe que nao encontrou "
+            "nos trechos disponibilizados.",
+            "",
+        ])
+        for chunk in retrieved_chunks:
+            tipo_label = "Engenharia" if chunk.tipo_documento == "engenharia" else "Fornecedor"
+            page_info = f"Pagina {chunk.page_number}" if chunk.page_number else "Pagina ?"
+            chunk_label = "TABELA" if chunk.chunk_type == "table" else "TEXTO"
+            header = f"### [{tipo_label}] {chunk.nome_arquivo} - {page_info} ({chunk_label})"
+            context_parts.append(f"{header}\n{chunk.conteudo}\n")
+    else:
+        # Full text mode: used for table regeneration or when RAG is not available
         context_parts.extend([
             "",
             "## TEXTO COMPLETO DOS DOCUMENTOS DA ENGENHARIA",

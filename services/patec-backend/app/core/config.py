@@ -39,6 +39,12 @@ class Settings(BaseSettings):
     # Self-review: optional second LLM pass to verify flagged items
     ENABLE_LLM_SELF_REVIEW: bool = False
 
+    # RAG - Retrieval Augmented Generation
+    GEMINI_EMBEDDING_MODEL: str = "text-embedding-004"
+    RAG_CHUNK_SIZE: int = 1500
+    RAG_CHUNK_OVERLAP: int = 200
+    RAG_TOP_K: int = 15
+
     # Storage
     UPLOAD_DIR: str = "./uploads"
     MAX_FILE_SIZE_MB: int = 50

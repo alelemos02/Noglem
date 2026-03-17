@@ -3,23 +3,40 @@ from docx import Document as DocxDocument
 from openpyxl import load_workbook
 
 
+def _format_table(table_data: list[list]) -> str:
+    """Format extracted table data as pipe-separated text with headers."""
+    if not table_data:
+        return ""
+    lines = []
+    for row in table_data:
+        cells = [str(c).strip() if c else "" for c in row]
+        lines.append(" | ".join(cells))
+    return "\n".join(lines)
+
+
 def extract_pdf(file_path: str) -> str:
     doc = fitz.open(file_path)
     text_parts = []
     for page_num, page in enumerate(doc, 1):
+        # Extract tables first (structured data is more reliable than get_text for tables)
+        page_tables = page.find_tables()
+        table_rects = []
+        if page_tables and page_tables.tables:
+            for table in page_tables.tables:
+                try:
+                    data = table.extract()
+                    if data:
+                        table_rects.append(table.bbox)
+                        text_parts.append(
+                            f"\n[Tabela - Pagina {page_num}]\n{_format_table(data)}\n"
+                        )
+                except Exception:
+                    pass
+
+        # Extract non-table text from the page
         text = page.get_text()
         if text.strip():
             text_parts.append(f"--- Pagina {page_num} ---\n{text}")
-
-        # Extract tables if any
-        tables = page.find_tables()
-        if tables:
-            for table in tables:
-                try:
-                    df = table.to_pandas()
-                    text_parts.append(f"\n[Tabela - Pagina {page_num}]\n{df.to_string()}\n")
-                except Exception:
-                    pass
 
     doc.close()
     return "\n".join(text_parts)

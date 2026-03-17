@@ -25,6 +25,7 @@ from app.services.chat import (
     call_gemini_stream_async,
     detect_table_regeneration,
 )
+from app.services.retriever import retrieve_relevant_chunks
 
 logger = logging.getLogger(__name__)
 
@@ -152,7 +153,20 @@ async def enviar_mensagem(
     await db.commit()
     await db.refresh(user_msg)
 
-    # Build context
+    # Retrieve relevant chunks via RAG (skip for table regeneration which needs full context)
+    chunks = None
+    if not payload.regenerar:
+        try:
+            chunks = await retrieve_relevant_chunks(
+                query=payload.mensagem,
+                parecer_id=parecer_id,
+                db=db,
+            )
+        except Exception:
+            logger.exception("RAG retrieval failed for parecer %s, falling back to full text", parecer_id)
+            chunks = None
+
+    # Build context with RAG chunks or full text fallback
     system_prompt, contents = build_chat_context(
         parecer=parecer,
         itens=list(itens),
@@ -160,7 +174,8 @@ async def enviar_mensagem(
         documentos=list(documentos),
         mensagens=list(mensagens),
         nova_mensagem=payload.mensagem,
-        incluir_documentos=payload.regenerar,
+        retrieved_chunks=chunks if chunks else None,
+        include_full_text=payload.regenerar,
     )
 
     max_tokens = 65536 if payload.regenerar else 8192

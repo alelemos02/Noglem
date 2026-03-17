@@ -145,10 +145,71 @@ export function OverviewPanel() {
         </div>
       )}
 
-      {/* Documents */}
+      {/* Document Numbers Reference */}
+      {documentos.length > 0 && (
+        <div className="rounded-lg border border-border bg-surface p-6">
+          <h3 className="mb-3 text-sm font-bold text-text-primary">
+            Documentos Carregados
+          </h3>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div>
+              <p className="mb-2 text-xs font-semibold text-text-secondary">
+                Engenharia ({documentos.filter((d) => d.tipo === "engenharia").length})
+              </p>
+              {documentos.filter((d) => d.tipo === "engenharia").length > 0 ? (
+                <ul className="space-y-1">
+                  {documentos
+                    .filter((d) => d.tipo === "engenharia")
+                    .map((doc) => (
+                      <li key={doc.id} className="flex items-center gap-2 text-sm">
+                        <span className="font-mono text-xs text-text-primary">
+                          {doc.nome_arquivo}
+                        </span>
+                        {doc.tamanho_bytes && (
+                          <span className="text-xs text-text-tertiary">
+                            ({(doc.tamanho_bytes / 1024).toFixed(0)} KB)
+                          </span>
+                        )}
+                      </li>
+                    ))}
+                </ul>
+              ) : (
+                <p className="text-xs text-text-tertiary">Nenhum documento</p>
+              )}
+            </div>
+            <div>
+              <p className="mb-2 text-xs font-semibold text-text-secondary">
+                Fornecedor ({documentos.filter((d) => d.tipo === "fornecedor").length})
+              </p>
+              {documentos.filter((d) => d.tipo === "fornecedor").length > 0 ? (
+                <ul className="space-y-1">
+                  {documentos
+                    .filter((d) => d.tipo === "fornecedor")
+                    .map((doc) => (
+                      <li key={doc.id} className="flex items-center gap-2 text-sm">
+                        <span className="font-mono text-xs text-text-primary">
+                          {doc.nome_arquivo}
+                        </span>
+                        {doc.tamanho_bytes && (
+                          <span className="text-xs text-text-tertiary">
+                            ({(doc.tamanho_bytes / 1024).toFixed(0)} KB)
+                          </span>
+                        )}
+                      </li>
+                    ))}
+                </ul>
+              ) : (
+                <p className="text-xs text-text-tertiary">Nenhum documento</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Document Upload */}
       <div className="rounded-lg border border-border bg-surface p-6">
         <h3 className="mb-3 text-sm font-bold text-text-primary">
-          Documentos
+          Upload de Documentos
         </h3>
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
           <FileUploadZone

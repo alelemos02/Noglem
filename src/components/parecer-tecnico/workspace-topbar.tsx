@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { ProcessamentoBadge, ParecerGeralBadge } from "./status-badge";
@@ -17,6 +17,7 @@ export function WorkspaceTopbar() {
     parecer,
     statusCounts,
     itens,
+    documentos,
     hasResults,
     filters,
     setFilters,
@@ -25,6 +26,23 @@ export function WorkspaceTopbar() {
 
   const [deleting, setDeleting] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
+  const [showDocs, setShowDocs] = useState(false);
+  const docsRef = useRef<HTMLDivElement>(null);
+
+  const engDocs = documentos.filter((d) => d.tipo === "engenharia");
+  const fornDocs = documentos.filter((d) => d.tipo === "fornecedor");
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (docsRef.current && !docsRef.current.contains(e.target as Node)) {
+        setShowDocs(false);
+      }
+    }
+    if (showDocs) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [showDocs]);
 
   if (!parecer) return null;
 
@@ -121,6 +139,53 @@ export function WorkspaceTopbar() {
 
         {/* Right: actions */}
         <div className="flex items-center gap-1.5">
+          {/* Document numbers popover */}
+          {documentos.length > 0 && (
+            <div className="relative" ref={docsRef}>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 px-2 text-xs text-text-tertiary hover:text-text-primary"
+                onClick={() => setShowDocs(!showDocs)}
+                title="Documentos carregados"
+              >
+                <span className="font-mono tabular-nums">
+                  {engDocs.length + fornDocs.length} docs
+                </span>
+              </Button>
+              {showDocs && (
+                <div className="absolute right-0 top-full z-50 mt-1 w-80 rounded-lg border border-border bg-surface p-4 shadow-lg">
+                  <p className="mb-2 text-xs font-bold text-text-primary">
+                    Documentos Carregados
+                  </p>
+                  {engDocs.length > 0 && (
+                    <div className="mb-3">
+                      <p className="mb-1 text-xs font-semibold text-text-secondary">
+                        Engenharia ({engDocs.length})
+                      </p>
+                      {engDocs.map((d) => (
+                        <p key={d.id} className="truncate font-mono text-xs text-text-primary" title={d.nome_arquivo}>
+                          {d.nome_arquivo}
+                        </p>
+                      ))}
+                    </div>
+                  )}
+                  {fornDocs.length > 0 && (
+                    <div>
+                      <p className="mb-1 text-xs font-semibold text-text-secondary">
+                        Fornecedor ({fornDocs.length})
+                      </p>
+                      {fornDocs.map((d) => (
+                        <p key={d.id} className="truncate font-mono text-xs text-text-primary" title={d.nome_arquivo}>
+                          {d.nome_arquivo}
+                        </p>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
           <Button
             variant="ghost"
             size="sm"

@@ -1,3 +1,4 @@
+import logging
 import os
 import uuid
 
@@ -14,6 +15,9 @@ from app.models.documento import Documento
 from app.schemas.documento import DocumentoResponse
 from app.services.document_crypto import encrypt_bytes, decrypted_temp_file
 from app.services.text_extractor import extract_text
+from app.services.indexer import index_document
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/pareceres/{parecer_id}/documentos", tags=["documentos"])
 
@@ -98,6 +102,22 @@ async def _upload_doc(
     db.add(documento)
     await db.commit()
     await db.refresh(documento)
+
+    # Index document for RAG (chunk + embed + store)
+    try:
+        chunk_count = await index_document(documento, db)
+        await db.commit()
+        logger.info(
+            "Indexed %d chunks for documento %s (%s)",
+            chunk_count,
+            documento.id,
+            documento.nome_arquivo,
+        )
+    except Exception:
+        logger.exception(
+            "RAG indexing failed for documento %s, continuing without embeddings",
+            documento.id,
+        )
 
     return _to_response(documento)
 
