@@ -177,10 +177,11 @@ async def upload_document_to_collection(
         db.commit()
         
     except Exception as e:
+        error_msg = f"{type(e).__name__}: {str(e)}"
         db_doc.status = DocumentStatus.FAILED
+        db_doc.error_message = error_msg
         db.commit()
-        logger.error(f"Ingestion failed for {doc_id}: {e}", exc_info=True)
-        # We don't raise 500 here because the file upload was technically successful, just processing failed.
+        logger.error(f"Ingestion failed for {doc_id}: {error_msg}", exc_info=True)
         
     db.refresh(db_doc)
     return db_doc

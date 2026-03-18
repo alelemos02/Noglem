@@ -8,9 +8,22 @@ from app.database import engine, Base
 # Importar modelos para garantir que o SQLAlchemy os conheça antes de criar tabelas
 import app.models.rag_models
 import app.models.email_models
+import app.models.auth_models
+
+from app.routers import translate, pdf, pid, rag, email, auth
 
 # Criar tabelas do banco de dados (SQLite)
 Base.metadata.create_all(bind=engine)
+
+# Migrations manuais (SQLite não suporta ALTER TABLE via create_all para colunas novas)
+from sqlalchemy import text, inspect
+with engine.connect() as conn:
+    inspector = inspect(engine)
+    if "documents" in inspector.get_table_names():
+        existing_cols = [c["name"] for c in inspector.get_columns("documents")]
+        if "error_message" not in existing_cols:
+            conn.execute(text("ALTER TABLE documents ADD COLUMN error_message TEXT"))
+            conn.commit()
 
 # Criar diretórios necessários
 os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
@@ -54,6 +67,7 @@ app.include_router(pdf.router, prefix="/api/pdf", tags=["PDF"])
 app.include_router(rag.router, prefix="/api/rag", tags=["RAG"])
 app.include_router(email.router, prefix="/api/email", tags=["Email"])
 app.include_router(pid.router, prefix="/api/pid", tags=["PID"])
+app.include_router(auth.router, prefix="/api/auth", tags=["Auth"])
 
 if __name__ == "__main__":
     import uvicorn

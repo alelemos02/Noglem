@@ -21,6 +21,7 @@ interface BackendDocument {
     filename: string;
     status: "uploaded" | "processing" | "ready" | "failed";
     has_ocr: boolean;
+    error_message?: string | null;
     created_at: string;
 }
 
@@ -278,7 +279,9 @@ export default function RagCollectionPage({ params }: { params: Promise<{ collec
                                                     <span className="text-[10px] text-warning">Processando...</span>
                                                 )}
                                                 {doc.status === "failed" && (
-                                                    <span className="text-[10px] text-error">Falhou</span>
+                                                    <span className="text-[10px] text-error" title={doc.error_message || "Erro desconhecido"}>
+                                                        Falhou {doc.error_message ? "⚠" : ""}
+                                                    </span>
                                                 )}
                                             </div>
                                             <Button

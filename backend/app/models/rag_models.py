@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, DateTime, ForeignKey, Boolean
+from sqlalchemy import Column, String, DateTime, ForeignKey, Boolean, Text
 from sqlalchemy.orm import relationship
 from datetime import datetime
 import uuid
@@ -33,6 +33,7 @@ class Document(Base):
     original_path = Column(String)
     status = Column(String, default=DocumentStatus.UPLOADED) # We store as string in SQLite
     has_ocr = Column(Boolean, default=False)
+    error_message = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     collection = relationship("Collection", back_populates="documents")
