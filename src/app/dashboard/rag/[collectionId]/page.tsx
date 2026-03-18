@@ -87,9 +87,13 @@ export default function RagCollectionPage({ params }: { params: Promise<{ collec
                     const newDoc: BackendDocument = await res.json();
                     setDocuments((prev) => [...prev, newDoc]);
                 } else {
-                    const error = await res.json().catch(() => ({ detail: "Erro ao enviar arquivo" }));
-                    console.error("Upload failed:", error);
-                    alert(`Erro ao enviar ${file.name}: ${error.detail || "Erro desconhecido"}`);
+                    const errorBody = await res.json().catch(() => ({ detail: "Erro ao enviar arquivo" }));
+                    console.error("Upload failed:", res.status, errorBody);
+                    const detail = errorBody?.detail;
+                    const errorMsg = typeof detail === "string"
+                        ? detail
+                        : detail ? JSON.stringify(detail) : `HTTP ${res.status}`;
+                    alert(`Erro ao enviar ${file.name}: ${errorMsg}`);
                 }
             }
         } catch (error) {

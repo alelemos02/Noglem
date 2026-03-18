@@ -21,22 +21,20 @@ async function handler(request: NextRequest, { params }: { params: Promise<{ pat
         // Headers
         const headers = buildBackendAuthHeaders(userId) as Record<string, string>;
 
-        // Content-Type handling for FormData/JSON
+        // Content-Type handling — always forward the original header
+        // For multipart/form-data, the header includes the boundary needed to parse the body
         const contentType = request.headers.get("content-type");
         if (contentType) {
-            if (!contentType.includes("multipart/form-data")) {
-                headers["Content-Type"] = contentType;
-            }
-            // If multipart, do NOT set Content-Type header, fetch will set it with boundary automatically 
-            // IF we pass FormData directly. But we are reading as blob/arrayBuffer or passing body stream?
-            // NextJS Request body is a stream. We can pass it directly?
+            headers["Content-Type"] = contentType;
         }
 
         // Read body upfront to avoid "duplex option is required" error
         let body: BodyInit | undefined;
         if (request.method !== "GET" && request.method !== "HEAD") {
             if (contentType?.includes("multipart/form-data")) {
-                body = await request.arrayBuffer();
+                // Convert to Buffer for reliable binary forwarding to FastAPI
+                const arrayBuf = await request.arrayBuffer();
+                body = Buffer.from(arrayBuf);
             } else {
                 body = await request.text();
             }
@@ -96,5 +94,9 @@ async function handler(request: NextRequest, { params }: { params: Promise<{ pat
         );
     }
 }
+
+// Allow larger request bodies (PDF uploads up to 50MB)
+export const maxContentLength = 50 * 1024 * 1024; // 50MB
+export const runtime = "nodejs";
 
 export { handler as GET, handler as POST, handler as PUT, handler as DELETE };
