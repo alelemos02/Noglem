@@ -1,0 +1,24 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "port": 3000,
+      "autoPort": true
+    },
+    {
+      "name": "fliping-backend",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["-c", "cd /Users/alexandrenogueira/workspace/01_ACTIVE/Fliping/backend && python3 -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8001"],
+      "port": 8001
+    },
+    {
+      "name": "fliping-frontend",
+      "runtimeExecutable": "yarn",
+      "runtimeArgs": ["--cwd", "/Users/alexandrenogueira/workspace/01_ACTIVE/Fliping/frontend", "dev", "--port", "3001"],
+      "port": 3001
+    }
+  ]
+}

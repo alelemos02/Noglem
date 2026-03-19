@@ -13,7 +13,7 @@ from app.config import settings
 
 # Models & Schemas
 from app.models.rag_models import Collection, Document, DocumentStatus, ChatSession, ChatMessage
-from app.models.rag_schemas import (
+from app.schemas.rag_schemas import (
     Collection as CollectionSchema, 
     CollectionCreate, 
     Document as DocumentSchema,

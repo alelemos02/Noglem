@@ -1,0 +1,11 @@
+fastapi
+uvicorn[standard]
+pydantic-settings
+SQLAlchemy
+pydantic
+langchain
+langchain-openai
+langchain-chroma
+python-multipart
+python-docx
+python-dotenv

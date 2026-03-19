@@ -14,7 +14,8 @@ async function handler(request: NextRequest, { params }: { params: Promise<{ pat
 
         const { path: pathSegments } = await params;
         const path = pathSegments.join("/");
-        const url = `${API_URL}/api/rag/${path}`;
+        const RAG_SERVICE_URL = process.env.RAG_API_URL || "http://localhost:8002";
+        const url = `${RAG_SERVICE_URL}/api/rag/${path}`;
         const searchParams = request.nextUrl.searchParams.toString();
         const finalUrl = searchParams ? `${url}?${searchParams}` : url;
 
