@@ -29,9 +29,10 @@ O que esta abaixo e especifico do Claude Code e nao se aplica a outros agentes.
 - **RAG microservice**: Railway (diretorio raiz: `services/rag-backend/`)
 - **PATEC microservice**: Railway (diretorio raiz: `services/patec-backend/`)
 
-**Fluxo de deploy:** faca o commit + push para o GitHub. Vercel e Railway fazem o deploy automaticamente.
+**Fluxo de deploy:**
+- **DEPLOY / GITHUB:** Toda alteracao finalizada deve sempre ser comitada (`git commit`) e subida para o GitHub (`git push origin main`), para garantir que reflita no site. A Vercel e o Railway fazem o deploy automaticamente.
 
-Correcoes de bug devem ser commitadas e enviadas ao GitHub — nao basta rodar localmente.
+Correcoes de bug devem seguir a mesma regra: devem ser commitadas e enviadas ao GitHub — nao basta rodar localmente.
 
 Para verificar logs de producao: acesse o painel do Railway ou Vercel.
 
