@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Languages, ArrowRight, Copy, Check, Sparkles, Globe } from "lucide-react";
+import { Languages, ArrowRight, Copy, Check, Sparkles, Globe, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -30,6 +30,14 @@ export default function TranslatePage() {
   const [isLoading, setIsLoading] = useState(false);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState("");
+
+  const handleClear = () => {
+    setSourceText("");
+    setTranslatedText("");
+    setImprovedText("");
+    setDetectedLang("");
+    setError("");
+  };
 
   const handleTranslate = async () => {
     if (!sourceText.trim()) return;
@@ -96,10 +104,10 @@ export default function TranslatePage() {
       {/* Controls */}
       <div className="flex items-center justify-between rounded-lg border bg-card p-4 shadow-sm">
         <div className="flex items-center gap-3">
-          <Sparkles className={`h-5 w-5 ${improveMode ? "text-warning" : "text-muted-foreground"}`} />
+          <Sparkles className={`h-6 w-6 ${improveMode ? "text-warning" : "text-muted-foreground"}`} />
           <div>
-            <h3 className="font-medium text-sm">Modo de Melhoria (Improve Mode)</h3>
-            <p className="text-xs text-muted-foreground">Reescreve o texto original para maior fluidez antes de traduzir.</p>
+            <h3 className="font-semibold text-base">Melhorar texto</h3>
+            <p className="text-sm text-muted-foreground">Reescreve o texto original para maior fluidez antes de traduzir.</p>
           </div>
         </div>
         <label className="relative inline-flex cursor-pointer items-center">
@@ -127,18 +135,31 @@ export default function TranslatePage() {
                   </span>
                 )}
               </CardTitle>
-              <select
-                value={sourceLang}
-                onChange={(e) => setSourceLang(e.target.value)}
-                className="rounded-md border border-input bg-background px-3 py-1 text-sm"
-              >
-                <option value="auto">Detectar Idioma</option>
-                {languages.map((lang) => (
-                  <option key={lang.code} value={lang.code}>
-                    {lang.name}
-                  </option>
-                ))}
-              </select>
+              <div className="flex items-center gap-2">
+                <div className="hidden sm:flex items-center gap-1 bg-muted/50 p-1 rounded-md">
+                  <button 
+                    onClick={() => setSourceLang("auto")}
+                    className={`px-3 py-1 text-xs rounded-sm transition-colors ${sourceLang === "auto" ? "bg-background shadow-sm font-medium" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}
+                  >
+                    Auto
+                  </button>
+                  <button onClick={() => setSourceLang("pt")} className={`px-3 py-1 text-xs rounded-sm transition-colors ${sourceLang === "pt" ? "bg-background shadow-sm font-medium" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}>PT</button>
+                  <button onClick={() => setSourceLang("en")} className={`px-3 py-1 text-xs rounded-sm transition-colors ${sourceLang === "en" ? "bg-background shadow-sm font-medium" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}>EN</button>
+                  <button onClick={() => setSourceLang("es")} className={`px-3 py-1 text-xs rounded-sm transition-colors ${sourceLang === "es" ? "bg-background shadow-sm font-medium" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}>ES</button>
+                </div>
+                <select
+                  value={sourceLang}
+                  onChange={(e) => setSourceLang(e.target.value)}
+                  className="rounded-md border border-input bg-background px-3 py-1 text-sm max-w-[140px]"
+                >
+                  <option value="auto">Detectar Idioma</option>
+                  {languages.map((lang) => (
+                    <option key={lang.code} value={lang.code}>
+                      {lang.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
           </CardHeader>
           <CardContent className="flex-1">
@@ -156,17 +177,24 @@ export default function TranslatePage() {
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
               <CardTitle className="text-base">Tradução</CardTitle>
-              <select
-                value={targetLang}
-                onChange={(e) => setTargetLang(e.target.value)}
-                className="rounded-md border border-input bg-background px-3 py-1 text-sm"
-              >
-                {languages.map((lang) => (
-                  <option key={lang.code} value={lang.code}>
-                    {lang.name}
-                  </option>
-                ))}
-              </select>
+              <div className="flex items-center gap-2">
+                <div className="hidden sm:flex items-center gap-1 bg-muted/50 p-1 rounded-md">
+                  <button onClick={() => setTargetLang("pt")} className={`px-3 py-1 text-xs rounded-sm transition-colors ${targetLang === "pt" ? "bg-background shadow-sm font-medium" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}>PT</button>
+                  <button onClick={() => setTargetLang("en")} className={`px-3 py-1 text-xs rounded-sm transition-colors ${targetLang === "en" ? "bg-background shadow-sm font-medium" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}>EN</button>
+                  <button onClick={() => setTargetLang("es")} className={`px-3 py-1 text-xs rounded-sm transition-colors ${targetLang === "es" ? "bg-background shadow-sm font-medium" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}>ES</button>
+                </div>
+                <select
+                  value={targetLang}
+                  onChange={(e) => setTargetLang(e.target.value)}
+                  className="rounded-md border border-input bg-background px-3 py-1 text-sm max-w-[140px]"
+                >
+                  {languages.map((lang) => (
+                    <option key={lang.code} value={lang.code}>
+                      {lang.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
           </CardHeader>
           <CardContent className="flex-1 space-y-4">
@@ -215,7 +243,17 @@ export default function TranslatePage() {
       )}
 
       {/* Action Button */}
-      <div className="flex justify-center">
+      <div className="flex justify-center gap-4">
+        <Button
+          size="lg"
+          variant="outline"
+          onClick={handleClear}
+          disabled={!sourceText && !translatedText}
+          className="gap-2 min-w-[120px]"
+        >
+          <Trash2 className="h-4 w-4" />
+          Limpar
+        </Button>
         <Button
           size="lg"
           onClick={handleTranslate}
