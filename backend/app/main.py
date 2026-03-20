@@ -3,27 +3,14 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.routers import translate, pdf, pid, rag, email
+from app.routers import translate, pdf, pid, email, auth
 from app.database import engine, Base
 # Importar modelos para garantir que o SQLAlchemy os conheça antes de criar tabelas
-import app.models.rag_models
 import app.models.email_models
 import app.models.auth_models
 
-from app.routers import translate, pdf, pid, email, auth
-
 # Criar tabelas do banco de dados (SQLite)
 Base.metadata.create_all(bind=engine)
-
-# Migrations manuais (SQLite não suporta ALTER TABLE via create_all para colunas novas)
-from sqlalchemy import text, inspect
-with engine.connect() as conn:
-    inspector = inspect(engine)
-    if "documents" in inspector.get_table_names():
-        existing_cols = [c["name"] for c in inspector.get_columns("documents")]
-        if "error_message" not in existing_cols:
-            conn.execute(text("ALTER TABLE documents ADD COLUMN error_message TEXT"))
-            conn.commit()
 
 # Criar diretórios necessários
 os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
