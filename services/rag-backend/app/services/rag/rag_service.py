@@ -4,9 +4,6 @@ RAG Service with streaming support, conversation memory, and structured logging.
 import logging
 from typing import List, Dict, Generator, Optional
 from langchain_openai import ChatOpenAI
-from langchain.chains.combine_documents import create_stuff_documents_chain
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.messages import HumanMessage, AIMessage
 from app.config import settings
 from app.services.rag.vector_store import get_vector_store_service
 from app.services.rag.rerank_service import get_rerank_service
@@ -139,45 +136,35 @@ class RAGService:
         # 1. Retrieve and rerank documents
         reranked_docs = self._retrieve_and_rerank(question, doc_id, collection_id)
 
-        # 2. Build prompt with or without history
+        if not reranked_docs:
+            return "Não encontrei documentos relevantes para responder sua pergunta."
+
+        # 2. Build context string
+        context_parts = []
+        for doc in reranked_docs:
+            filename = doc.metadata.get('filename', 'Unknown')
+            page = doc.metadata.get('page_number', '?')
+            content = doc.page_content
+            context_parts.append(f"Source: {filename} (Page {page})\nContent: {content}")
+        context = "\n\n---\n\n".join(context_parts)
+
+        # 3. Build messages
         has_history = bool(chat_history and len(chat_history) > 0)
         system_prompt = self._get_system_prompt(with_history=has_history)
 
         if has_history:
-            prompt = ChatPromptTemplate.from_messages([
-                ("system", system_prompt),
-                ("human", "{input}"),
-            ])
-        else:
-            prompt = ChatPromptTemplate.from_messages([
-                ("system", system_prompt),
-                ("human", "{input}"),
-            ])
+            system_prompt = system_prompt.replace("{history}", self._format_history(chat_history))
 
-        # 3. Generate answer
-        document_prompt = ChatPromptTemplate.from_template(
-            "Source: {filename} (Page {page_number})\nContent: {page_content}"
-        )
-        question_answer_chain = create_stuff_documents_chain(
-            self.llm, prompt, document_prompt=document_prompt
-        )
+        system_prompt = system_prompt.replace("{context}", context)
 
-        invoke_params = {
-            "input": question,
-            "context": reranked_docs
-        }
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": question}
+        ]
 
-        if has_history:
-            invoke_params["history"] = self._format_history(chat_history)
-
-        response = question_answer_chain.invoke(invoke_params)
-
-        # Ensure we return a string
-        if isinstance(response, dict):
-            # Depends on version, sometimes returns 'answer' or 'output_text'
-            response = response.get("answer") or response.get("output_text") or str(response)
-
-        return response
+        # 4. Generate answer
+        response = self.llm.invoke(messages)
+        return response.content
 
     def stream_answer(
         self,

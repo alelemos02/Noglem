@@ -9,3 +9,8 @@ langchain-chroma
 python-multipart
 python-docx
 python-dotenv
+pdfplumber
+pdf2image
+pytesseract
+flashrank
+langchain-text-splitters
