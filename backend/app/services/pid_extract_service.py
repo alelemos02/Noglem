@@ -98,15 +98,23 @@ class PidExtractService:
             if page_idx >= len(doc):
                 continue
             page = doc[page_idx]
+            # pdfplumber gives coords in the visual (rotated) space,
+            # but fitz Shape draws in the un-rotated PDF space.
+            # Use derotation_matrix to convert when page has rotation.
+            derotation = page.derotation_matrix if page.rotation != 0 else None
+
             for inst in page_instruments:
                 pos = inst.position
-                # pdfplumber coords: origin top-left, y downward (same as fitz)
                 cx = (pos.x0 + pos.x1) / 2
                 cy = (pos.top + pos.bottom) / 2
                 radius = 5  # small circle (~1.8mm)
-                center = fitz.Point(cx, cy)
+
+                point = fitz.Point(cx, cy)
+                if derotation:
+                    point = point * derotation
+
                 shape = page.new_shape()
-                shape.draw_circle(center, radius)
+                shape.draw_circle(point, radius)
                 shape.finish(color=yellow, fill=yellow, fill_opacity=0.6, width=1)
                 shape.commit()
 
