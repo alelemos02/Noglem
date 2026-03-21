@@ -9,7 +9,9 @@ print(f'DB Sync: {settings.DATABASE_URL_SYNC[:40]}...')
 "
 
 # Run alembic with a timeout to prevent hanging
-timeout 30 alembic upgrade head || echo "WARNING: Alembic migration failed or timed out, continuing..."
+if ! timeout 30 alembic upgrade head 2>&1; then
+    echo "ERROR: Alembic migration failed or timed out. Check logs above."
+fi
 
 echo "=== Starting Conhecimento RAG API server ==="
 exec python run.py
