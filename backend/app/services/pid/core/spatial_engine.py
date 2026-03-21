@@ -145,7 +145,7 @@ def associate_instruments_to_equipment(
 
 def _looks_like_instrument(tag: str) -> bool:
     """Check if a tag looks like an instrument rather than equipment."""
-    from models.instrument import ISA_TYPE_DESCRIPTIONS
+    from app.services.pid.models.instrument import ISA_TYPE_DESCRIPTIONS
 
     for isa_type in ISA_TYPE_DESCRIPTIONS:
         if tag.startswith(isa_type) and len(tag) > len(isa_type):
