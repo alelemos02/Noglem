@@ -58,10 +58,10 @@ async def retrieve_relevant_chunks(
         SELECT
             id, document_id, collection_id, conteudo, page_number,
             chunk_index, chunk_type, nome_arquivo, created_at,
-            1 - (embedding <=> :query_vec::vector) AS similarity
+            1 - (embedding <=> CAST(:query_vec AS vector)) AS similarity
         FROM con_document_chunks
         WHERE collection_id = :collection_id
-        ORDER BY embedding <=> :query_vec::vector
+        ORDER BY embedding <=> CAST(:query_vec AS vector)
         LIMIT :top_k
     """)
 
