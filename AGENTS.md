@@ -21,7 +21,7 @@ Browser
   └── Next.js 16 App Router (frontend + API Routes como proxy seguro)
         ├── Backend Central (FastAPI, porta 8000)   ← ferramentas simples
         ├── PATEC Microservice (FastAPI + PostgreSQL + Celery + Redis)
-        └── RAG Microservice (FastAPI + ChromaDB + LangChain)
+        └── Conhecimento/RAG Microservice (FastAPI + PostgreSQL/pgvector + FlashRank)
 ```
 
 ### Regra de seguranca — nunca violar
@@ -69,7 +69,7 @@ enghub-v2/
 │       └── services/                # gemini, pdf_extract, pdf_convert, pid_extract
 ├── services/
 │   ├── patec-backend/               # Microservico pareceres tecnicos
-│   └── rag-backend/                 # Microservico RAG/conhecimento
+│   └── conhecimento-backend/        # Microservico RAG/conhecimento
 ├── AGENTS.md                        # Este arquivo — instrucoes universais
 └── CLAUDE.md                        # Instrucoes especificas para Claude Code
 ```
@@ -158,9 +158,45 @@ Rate limiting por usuario (sliding window): Translate 30/min, PDF/PID 5/min.
 PostgreSQL + Redis + Celery. Para analises longas e pareceres tecnicos.
 Proxy Next.js: `/api/parecer-tecnico/[...path]/route.ts`
 
-### RAG (`services/rag-backend/`)
-ChromaDB + LangChain + Google Gemini embeddings (768-dim, `gemini-embedding-001`).
-SQLite para metadados de documentos.
+### RAG / Conhecimento (`services/conhecimento-backend/`)
+PostgreSQL (pgvector) + FlashRank reranker + Google Gemini embeddings.
+Gerencia colecoes, upload de PDFs, embeddings vetoriais e chat com documentos.
+Proxy Next.js: `/api/rag/[...path]/route.ts`
+
+---
+
+## Infraestrutura Railway
+
+Todos os backends rodam no Railway. O diagrama abaixo mostra os servicos e suas conexoes:
+
+```
+Usuario → Frontend (Vercel) → Next.js API proxy
+                                    |
+                    ┌───────────────────────────────┐
+                    │  conhecimento-api (RAG)        │ ← upload PDF, chat
+                    │  patec-api (PATEC)             │ ← analise tecnica
+                    └───────────┬───────────────────┘
+                                |
+                           Postgres (dados)
+                           Redis (filas) → patec-worker (jobs async)
+```
+
+### Servicos
+
+| Servico | Funcao | Conexoes |
+|---------|--------|----------|
+| **Postgres** | Banco de dados central. Armazena colecoes do RAG, documentos, vetores (pgvector), dados do PATEC. Volume persistente (`postgres-volume`). | Recebe conexoes de `conhecimento-api`, `patec-api` e `patec-worker` |
+| **Redis** | Cache e broker de filas (Celery). Volume persistente (`redis-volume`). | Recebe conexoes de `patec-api` e `patec-worker` |
+| **conhecimento-api** | Backend do modulo RAG/Conhecimento. Gerencia colecoes, recebe uploads de PDFs, gera embeddings vetoriais e responde perguntas via chat. | Conecta no Postgres |
+| **patec-api** | Backend do modulo PATEC. Recebe requisicoes do frontend, processa e salva no Postgres. Enfileira tarefas assincronas no Redis. | Conecta no Postgres e Redis |
+| **patec-worker** | Worker Celery do PATEC. Consome tarefas da fila Redis e executa processamento em background (analise de documentos, geracao de relatorios). | Conecta no Postgres e Redis |
+
+### Deploy
+
+- Cada servico tem seu proprio `Dockerfile` e `railway.toml` no diretorio raiz correspondente.
+- O Railway faz deploy automatico a cada push em `main` no GitHub.
+- Variaveis de ambiente sao configuradas no painel do Railway (nao no repositorio).
+- Para verificar logs de producao: painel do Railway ou Vercel.
 
 ---
 
