@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { Gauge, Upload, FileText, Download } from "lucide-react";
+import { Gauge, Upload, FileText, Download, ChevronLeft, ChevronRight, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 
 interface InstrumentData {
   tag: string;
@@ -25,6 +26,11 @@ interface LoopData {
   instruments: string[];
   is_complete: boolean;
   missing: string[];
+}
+
+interface PreviewPage {
+  page: number;
+  image: string;
 }
 
 interface ExtractResult {
@@ -49,6 +55,12 @@ export default function PidExtractorPage() {
   const [isDragging, setIsDragging] = useState(false);
   const [error, setError] = useState("");
 
+  // Preview state
+  const [activeTab, setActiveTab] = useState<"table" | "preview">("table");
+  const [previewPages, setPreviewPages] = useState<PreviewPage[] | null>(null);
+  const [currentPage, setCurrentPage] = useState(0);
+  const [isLoadingPreview, setIsLoadingPreview] = useState(false);
+
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
@@ -58,6 +70,8 @@ export default function PidExtractorPage() {
       setFile(droppedFile);
       setResult(null);
       setError("");
+      setPreviewPages(null);
+      setActiveTab("table");
     }
   }, []);
 
@@ -67,6 +81,8 @@ export default function PidExtractorPage() {
       setFile(selectedFile);
       setResult(null);
       setError("");
+      setPreviewPages(null);
+      setActiveTab("table");
     }
   };
 
@@ -98,6 +114,37 @@ export default function PidExtractorPage() {
       console.error("Erro na extração:", err);
     } finally {
       setIsProcessing(false);
+    }
+  };
+
+  const handleLoadPreview = async () => {
+    if (!file) return;
+
+    setIsLoadingPreview(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("profile", profile);
+
+      const response = await fetch("/api/pid/extract/preview", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Erro ao gerar preview");
+      }
+
+      setPreviewPages(data.pages || []);
+      setCurrentPage(0);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Erro desconhecido";
+      setError(message);
+      console.error("Erro no preview:", err);
+    } finally {
+      setIsLoadingPreview(false);
     }
   };
 
@@ -185,6 +232,8 @@ export default function PidExtractorPage() {
                     setFile(null);
                     setResult(null);
                     setError("");
+                    setPreviewPages(null);
+                    setActiveTab("table");
                   }}
                 >
                   Remover
@@ -316,6 +365,8 @@ export default function PidExtractorPage() {
                   setResult(null);
                   setFile(null);
                   setError("");
+                  setPreviewPages(null);
+                  setActiveTab("table");
                 }}
               >
                 Nova extração
@@ -323,90 +374,188 @@ export default function PidExtractorPage() {
             </div>
           </div>
 
-          {/* Instruments Table */}
-          {result.instruments.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">
-                  Instrument Index ({result.instruments.length} instrumentos)
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="overflow-x-auto">
-                  <table className="w-full border-collapse text-sm">
-                    <thead>
-                      <tr>
-                        {["Tag", "Tipo ISA", "Descrição", "Área", "Equipamento", "Loop", "Folha", "Conf."].map(
-                          (header) => (
-                            <th
-                              key={header}
-                              className="border border-border bg-muted px-3 py-2 text-left font-medium"
-                            >
-                              {header}
-                            </th>
-                          )
-                        )}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {result.instruments.map((inst, i) => (
-                        <tr key={i} className="hover:bg-muted/50">
-                          <td className="border border-border px-3 py-2 font-mono font-medium">
-                            {inst.tag}
-                          </td>
-                          <td className="border border-border px-3 py-2">{inst.isa_type}</td>
-                          <td className="border border-border px-3 py-2">{inst.description}</td>
-                          <td className="border border-border px-3 py-2">{inst.area}</td>
-                          <td className="border border-border px-3 py-2">{inst.equipment}</td>
-                          <td className="border border-border px-3 py-2">{inst.loop_id}</td>
-                          <td className="border border-border px-3 py-2">{inst.sheet}</td>
-                          <td className="border border-border px-3 py-2">
-                            <span
-                              className={
-                                inst.confidence < 0.5
-                                  ? "text-destructive font-medium"
-                                  : inst.confidence < 0.8
-                                    ? "text-warning font-medium"
-                                    : ""
-                              }
-                            >
-                              {Math.round(inst.confidence * 100)}%
-                            </span>
-                          </td>
-                        </tr>
+          {/* Tabs */}
+          <div className="flex gap-1 border-b border-border">
+            <button
+              className={cn(
+                "px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors",
+                activeTab === "table"
+                  ? "border-accent text-accent"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
+              )}
+              onClick={() => setActiveTab("table")}
+            >
+              Instrument Index
+            </button>
+            <button
+              className={cn(
+                "flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors",
+                activeTab === "preview"
+                  ? "border-accent text-accent"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
+              )}
+              onClick={() => {
+                setActiveTab("preview");
+                if (!previewPages && !isLoadingPreview) handleLoadPreview();
+              }}
+            >
+              <Eye className="h-4 w-4" />
+              P&ID Anotado
+            </button>
+          </div>
+
+          {/* Tab: Instrument Index */}
+          {activeTab === "table" && (
+            <>
+              {result.instruments.length > 0 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">
+                      Instrument Index ({result.instruments.length} instrumentos)
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="overflow-x-auto">
+                      <table className="w-full border-collapse text-sm">
+                        <thead>
+                          <tr>
+                            {["Tag", "Tipo ISA", "Descrição", "Área", "Equipamento", "Loop", "Folha", "Conf."].map(
+                              (header) => (
+                                <th
+                                  key={header}
+                                  className="border border-border bg-muted px-3 py-2 text-left font-medium"
+                                >
+                                  {header}
+                                </th>
+                              )
+                            )}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {result.instruments.map((inst, i) => (
+                            <tr key={i} className="hover:bg-muted/50">
+                              <td className="border border-border px-3 py-2 font-mono font-medium">
+                                {inst.tag}
+                              </td>
+                              <td className="border border-border px-3 py-2">{inst.isa_type}</td>
+                              <td className="border border-border px-3 py-2">{inst.description}</td>
+                              <td className="border border-border px-3 py-2">{inst.area}</td>
+                              <td className="border border-border px-3 py-2">{inst.equipment}</td>
+                              <td className="border border-border px-3 py-2">{inst.loop_id}</td>
+                              <td className="border border-border px-3 py-2">{inst.sheet}</td>
+                              <td className="border border-border px-3 py-2">
+                                <span
+                                  className={
+                                    inst.confidence < 0.5
+                                      ? "text-destructive font-medium"
+                                      : inst.confidence < 0.8
+                                        ? "text-warning font-medium"
+                                        : ""
+                                  }
+                                >
+                                  {Math.round(inst.confidence * 100)}%
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Warnings */}
+              {result.warnings.length > 0 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base text-warning">
+                      Avisos ({result.warnings.length})
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ul className="space-y-1 text-sm text-muted-foreground">
+                      {result.warnings.map((w, i) => (
+                        <li key={i}>{w}</li>
                       ))}
-                    </tbody>
-                  </table>
+                    </ul>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* No instruments found */}
+              {result.instruments.length === 0 && (
+                <div className="rounded-lg border border-border bg-card p-8 text-center">
+                  <p className="text-muted-foreground">
+                    Nenhum instrumento encontrado neste PDF. Verifique se o P&ID é vetorial e se o perfil de tags está correto.
+                  </p>
                 </div>
-              </CardContent>
-            </Card>
+              )}
+            </>
           )}
 
-          {/* Warnings */}
-          {result.warnings.length > 0 && (
+          {/* Tab: P&ID Anotado */}
+          {activeTab === "preview" && (
             <Card>
-              <CardHeader>
-                <CardTitle className="text-base text-warning">
-                  Avisos ({result.warnings.length})
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ul className="space-y-1 text-sm text-muted-foreground">
-                  {result.warnings.map((w, i) => (
-                    <li key={i}>{w}</li>
-                  ))}
-                </ul>
+              <CardContent className="p-4">
+                {isLoadingPreview && (
+                  <div className="flex flex-col items-center gap-4 py-16">
+                    <div className="h-8 w-8 animate-spin rounded-full border-4 border-accent border-t-transparent" />
+                    <p className="text-sm text-muted-foreground">
+                      Gerando preview com tags marcados...
+                    </p>
+                  </div>
+                )}
+
+                {previewPages && previewPages.length > 0 && (
+                  <div className="space-y-4">
+                    {/* Page navigation */}
+                    <div className="flex items-center justify-between">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={currentPage === 0}
+                        onClick={() => setCurrentPage((p) => p - 1)}
+                        className="gap-1"
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                        Anterior
+                      </Button>
+                      <span className="text-sm font-mono tabular-nums text-muted-foreground">
+                        Página {currentPage + 1} de {previewPages.length}
+                      </span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={currentPage === previewPages.length - 1}
+                        onClick={() => setCurrentPage((p) => p + 1)}
+                        className="gap-1"
+                      >
+                        Próxima
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                    </div>
+
+                    {/* Page image */}
+                    <div className="overflow-auto rounded-lg border border-border bg-muted/30">
+                      <img
+                        src={previewPages[currentPage].image}
+                        alt={`P&ID página ${currentPage + 1} com tags marcados`}
+                        className="w-full h-auto"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {previewPages && previewPages.length === 0 && !isLoadingPreview && (
+                  <div className="py-16 text-center">
+                    <p className="text-muted-foreground">
+                      Nenhuma página para exibir.
+                    </p>
+                  </div>
+                )}
               </CardContent>
             </Card>
-          )}
-
-          {/* No instruments found */}
-          {result.instruments.length === 0 && (
-            <div className="rounded-lg border border-border bg-card p-8 text-center">
-              <p className="text-muted-foreground">
-                Nenhum instrumento encontrado neste PDF. Verifique se o P&ID é vetorial e se o perfil de tags está correto.
-              </p>
-            </div>
           )}
         </>
       )}

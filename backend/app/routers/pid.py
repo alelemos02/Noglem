@@ -51,6 +51,37 @@ async def extract_instruments(
             os.remove(temp_path)
 
 
+@router.post("/extract/preview")
+async def extract_preview(
+    file: UploadFile = File(...),
+    profile: str = Form("promon"),
+    _: None = Depends(enforce_pid_rate_limit),
+):
+    """Extrai instrumentos e retorna imagens anotadas com tags marcados."""
+    validate_pdf(file)
+
+    if profile not in ("promon", "technip"):
+        raise HTTPException(status_code=400, detail=f"Profile inválido: {profile}")
+
+    file_id = str(uuid.uuid4())
+    temp_path = os.path.join(settings.UPLOAD_DIR, f"{file_id}.pdf")
+
+    try:
+        content = await file.read()
+        with open(temp_path, "wb") as f:
+            f.write(content)
+
+        result = pid_service.extract_to_annotated_images(temp_path, profile_name=profile)
+        result["filename"] = file.filename or "unknown.pdf"
+        return result
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro na extração: {str(e)}")
+    finally:
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+
+
 @router.post("/extract/download")
 async def download_excel(
     file: UploadFile = File(...),
