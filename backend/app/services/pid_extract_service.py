@@ -107,12 +107,12 @@ class PidExtractService:
                 pos = inst.position
                 cx = (pos.x0 + pos.x1) / 2
                 cy = (pos.top + pos.bottom) / 2
-                # Dynamic radius: proportional to the bounding box of the
-                # detected text, so it scales automatically with any
-                # document size / font size.  Uses 60% of the bbox height.
+                # Dynamic radius based on text HEIGHT only (not width).
+                # Width varies wildly when balloon detection merges ISA type
+                # + number words, but height reflects the actual font size
+                # and scales correctly across any document format.
                 bbox_h = pos.bottom - pos.top
-                bbox_w = pos.x1 - pos.x0
-                radius = max(bbox_h, bbox_w) * 0.6
+                radius = bbox_h * 0.5
                 radius = max(radius, 2.0)  # minimum 2pt to stay visible
 
                 point = fitz.Point(cx, cy)
