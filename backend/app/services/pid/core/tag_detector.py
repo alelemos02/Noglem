@@ -17,6 +17,13 @@ from app.services.pid.models.instrument import (
 
 logger = logging.getLogger(__name__)
 
+# Regex to detect ISA alarm/condition ANNOTATION types.
+# These appear as plain text labels near instruments (e.g., "TAH", "PAL"),
+# NOT inside instrument bubbles/circles.  They must NOT be detected as
+# standalone instruments by the balloon strategy.
+# Pattern: <variable>[D]A<H|L|HH|LL>  (e.g., TAH, PDAL, LAHH, TALL)
+_ALARM_ANNOTATION_RE = re.compile(r'^[A-Z]D?A[HL]{1,2}$')
+
 
 def load_profile(config_path: str, profile_name: str) -> Dict:
     """Load a tag profile from YAML config."""
@@ -98,6 +105,10 @@ def _create_instrument_from_match(
     if isa_type not in ISA_TYPE_DESCRIPTIONS:
         return None
 
+    # Skip alarm/condition annotations (TAH, PAL, TALL, PDAH, etc.)
+    if _ALARM_ANNOTATION_RE.match(isa_type):
+        return None
+
     full_tag = match.group(0)
     if full_tag in seen_tags:
         return None
@@ -141,11 +152,15 @@ def _detect_balloon_tags(
     instruments = []
     has_area = profile.get("has_area_prefix", False)
 
-    # Index: all words that are pure ISA types
+    # Index: all words that are pure ISA types (inside instrument bubbles)
     isa_type_words = []
     for w in words:
         text = w.text.strip()
         if text in ISA_TYPE_DESCRIPTIONS and len(text) >= 2:
+            # Skip alarm/condition annotations (TAH, PAL, TALL, PDAH, etc.)
+            # These appear as plain text near instruments, not inside bubbles.
+            if _ALARM_ANNOTATION_RE.match(text):
+                continue
             # Exclude common short words that happen to be ISA types
             # "AT" could be English "at", "PI" could be math pi
             # Only include if it looks like it's in a drawing context
@@ -172,8 +187,8 @@ def _detect_balloon_tags(
                 continue
 
             dist = type_word.position.distance_to(num_word.position)
-            # Look within 50px radius (typical balloon size)
-            if dist < 50.0 and dist < best_dist:
+            # Look within 35px radius (typical balloon size)
+            if dist < 35.0 and dist < best_dist:
                 best_dist = dist
                 best_number = num_word
 

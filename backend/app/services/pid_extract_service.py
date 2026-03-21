@@ -107,7 +107,7 @@ class PidExtractService:
                 pos = inst.position
                 cx = (pos.x0 + pos.x1) / 2
                 cy = (pos.top + pos.bottom) / 2
-                radius = 5  # small circle (~1.8mm)
+                radius = 3  # small dot (~1mm)
 
                 point = fitz.Point(cx, cy)
                 if derotation:
