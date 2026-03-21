@@ -22,7 +22,7 @@ sqlalchemy>=2.0.0
 langchain==0.3.25
 langchain-community==0.3.23
 langchain-openai==0.2.21
-langchain-chroma==0.1.4
+langchain-chroma>=0.2.0
 langchain-text-splitters==0.3.8
 chromadb>=0.4.22
 pysqlite3-binary>=0.5.0; sys_platform == 'linux'
@@ -37,4 +37,4 @@ beautifulsoup4>=4.12.0
 
 # Email RAG — Embeddings locais (sem envio de dados para APIs externas)
 sentence-transformers>=3.0.0
-langchain-huggingface==0.1.2
+langchain-huggingface>=0.2.0
