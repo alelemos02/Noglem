@@ -7,7 +7,7 @@ load_dotenv()
 class Settings:
     # API Settings
     API_TITLE = "Julia API"
-    API_VERSION = "2.0.0"
+    API_VERSION = "2.0.1"
     API_DESCRIPTION = "Backend unificado para o Julia"
 
     # CORS
