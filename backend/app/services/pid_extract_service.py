@@ -107,7 +107,13 @@ class PidExtractService:
                 pos = inst.position
                 cx = (pos.x0 + pos.x1) / 2
                 cy = (pos.top + pos.bottom) / 2
-                radius = 3  # small dot (~1mm)
+                # Dynamic radius: proportional to the bounding box of the
+                # detected text, so it scales automatically with any
+                # document size / font size.  Uses 60% of the bbox height.
+                bbox_h = pos.bottom - pos.top
+                bbox_w = pos.x1 - pos.x0
+                radius = max(bbox_h, bbox_w) * 0.6
+                radius = max(radius, 2.0)  # minimum 2pt to stay visible
 
                 point = fitz.Point(cx, cy)
                 if derotation:
