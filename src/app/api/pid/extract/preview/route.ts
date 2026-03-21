@@ -20,13 +20,20 @@ export async function POST(request: NextRequest) {
     if (!response.ok) {
       const error = await response.json().catch(() => ({ detail: "Erro no servidor" }));
       return NextResponse.json(
-        { error: error.detail || "Erro ao gerar preview" },
+        { error: error.detail || "Erro ao gerar PDF anotado" },
         { status: response.status }
       );
     }
 
-    const data = await response.json();
-    return NextResponse.json(data);
+    const blob = await response.blob();
+    const contentType = response.headers.get("content-type") || "application/pdf";
+
+    return new NextResponse(blob, {
+      headers: {
+        "Content-Type": contentType,
+        "Content-Disposition": response.headers.get("content-disposition") || "attachment; filename=pid_anotado.pdf",
+      },
+    });
   } catch (error) {
     console.error("Erro ao conectar com backend:", error);
     return NextResponse.json(

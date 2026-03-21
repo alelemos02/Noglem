@@ -1,13 +1,8 @@
 """Service wrapper for PID Instrument Extractor pipeline."""
 
-import base64
 import logging
-from io import BytesIO
 from pathlib import Path
 from typing import Any, Dict, List
-
-from PIL import Image, ImageDraw, ImageFont
-from pdf2image import convert_from_path
 
 from app.services.pid.core.ingestion import discover_pdfs, load_pdf
 from app.services.pid.core.text_extraction import extract_words
@@ -78,16 +73,17 @@ class PidExtractService:
         result = self.extract(pdf_path, profile_name, max_distance)
         return export_to_excel(result, output_path)
 
-    def extract_to_annotated_images(
+    def extract_to_annotated_pdf(
         self,
         pdf_path: str,
+        output_path: str,
         profile_name: str = "promon",
         max_distance: float = 200.0,
-        dpi: int = 150,
-    ) -> Dict[str, Any]:
-        """Extract instruments and return annotated page images with tags highlighted."""
+    ) -> str:
+        """Extract instruments and save annotated PDF with yellow circles on each tag."""
+        import fitz  # PyMuPDF
+
         result = self.extract(pdf_path, profile_name, max_distance)
-        summary = self._result_to_dict(result)
 
         # Group instruments by page
         instruments_by_page: Dict[int, list] = {}
@@ -95,82 +91,28 @@ class PidExtractService:
             if inst.position:
                 instruments_by_page.setdefault(inst.page_index, []).append(inst)
 
-        # Load font for labels
-        font = self._load_label_font()
-        scale = dpi / 72.0
+        doc = fitz.open(pdf_path)
+        yellow = (234 / 255, 179 / 255, 8 / 255)  # #EAB308
 
-        # Process one page at a time to save memory
-        pages = []
-        doc = load_pdf(pdf_path)
-        for page_info in doc.pages:
-            page_idx = page_info.index
-            page_images = convert_from_path(
-                pdf_path, dpi=dpi,
-                first_page=page_idx + 1, last_page=page_idx + 1,
-            )
-            if not page_images:
+        for page_idx, page_instruments in instruments_by_page.items():
+            if page_idx >= len(doc):
                 continue
+            page = doc[page_idx]
+            for inst in page_instruments:
+                pos = inst.position
+                # pdfplumber coords: origin top-left, y downward (same as fitz)
+                cx = (pos.x0 + pos.x1) / 2
+                cy = (pos.top + pos.bottom) / 2
+                radius = 5  # small circle (~1.8mm)
+                center = fitz.Point(cx, cy)
+                shape = page.new_shape()
+                shape.draw_circle(center, radius)
+                shape.finish(color=yellow, fill=yellow, fill_opacity=0.6, width=1)
+                shape.commit()
 
-            img = page_images[0].convert("RGB")
-            page_instruments = instruments_by_page.get(page_idx, [])
-
-            if page_instruments:
-                draw = ImageDraw.Draw(img)
-                for inst in page_instruments:
-                    pos = inst.position
-                    x0 = pos.x0 * scale
-                    y0 = pos.top * scale
-                    x1 = pos.x1 * scale
-                    y1 = pos.bottom * scale
-
-                    # Yellow rectangle around tag
-                    for offset in range(3):
-                        draw.rectangle(
-                            [x0 - offset, y0 - offset, x1 + offset, y1 + offset],
-                            outline="#EAB308",
-                        )
-
-                    # Label background + text above the rectangle
-                    label = inst.tag
-                    bbox = font.getbbox(label)
-                    text_w = bbox[2] - bbox[0]
-                    text_h = bbox[3] - bbox[1]
-                    label_y = max(0, y0 - text_h - 6)
-                    draw.rectangle(
-                        [x0, label_y, x0 + text_w + 6, label_y + text_h + 4],
-                        fill="#EAB308",
-                    )
-                    draw.text((x0 + 3, label_y + 1), label, fill="#000000", font=font)
-
-            # Convert to JPEG base64
-            buf = BytesIO()
-            img.save(buf, format="JPEG", quality=80)
-            b64 = base64.b64encode(buf.getvalue()).decode("ascii")
-            pages.append({
-                "page": page_idx + 1,
-                "image": f"data:image/jpeg;base64,{b64}",
-            })
-
-            # Free memory
-            del img, page_images
-            buf.close()
-
-        summary["pages"] = pages
-        return summary
-
-    @staticmethod
-    def _load_label_font() -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
-        """Load a font for tag labels, with fallback to default."""
-        font_paths = [
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-        ]
-        for path in font_paths:
-            try:
-                return ImageFont.truetype(path, size=12)
-            except (OSError, IOError):
-                continue
-        return ImageFont.load_default()
+        doc.save(output_path)
+        doc.close()
+        return output_path
 
     def _process_single_pdf(
         self,

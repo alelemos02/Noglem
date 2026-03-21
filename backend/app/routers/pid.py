@@ -57,29 +57,34 @@ async def extract_preview(
     profile: str = Form("promon"),
     _: None = Depends(enforce_pid_rate_limit),
 ):
-    """Extrai instrumentos e retorna imagens anotadas com tags marcados."""
+    """Extrai instrumentos e retorna PDF anotado com circulos amarelos nos tags."""
     validate_pdf(file)
 
     if profile not in ("promon", "technip"):
         raise HTTPException(status_code=400, detail=f"Profile inválido: {profile}")
 
     file_id = str(uuid.uuid4())
-    temp_path = os.path.join(settings.UPLOAD_DIR, f"{file_id}.pdf")
+    temp_pdf = os.path.join(settings.UPLOAD_DIR, f"{file_id}.pdf")
+    output_pdf = os.path.join(settings.OUTPUT_DIR, f"{file_id}_annotated.pdf")
 
     try:
         content = await file.read()
-        with open(temp_path, "wb") as f:
+        with open(temp_pdf, "wb") as f:
             f.write(content)
 
-        result = pid_service.extract_to_annotated_images(temp_path, profile_name=profile)
-        result["filename"] = file.filename or "unknown.pdf"
-        return result
+        pid_service.extract_to_annotated_pdf(temp_pdf, output_pdf, profile_name=profile)
+
+        return FileResponse(
+            output_pdf,
+            media_type="application/pdf",
+            filename=f"{os.path.splitext(file.filename or 'pid')[0]}_anotado.pdf",
+        )
 
     except Exception as e:
+        for path in [temp_pdf, output_pdf]:
+            if os.path.exists(path):
+                os.remove(path)
         raise HTTPException(status_code=500, detail=f"Erro na extração: {str(e)}")
-    finally:
-        if os.path.exists(temp_path):
-            os.remove(temp_path)
 
 
 @router.post("/extract/download")
