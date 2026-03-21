@@ -187,8 +187,8 @@ def _detect_balloon_tags(
                 continue
 
             dist = type_word.position.distance_to(num_word.position)
-            # Look within 35px radius (typical balloon size)
-            if dist < 35.0 and dist < best_dist:
+            # Look within 45px radius (typical balloon size)
+            if dist < 45.0 and dist < best_dist:
                 best_dist = dist
                 best_number = num_word
 
@@ -204,18 +204,17 @@ def _detect_balloon_tags(
         tag_number = num_match.group(1)
         qualifier = num_match.group(2)
 
-        # Look for area prefix nearby (for PROMON format)
-        area = ""
-        if has_area:
-            area = _find_area_prefix(type_word, words)
+        # Build tag WITHOUT area prefix — balloon detection cannot
+        # reliably determine the area from nearby text.  Area is only
+        # correct when it comes from the full tag regex (Strategy 1).
+        full_tag = f"{isa_type}-{tag_number}{qualifier}"
 
-        # Build full tag
-        if area:
-            full_tag = f"{area}-{isa_type}-{tag_number}{qualifier}"
-        else:
-            full_tag = f"{isa_type}-{tag_number}{qualifier}"
-
-        if full_tag in already_found:
+        # Skip if this ISA-type + number was already found (possibly
+        # with an area prefix by Strategy 1, e.g. "052-TI-062").
+        tag_suffix = f"-{isa_type}-{tag_number}{qualifier}"
+        if full_tag in already_found or any(
+            t.endswith(tag_suffix) for t in already_found
+        ):
             continue
         already_found.add(full_tag)
 
@@ -233,7 +232,7 @@ def _detect_balloon_tags(
             isa_description=ISA_TYPE_DESCRIPTIONS.get(isa_type, "Unknown"),
             position=pos,
             page_index=type_word.page_index,
-            area=area,
+            area="",
             tag_number=tag_number,
             qualifier=qualifier,
             confidence=0.75,  # Good confidence for balloon detection

@@ -385,7 +385,7 @@ export default function PidExtractorPage() {
                   <table className="w-full border-collapse text-sm">
                     <thead>
                       <tr>
-                        {["Tag", "Tipo ISA", "Descrição", "Área", "Equipamento", "Loop", "Folha", "Conf."].map(
+                        {["Tag", "Tipo ISA", "Descrição", "Equipamento", "Loop", "Folha", "Conf."].map(
                           (header) => (
                             <th
                               key={header}
@@ -405,7 +405,6 @@ export default function PidExtractorPage() {
                           </td>
                           <td className="border border-border px-3 py-2">{inst.isa_type}</td>
                           <td className="border border-border px-3 py-2">{inst.description}</td>
-                          <td className="border border-border px-3 py-2">{inst.area}</td>
                           <td className="border border-border px-3 py-2">{inst.equipment}</td>
                           <td className="border border-border px-3 py-2">{inst.loop_id}</td>
                           <td className="border border-border px-3 py-2">{inst.sheet}</td>

@@ -1,8 +1,12 @@
 """Service wrapper for PID Instrument Extractor pipeline."""
 
 import logging
+from io import BytesIO
 from pathlib import Path
 from typing import Any, Dict, List
+
+from PIL import Image, ImageDraw
+from pdf2image import convert_from_path
 
 from app.services.pid.core.ingestion import discover_pdfs, load_pdf
 from app.services.pid.core.text_extraction import extract_words
@@ -80,8 +84,13 @@ class PidExtractService:
         profile_name: str = "promon",
         max_distance: float = 200.0,
     ) -> str:
-        """Extract instruments and save annotated PDF with yellow circles on each tag."""
-        import fitz  # PyMuPDF
+        """Extract instruments and save annotated PDF with yellow circles.
+
+        Uses image-based rendering (pdf2image + Pillow) to guarantee correct
+        circle placement regardless of page rotation or coordinate quirks.
+        Each page is rasterised, annotated, and assembled into a new PDF.
+        """
+        import fitz  # PyMuPDF – used only to assemble the output PDF
 
         result = self.extract(pdf_path, profile_name, max_distance)
 
@@ -91,41 +100,70 @@ class PidExtractService:
             if inst.position:
                 instruments_by_page.setdefault(inst.page_index, []).append(inst)
 
-        doc = fitz.open(pdf_path)
-        yellow = (234 / 255, 179 / 255, 8 / 255)  # #EAB308
+        dpi = 150
+        scale = dpi / 72.0
+        # Semi-transparent yellow  (#EAB308 @ 60 %)
+        fill_color = (234, 179, 8, 153)
+        outline_color = (200, 150, 0, 220)
 
-        for page_idx, page_instruments in instruments_by_page.items():
-            if page_idx >= len(doc):
+        source_doc = load_pdf(pdf_path)
+        output_doc = fitz.open()
+
+        for page_info in source_doc.pages:
+            idx = page_info.index
+
+            # Render page to image (handles rotation automatically)
+            page_images = convert_from_path(
+                pdf_path, dpi=dpi,
+                first_page=idx + 1, last_page=idx + 1,
+            )
+            if not page_images:
                 continue
-            page = doc[page_idx]
-            # pdfplumber gives coords in the visual (rotated) space,
-            # but fitz Shape draws in the un-rotated PDF space.
-            # Use derotation_matrix to convert when page has rotation.
-            derotation = page.derotation_matrix if page.rotation != 0 else None
 
-            for inst in page_instruments:
-                pos = inst.position
-                cx = (pos.x0 + pos.x1) / 2
-                cy = (pos.top + pos.bottom) / 2
-                # Dynamic radius based on text HEIGHT only (not width).
-                # Width varies wildly when balloon detection merges ISA type
-                # + number words, but height reflects the actual font size
-                # and scales correctly across any document format.
-                bbox_h = pos.bottom - pos.top
-                radius = bbox_h * 0.5
-                radius = max(radius, 2.0)  # minimum 2pt to stay visible
+            img = page_images[0].convert("RGBA")
+            page_instruments = instruments_by_page.get(idx, [])
 
-                point = fitz.Point(cx, cy)
-                if derotation:
-                    point = point * derotation
+            if page_instruments:
+                overlay = Image.new("RGBA", img.size, (0, 0, 0, 0))
+                draw = ImageDraw.Draw(overlay)
 
-                shape = page.new_shape()
-                shape.draw_circle(point, radius)
-                shape.finish(color=yellow, fill=yellow, fill_opacity=0.6, width=1)
-                shape.commit()
+                for inst in page_instruments:
+                    pos = inst.position
+                    cx = (pos.x0 + pos.x1) / 2 * scale
+                    cy = (pos.top + pos.bottom) / 2 * scale
+                    # Radius from text height – scales with document/font size
+                    bbox_h = (pos.bottom - pos.top) * scale
+                    radius = bbox_h * 0.45
+                    radius = max(radius, 3.0)   # minimum visible
+                    radius = min(radius, 20.0)  # cap to avoid huge circles
 
-        doc.save(output_path)
-        doc.close()
+                    draw.ellipse(
+                        [cx - radius, cy - radius, cx + radius, cy + radius],
+                        fill=fill_color,
+                        outline=outline_color,
+                        width=2,
+                    )
+
+                img = Image.alpha_composite(img, overlay)
+
+            # Convert to RGB JPEG bytes and add as a PDF page
+            img_rgb = img.convert("RGB")
+            buf = BytesIO()
+            img_rgb.save(buf, format="JPEG", quality=85)
+            img_bytes = buf.getvalue()
+            buf.close()
+
+            # Page size in PDF points (same visual dimensions as original)
+            w_pt = img_rgb.width * 72.0 / dpi
+            h_pt = img_rgb.height * 72.0 / dpi
+            page = output_doc.new_page(width=w_pt, height=h_pt)
+            page.insert_image(page.rect, stream=img_bytes)
+
+            # Free memory
+            del img, img_rgb, page_images
+
+        output_doc.save(output_path)
+        output_doc.close()
         return output_path
 
     def _process_single_pdf(
