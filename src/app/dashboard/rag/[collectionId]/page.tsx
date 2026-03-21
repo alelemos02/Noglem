@@ -302,9 +302,9 @@ export default function RagCollectionPage({ params }: { params: Promise<{ collec
 
                 {/* Chat Area */}
                 <Card className="flex flex-1 flex-col overflow-hidden">
-                    <CardContent className="flex flex-1 flex-col p-0">
+                    <CardContent className="flex flex-1 flex-col p-0 overflow-hidden">
                         {/* Messages */}
-                        <ScrollArea className="flex-1 p-4">
+                        <ScrollArea className="flex-1 min-h-0 p-4">
                             <div className="space-y-6 max-w-3xl mx-auto">
                                 {messages.length === 0 ? (
                                     <div className="flex h-full flex-col items-center justify-center py-20 text-center opacity-50">
