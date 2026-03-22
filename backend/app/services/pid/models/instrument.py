@@ -200,6 +200,7 @@ ISA_TYPE_DESCRIPTIONS = {
     "YV": "Event Valve (Solenoid)",
     "YI": "Event Indicator",
     # Misc
+    "AW": "Analysis Window/Well",
     "PW": "Pump (non-ISA, project-specific)",
     "MW": "Motor (non-ISA, project-specific)",
     "FC": "Flow Controller",

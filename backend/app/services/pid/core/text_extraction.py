@@ -110,6 +110,7 @@ def _merge_adjacent_words(
         merged_x1 = current.position.x1
         merged_bottom = current.position.bottom
         was_merged = False
+        last_merged_idx = i  # Track the index of the last actually merged word
 
         # Look ahead for adjacent words on same line
         j = i + 1
@@ -121,17 +122,28 @@ def _merge_adjacent_words(
             if vertical_diff > max_gap_y:
                 break  # Past this line, stop looking
 
-            # Check horizontal gap
+            # Check horizontal gap (allow small overlaps up to 2px,
+            # common in PDF instrument balloons where characters like
+            # F, Q, I, T overlap by ~0.05px).
+            # Use break (not continue) because words are sorted by x0:
+            # - If gap > max_gap_x, all subsequent words are even further right
+            # - If gap < -2.0, the word is from a different spatial group
+            # Using continue here caused merges to "jump" across non-adjacent
+            # characters, absorbing indices far ahead and skipping intermediate
+            # characters (e.g., F,Q,I,T at indices 2086-2089 were lost because
+            # an earlier merge at index 2045 absorbed index 2094).
             gap = next_word.position.x0 - merged_x1
-            if gap < 0 or gap > max_gap_x:
-                j += 1
-                continue
+            if gap > max_gap_x:
+                break  # everything further right is even further
+            if gap < -2.0:
+                break  # word is from a different spatial group
 
             # Merge
             merged_text += next_word.text
             merged_x1 = next_word.position.x1
             merged_bottom = max(merged_bottom, next_word.position.bottom)
             was_merged = True
+            last_merged_idx = j
             j += 1
 
         merged_word = ExtractedWord(
@@ -149,10 +161,14 @@ def _merge_adjacent_words(
 
         # Also keep original unmerged words so tag detector can try both
         if was_merged:
-            for k in range(i, j):
+            for k in range(i, last_merged_idx + 1):
                 result.append(sorted_words[k])
 
-        i = j if was_merged else i + 1
+        # Advance past the last MERGED word, not past all scanned words.
+        # The old code used i=j which skipped non-merged words between
+        # the merge group and the break point, losing characters like
+        # F, Q, I, T that should form "FQIT".
+        i = last_merged_idx + 1
 
     return result
 

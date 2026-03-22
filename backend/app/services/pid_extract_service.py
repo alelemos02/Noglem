@@ -205,7 +205,7 @@ class PidExtractService:
             notes = parse_notes(words, page_info.width, page_info.height)
             result.notes.extend(notes)
 
-            instruments, line_numbers = detect_tags(words, profile)
+            instruments, line_numbers = detect_tags(words, profile, page_width=page_info.width)
             result.line_numbers.extend(line_numbers)
 
             for inst in instruments:
