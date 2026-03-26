@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 
 const ADMIN_EMAILS = [
+  "alelemos02@gmail.com",
   "alexandre.nogueira@noglem.com.br",
   "admin@noglem.com.br",
 ];
