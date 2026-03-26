@@ -1,12 +1,10 @@
 """Service wrapper for PID Instrument Extractor pipeline."""
 
 import logging
-from io import BytesIO
 from pathlib import Path
 from typing import Any, Dict, List
 
-from PIL import Image, ImageDraw
-from pdf2image import convert_from_path
+import pdfplumber
 
 from app.services.pid.core.ingestion import discover_pdfs, load_pdf
 from app.services.pid.core.text_extraction import extract_words
@@ -17,11 +15,13 @@ from app.services.pid.core.spatial_engine import (
     associate_instruments_to_equipment,
     detect_equipment,
 )
+from app.services.pid.core.symbol_detector import classify_instruments
 from app.services.pid.core.loop_builder import build_loops
 from app.services.pid.core.hierarchy import build_hierarchy
 from app.services.pid.core.cross_sheet import reconcile_cross_sheets
 from app.services.pid.core.validator import validate
 from app.services.pid.export.excel_export import export_to_excel
+from app.services.pid.export.pdf_export import export_highlighted_pdf
 from app.services.pid.models.instrument import ExtractionResult
 
 logger = logging.getLogger(__name__)
@@ -34,18 +34,13 @@ class PidExtractService:
     """Extracts instrument tags from P&ID PDFs."""
 
     def extract(
-        self, pdf_path: str, profile_name: str = "promon", max_distance: float = 200.0
+        self,
+        pdf_path: str,
+        profile_name: str = "promon",
+        max_distance: float = 200.0,
+        use_llm: bool = False,
     ) -> ExtractionResult:
-        """Run the full extraction pipeline on a PDF file.
-
-        Args:
-            pdf_path: Path to the PDF file.
-            profile_name: Tag profile name (promon, technip).
-            max_distance: Max distance for instrument-equipment association.
-
-        Returns:
-            ExtractionResult with all extracted data.
-        """
+        """Run the full extraction pipeline on a PDF file."""
         tag_profile = load_profile(CONFIG_PATH, profile_name)
 
         result = ExtractionResult()
@@ -57,13 +52,21 @@ class PidExtractService:
             build_hierarchy(result.instruments)
             validate(result)
 
+            if use_llm:
+                from app.services.pid.core.llm_validator import validate_with_llm
+                validate_with_llm(result)
+
         return result
 
     def extract_to_json(
-        self, pdf_path: str, profile_name: str = "promon", max_distance: float = 200.0
+        self,
+        pdf_path: str,
+        profile_name: str = "promon",
+        max_distance: float = 200.0,
+        use_llm: bool = False,
     ) -> Dict[str, Any]:
         """Extract and return a JSON-serializable summary."""
-        result = self.extract(pdf_path, profile_name, max_distance)
+        result = self.extract(pdf_path, profile_name, max_distance, use_llm=use_llm)
         return self._result_to_dict(result)
 
     def extract_to_excel(
@@ -72,9 +75,10 @@ class PidExtractService:
         output_path: str,
         profile_name: str = "promon",
         max_distance: float = 200.0,
+        use_llm: bool = False,
     ) -> str:
         """Extract and export to Excel."""
-        result = self.extract(pdf_path, profile_name, max_distance)
+        result = self.extract(pdf_path, profile_name, max_distance, use_llm=use_llm)
         return export_to_excel(result, output_path)
 
     def extract_to_annotated_pdf(
@@ -83,88 +87,15 @@ class PidExtractService:
         output_path: str,
         profile_name: str = "promon",
         max_distance: float = 200.0,
+        use_llm: bool = False,
     ) -> str:
-        """Extract instruments and save annotated PDF with yellow circles.
+        """Extract instruments and save annotated vector PDF.
 
-        Uses image-based rendering (pdf2image + Pillow) to guarantee correct
-        circle placement regardless of page rotation or coordinate quirks.
-        Each page is rasterised, annotated, and assembled into a new PDF.
+        Uses PyMuPDF vector annotations to preserve original PDF quality.
+        Color coding: yellow=field, red=DCS, blue=furnished, orange=low confidence.
         """
-        import fitz  # PyMuPDF – used only to assemble the output PDF
-
-        result = self.extract(pdf_path, profile_name, max_distance)
-
-        # Group instruments by page
-        instruments_by_page: Dict[int, list] = {}
-        for inst in result.instruments:
-            if inst.position:
-                instruments_by_page.setdefault(inst.page_index, []).append(inst)
-
-        dpi = 150
-        scale = dpi / 72.0
-        # Semi-transparent yellow  (#EAB308 @ 60 %)
-        fill_color = (234, 179, 8, 153)
-        outline_color = (200, 150, 0, 220)
-
-        source_doc = load_pdf(pdf_path)
-        output_doc = fitz.open()
-
-        for page_info in source_doc.pages:
-            idx = page_info.index
-
-            # Render page to image (handles rotation automatically)
-            page_images = convert_from_path(
-                pdf_path, dpi=dpi,
-                first_page=idx + 1, last_page=idx + 1,
-            )
-            if not page_images:
-                continue
-
-            img = page_images[0].convert("RGBA")
-            page_instruments = instruments_by_page.get(idx, [])
-
-            if page_instruments:
-                overlay = Image.new("RGBA", img.size, (0, 0, 0, 0))
-                draw = ImageDraw.Draw(overlay)
-
-                for inst in page_instruments:
-                    pos = inst.position
-                    cx = (pos.x0 + pos.x1) / 2 * scale
-                    cy = (pos.top + pos.bottom) / 2 * scale
-                    # Radius from text height – scales with document/font size
-                    bbox_h = (pos.bottom - pos.top) * scale
-                    radius = bbox_h * 0.45
-                    radius = max(radius, 3.0)   # minimum visible
-                    radius = min(radius, 20.0)  # cap to avoid huge circles
-
-                    draw.ellipse(
-                        [cx - radius, cy - radius, cx + radius, cy + radius],
-                        fill=fill_color,
-                        outline=outline_color,
-                        width=2,
-                    )
-
-                img = Image.alpha_composite(img, overlay)
-
-            # Convert to RGB JPEG bytes and add as a PDF page
-            img_rgb = img.convert("RGB")
-            buf = BytesIO()
-            img_rgb.save(buf, format="JPEG", quality=85)
-            img_bytes = buf.getvalue()
-            buf.close()
-
-            # Page size in PDF points (same visual dimensions as original)
-            w_pt = img_rgb.width * 72.0 / dpi
-            h_pt = img_rgb.height * 72.0 / dpi
-            page = output_doc.new_page(width=w_pt, height=h_pt)
-            page.insert_image(page.rect, stream=img_bytes)
-
-            # Free memory
-            del img, img_rgb, page_images
-
-        output_doc.save(output_path)
-        output_doc.close()
-        return output_path
+        result = self.extract(pdf_path, profile_name, max_distance, use_llm=use_llm)
+        return export_highlighted_pdf(pdf_path, output_path, result)
 
     def _process_single_pdf(
         self,
@@ -177,6 +108,7 @@ class PidExtractService:
 
         if not doc.is_vectorial:
             logger.warning(f"{doc.filename}: Contains scanned pages, skipping non-text pages.")
+            return
 
         merge_settings = profile.get("word_merge", {})
         merge_gap_x = merge_settings.get("max_horizontal_gap", 5.0)
@@ -205,7 +137,7 @@ class PidExtractService:
             notes = parse_notes(words, page_info.width, page_info.height)
             result.notes.extend(notes)
 
-            instruments, line_numbers = detect_tags(words, profile, page_width=page_info.width)
+            instruments, line_numbers = detect_tags(words, profile)
             result.line_numbers.extend(line_numbers)
 
             for inst in instruments:
@@ -219,6 +151,11 @@ class PidExtractService:
 
             equipment = detect_equipment(words, instruments)
             associate_instruments_to_equipment(instruments, equipment, max_distance)
+
+            # Classify symbology (Physical vs DCS)
+            with pdfplumber.open(pdf_path) as pdf_sym:
+                sym_page = pdf_sym.pages[page_idx]
+                classify_instruments(instruments, sym_page.edges or [])
 
             result.instruments.extend(instruments)
             result.equipment.extend(equipment)
@@ -239,6 +176,10 @@ class PidExtractService:
                 "tag": inst.tag,
                 "isa_type": inst.isa_type,
                 "description": inst.isa_description,
+                "symbol": inst.symbol,
+                "classification": inst.classification,
+                "is_physical": inst.is_physical,
+                "furnished_by_package": inst.furnished_by_package,
                 "area": inst.area,
                 "tag_number": inst.tag_number,
                 "qualifier": inst.qualifier,
@@ -258,14 +199,47 @@ class PidExtractService:
                 "missing": loop.missing,
             })
 
+        line_numbers = []
+        for ln in result.line_numbers:
+            line_numbers.append({
+                "full_tag": ln.full_tag,
+                "diameter": ln.diameter,
+                "spec_class": ln.spec_class,
+                "line_id": ln.line_id,
+                "service_code": ln.service_code,
+            })
+
+        notes = []
+        for note in result.notes:
+            notes.append({
+                "number": note.number,
+                "text": note.text,
+                "affects_instruments": note.affects_instruments,
+            })
+
+        metadata = []
+        for meta in result.metadata:
+            metadata.append({
+                "document_number": meta.document_number,
+                "revision": meta.revision,
+                "title": meta.title,
+                "area": meta.area,
+                "sheet_number": meta.sheet_number,
+                "date": meta.date,
+            })
+
         return {
             "total_instruments": len(result.instruments),
             "total_equipment": len(result.equipment),
             "total_loops": len(result.loops),
+            "total_line_numbers": len(result.line_numbers),
             "total_warnings": len(result.warnings),
             "total_errors": len(result.errors),
             "instruments": instruments,
             "loops": loops,
+            "line_numbers": line_numbers,
+            "notes": notes,
+            "metadata": metadata,
             "warnings": result.warnings,
             "errors": result.errors,
         }

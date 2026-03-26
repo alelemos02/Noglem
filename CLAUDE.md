@@ -31,6 +31,7 @@ O que esta abaixo e especifico do Claude Code e nao se aplica a outros agentes.
 
 **Fluxo de deploy:**
 - **DEPLOY / GITHUB:** Toda alteracao finalizada deve sempre ser comitada (`git commit`) e subida para o GitHub (`git push origin main`), para garantir que reflita no site. A Vercel e o Railway fazem o deploy automaticamente.
+- **REGRA OBRIGATORIA:** Sempre que finalizar uma alteracao (feature, fix, refactor), faca `git commit` e `git push origin main` automaticamente — nunca espere o usuario pedir.
 
 Correcoes de bug devem seguir a mesma regra: devem ser commitadas e enviadas ao GitHub — nao basta rodar localmente.
 

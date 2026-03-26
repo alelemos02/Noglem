@@ -80,25 +80,10 @@ def _merge_adjacent_words(
     max_gap_x: float,
     max_gap_y: float,
 ) -> List[ExtractedWord]:
-    """Merge words that are horizontally adjacent (likely fragments of one tag).
-
-    Words are merged only if:
-    - They are on the same line (vertical overlap within tolerance)
-    - Horizontal gap is less than max_gap_x
-    - The combined text looks like it could be a tag (contains alphanumeric + dashes)
-
-    Args:
-        words: Words to process.
-        max_gap_x: Maximum horizontal gap to merge.
-        max_gap_y: Maximum vertical difference for same line.
-
-    Returns:
-        List with adjacent words merged where appropriate.
-    """
+    """Merge words that are horizontally adjacent (likely fragments of one tag)."""
     if not words:
         return []
 
-    # Sort by vertical position (top), then horizontal (x0)
     sorted_words = sorted(words, key=lambda w: (w.position.top, w.position.x0))
 
     result = []
@@ -110,40 +95,24 @@ def _merge_adjacent_words(
         merged_x1 = current.position.x1
         merged_bottom = current.position.bottom
         was_merged = False
-        last_merged_idx = i  # Track the index of the last actually merged word
 
-        # Look ahead for adjacent words on same line
         j = i + 1
         while j < len(sorted_words):
             next_word = sorted_words[j]
 
-            # Check if on same line (vertical overlap)
             vertical_diff = abs(next_word.position.top - current.position.top)
             if vertical_diff > max_gap_y:
-                break  # Past this line, stop looking
+                break
 
-            # Check horizontal gap (allow small overlaps up to 2px,
-            # common in PDF instrument balloons where characters like
-            # F, Q, I, T overlap by ~0.05px).
-            # Use break (not continue) because words are sorted by x0:
-            # - If gap > max_gap_x, all subsequent words are even further right
-            # - If gap < -2.0, the word is from a different spatial group
-            # Using continue here caused merges to "jump" across non-adjacent
-            # characters, absorbing indices far ahead and skipping intermediate
-            # characters (e.g., F,Q,I,T at indices 2086-2089 were lost because
-            # an earlier merge at index 2045 absorbed index 2094).
             gap = next_word.position.x0 - merged_x1
-            if gap > max_gap_x:
-                break  # everything further right is even further
-            if gap < -2.0:
-                break  # word is from a different spatial group
+            if gap < 0 or gap > max_gap_x:
+                j += 1
+                continue
 
-            # Merge
             merged_text += next_word.text
             merged_x1 = next_word.position.x1
             merged_bottom = max(merged_bottom, next_word.position.bottom)
             was_merged = True
-            last_merged_idx = j
             j += 1
 
         merged_word = ExtractedWord(
@@ -161,14 +130,10 @@ def _merge_adjacent_words(
 
         # Also keep original unmerged words so tag detector can try both
         if was_merged:
-            for k in range(i, last_merged_idx + 1):
+            for k in range(i, j):
                 result.append(sorted_words[k])
 
-        # Advance past the last MERGED word, not past all scanned words.
-        # The old code used i=j which skipped non-merged words between
-        # the merge group and the break point, losing characters like
-        # F, Q, I, T that should form "FQIT".
-        i = last_merged_idx + 1
+        i = j if was_merged else i + 1
 
     return result
 
@@ -180,19 +145,7 @@ def extract_words_by_zone(
     merge_gap_x: float = 5.0,
     merge_gap_y: float = 3.0,
 ) -> dict:
-    """Extract words organized by spatial zones (quadrants).
-
-    Divides the page into zones x zones grid and returns words per zone.
-    Useful for reducing false associations in spatial analysis.
-
-    Args:
-        pdf_path: Path to PDF file.
-        page_index: Page to process.
-        zones: Number of divisions per axis (4 = 4x4 = 16 zones).
-
-    Returns:
-        Dict mapping (row, col) zone tuple to list of ExtractedWord.
-    """
+    """Extract words organized by spatial zones (quadrants)."""
     words = extract_words(
         pdf_path,
         page_indices=[page_index],
@@ -203,7 +156,6 @@ def extract_words_by_zone(
     if not words:
         return {}
 
-    # Get page dimensions
     with pdfplumber.open(pdf_path) as pdf:
         page = pdf.pages[page_index]
         page_width = float(page.width)

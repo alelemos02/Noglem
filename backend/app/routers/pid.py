@@ -24,6 +24,7 @@ def validate_pdf(file: UploadFile):
 async def extract_instruments(
     file: UploadFile = File(...),
     profile: str = Form("promon"),
+    use_llm: str = Form("false"),
     _: None = Depends(enforce_pid_rate_limit),
 ):
     """Extrai instrumentos de um P&ID (PDF vetorial) e retorna JSON."""
@@ -32,6 +33,7 @@ async def extract_instruments(
     if profile not in ("promon", "technip"):
         raise HTTPException(status_code=400, detail=f"Profile inválido: {profile}")
 
+    enable_llm = use_llm.lower() == "true"
     file_id = str(uuid.uuid4())
     temp_path = os.path.join(settings.UPLOAD_DIR, f"{file_id}.pdf")
 
@@ -40,7 +42,7 @@ async def extract_instruments(
         with open(temp_path, "wb") as f:
             f.write(content)
 
-        result = pid_service.extract_to_json(temp_path, profile_name=profile)
+        result = pid_service.extract_to_json(temp_path, profile_name=profile, use_llm=enable_llm)
         result["filename"] = file.filename or "unknown.pdf"
         return result
 
@@ -55,14 +57,16 @@ async def extract_instruments(
 async def extract_preview(
     file: UploadFile = File(...),
     profile: str = Form("promon"),
+    use_llm: str = Form("false"),
     _: None = Depends(enforce_pid_rate_limit),
 ):
-    """Extrai instrumentos e retorna PDF anotado com circulos amarelos nos tags."""
+    """Extrai instrumentos e retorna PDF anotado vetorial com marcacoes coloridas."""
     validate_pdf(file)
 
     if profile not in ("promon", "technip"):
         raise HTTPException(status_code=400, detail=f"Profile inválido: {profile}")
 
+    enable_llm = use_llm.lower() == "true"
     file_id = str(uuid.uuid4())
     temp_pdf = os.path.join(settings.UPLOAD_DIR, f"{file_id}.pdf")
     output_pdf = os.path.join(settings.OUTPUT_DIR, f"{file_id}_annotated.pdf")
@@ -72,7 +76,7 @@ async def extract_preview(
         with open(temp_pdf, "wb") as f:
             f.write(content)
 
-        pid_service.extract_to_annotated_pdf(temp_pdf, output_pdf, profile_name=profile)
+        pid_service.extract_to_annotated_pdf(temp_pdf, output_pdf, profile_name=profile, use_llm=enable_llm)
 
         return FileResponse(
             output_pdf,
@@ -91,6 +95,7 @@ async def extract_preview(
 async def download_excel(
     file: UploadFile = File(...),
     profile: str = Form("promon"),
+    use_llm: str = Form("false"),
     _: None = Depends(enforce_pid_rate_limit),
 ):
     """Extrai instrumentos e retorna como arquivo Excel."""
@@ -99,6 +104,7 @@ async def download_excel(
     if profile not in ("promon", "technip"):
         raise HTTPException(status_code=400, detail=f"Profile inválido: {profile}")
 
+    enable_llm = use_llm.lower() == "true"
     file_id = str(uuid.uuid4())
     temp_pdf = os.path.join(settings.UPLOAD_DIR, f"{file_id}.pdf")
     output_excel = os.path.join(settings.OUTPUT_DIR, f"{file_id}_pid.xlsx")
@@ -108,7 +114,7 @@ async def download_excel(
         with open(temp_pdf, "wb") as f:
             f.write(content)
 
-        pid_service.extract_to_excel(temp_pdf, output_excel, profile_name=profile)
+        pid_service.extract_to_excel(temp_pdf, output_excel, profile_name=profile, use_llm=enable_llm)
 
         return FileResponse(
             output_excel,

@@ -87,6 +87,7 @@ ISA_TYPE_DESCRIPTIONS = {
     "PCV": "Pressure Control Valve",
     "PY": "Pressure Relay/Compute",
     "PE": "Pressure Element",
+    "PG": "Pressure Gauge",
     # Temperature
     "TI": "Temperature Indicator",
     "TIT": "Temperature Indicating Transmitter",
@@ -103,10 +104,12 @@ ISA_TYPE_DESCRIPTIONS = {
     "TAL": "Temperature Alarm Low",
     "TAHH": "Temperature Alarm High-High",
     "TALL": "Temperature Alarm Low-Low",
+    "TSV": "Temperature Safety Valve",
     "TW": "Temperature Well (Thermowell)",
     "TV": "Temperature Valve",
     "TY": "Temperature Relay/Compute",
     "TR": "Temperature Recorder",
+    "TG": "Temperature Gauge",
     # Flow
     "FI": "Flow Indicator",
     "FIT": "Flow Indicating Transmitter",
@@ -127,6 +130,7 @@ ISA_TYPE_DESCRIPTIONS = {
     "FO": "Flow Orifice",
     "FR": "Flow Recorder",
     "FC": "Flow Controller",
+    "FG": "Flow Gauge",
     # Level
     "LI": "Level Indicator",
     "LIT": "Level Indicating Transmitter",
@@ -157,18 +161,20 @@ ISA_TYPE_DESCRIPTIONS = {
     "AR": "Analysis Recorder",
     # Valve/On-Off
     "XV": "On-Off Valve (Unclassified)",
+    # Hand / Manual
+    "HS": "Hand Switch",
+    "HSA": "Hand Switch Alarm",
+    "HSS": "Hand Switch Safety",
+    "HIC": "Hand Indicating Controller",
+    "HOA": "Hand-Off-Auto Switch",
+    "HC": "Hand Controller",
     "HV": "Hand Valve",
     "HCV": "Hand Control Valve",
     "SDV": "Shutdown Valve",
     "BDV": "Blowdown Valve",
     "SV": "Solenoid Valve",
-    # Valve accessories
-    "ZSO": "Valve Position Switch Open",
-    "ZSC": "Valve Position Switch Closed",
-    "ZSH": "Valve Position Switch High",
-    "ZSL": "Valve Position Switch Low",
-    "ZOI": "Valve Position Open Indicator",
-    "ZCI": "Valve Position Closed Indicator",
+    "ZA": "Position Alarm",
+    "ZS": "Position Switch",
     "ZT": "Valve Position Transmitter",
     "ZI": "Valve Position Indicator",
     # Motor/Pump accessories
@@ -176,8 +182,12 @@ ISA_TYPE_DESCRIPTIONS = {
     "HCM": "Motor Hand Control",
     "ITM": "Motor Current Transmitter",
     "IIM": "Motor Current Indicator",
+    "IE": "Current Element",
+    "II": "Current Indicator",
+    "ML": "Motor Light",
     "YAM": "Motor Alarm Relay",
     "RIM": "Motor Speed Indicator",
+    "SIS": "Safety Instrumented System",
     # Speed
     "SI": "Speed Indicator",
     "SIT": "Speed Indicating Transmitter",
@@ -186,9 +196,13 @@ ISA_TYPE_DESCRIPTIONS = {
     "SS": "Speed Switch",
     "SSH": "Speed Switch High",
     "SSL": "Speed Switch Low",
+    "SC": "Speed Controller",
+    "SLA": "Speed Low Alarm",
+    "SAL": "Speed Alarm Low",
     # Weight
-    "WI": "Weight Indicator",
+    "WE": "Weight Element",
     "WIT": "Weight Indicating Transmitter",
+    "WI": "Weight Indicator",
     "WT": "Weight Transmitter",
     # Vibration
     "VI": "Vibration Indicator",
@@ -200,11 +214,20 @@ ISA_TYPE_DESCRIPTIONS = {
     "YV": "Event Valve (Solenoid)",
     "YI": "Event Indicator",
     # Misc
-    "AW": "Analysis Window/Well",
     "PW": "Pump (non-ISA, project-specific)",
     "MW": "Motor (non-ISA, project-specific)",
-    "FC": "Flow Controller",
 }
+
+# --- DYNAMIC RULES FOR 'Z' (SAFETY/SYSTEM) MODIFIERS ---
+_z_variants = {}
+for base_isa, desc in ISA_TYPE_DESCRIPTIONS.items():
+    if len(base_isa) >= 2 and base_isa[1] != 'Z':
+        z_isa = base_isa[0] + 'Z' + base_isa[1:]
+        if z_isa not in ISA_TYPE_DESCRIPTIONS:
+            _z_variants[z_isa] = f"{desc} (Safety/SIS)"
+
+ISA_TYPE_DESCRIPTIONS.update(_z_variants)
+# -----------------------------------------------------
 
 # Set of all valid ISA type prefixes (sorted by length desc for greedy matching)
 ISA_VALID_TYPES = sorted(ISA_TYPE_DESCRIPTIONS.keys(), key=len, reverse=True)
@@ -238,44 +261,50 @@ class ExtractedWord:
     text: str
     position: Position
     page_index: int
-    merged: bool = False  # True if this word was created by merging adjacent words
+    merged: bool = False
 
 
 @dataclass
 class Instrument:
     """An instrument detected in a P&ID."""
-    tag: str                                # Full tag (e.g., "122-PIT-0115A")
-    isa_type: str                           # ISA type code (e.g., "PIT")
-    isa_description: str                    # ISA description (e.g., "Pressure Indicating Transmitter")
+    tag: str
+    isa_type: str
+    isa_description: str
     position: Optional[Position] = None
     page_index: int = 0
     sheet_name: str = ""
 
-    # Parsed components (depend on profile)
-    area: str = ""                          # Area prefix (e.g., "122")
-    tag_number: str = ""                    # Numeric part (e.g., "0115")
-    qualifier: str = ""                     # Suffix (e.g., "A")
+    # Parsed components
+    area: str = ""
+    tag_number: str = ""
+    qualifier: str = ""
 
     # Associations
-    equipment_ref: str = ""                 # Associated equipment tag
-    loop_id: str = ""                       # Loop identifier
-    line_number: str = ""                   # Associated line number
-    service: str = ""                       # Process service description
+    equipment_ref: str = ""
+    loop_id: str = ""
+    furnished_by_package: bool = False
+    line_number: str = ""
+    service: str = ""
 
     # Hierarchy
-    parent_tag: str = ""                    # Parent instrument tag
+    parent_tag: str = ""
     children_tags: list = field(default_factory=list)
 
+    # Symbology Classification
+    symbol: str = "circle"
+    is_physical: bool = True
+    classification: str = "Instrumento de Campo"
+
     # Metadata
-    confidence: float = 1.0                 # Detection confidence (0.0-1.0)
-    notes: list = field(default_factory=list)  # Applicable drawing notes
-    source: str = "primary"                 # "primary" or "cross-reference"
+    confidence: float = 1.0
+    notes: list = field(default_factory=list)
+    source: str = "primary"
 
 
 @dataclass
 class Equipment:
     """An equipment item detected in a P&ID."""
-    tag: str                                # Equipment tag (e.g., "W503AC", "122-VE01AB")
+    tag: str
     position: Optional[Position] = None
     page_index: int = 0
     description: str = ""
@@ -285,20 +314,20 @@ class Equipment:
 @dataclass
 class Loop:
     """An instrument loop grouping related instruments."""
-    loop_id: str                            # Loop identifier (e.g., "0115", "W504AC-1")
-    instruments: list = field(default_factory=list)  # List of Instrument tags
-    is_complete: bool = False               # Whether the loop has all expected instruments
-    missing: list = field(default_factory=list)  # Missing instrument types
+    loop_id: str
+    instruments: list = field(default_factory=list)
+    is_complete: bool = False
+    missing: list = field(default_factory=list)
 
 
 @dataclass
 class LineNumber:
     """A process line number extracted from a P&ID."""
-    full_tag: str                           # Full line number (e.g., '6"-S6AAFPN-L00205-DHT')
-    diameter: str = ""                      # Pipe diameter (e.g., '6"')
-    spec_class: str = ""                    # Piping spec class (e.g., "S6AAFPN")
-    line_id: str = ""                       # Line identifier (e.g., "L00205")
-    service_code: str = ""                  # Service code (e.g., "DHT")
+    full_tag: str
+    diameter: str = ""
+    spec_class: str = ""
+    line_id: str = ""
+    service_code: str = ""
     position: Optional[Position] = None
     page_index: int = 0
 
@@ -306,10 +335,10 @@ class LineNumber:
 @dataclass
 class DrawingNote:
     """A note extracted from the P&ID drawing."""
-    number: int                             # Note number
-    text: str                               # Note content
-    affects_instruments: bool = False       # Whether this note applies to instruments
-    affected_types: list = field(default_factory=list)  # ISA types affected
+    number: int
+    text: str
+    affects_instruments: bool = False
+    affected_types: list = field(default_factory=list)
 
 
 @dataclass
@@ -331,11 +360,11 @@ class DrawingMetadata:
 @dataclass
 class ExtractionResult:
     """Complete result of processing one or more P&ID sheets."""
-    metadata: list = field(default_factory=list)        # List of DrawingMetadata
-    instruments: list = field(default_factory=list)      # List of Instrument
-    equipment: list = field(default_factory=list)        # List of Equipment
-    loops: list = field(default_factory=list)            # List of Loop
-    line_numbers: list = field(default_factory=list)     # List of LineNumber
-    notes: list = field(default_factory=list)            # List of DrawingNote
-    warnings: list = field(default_factory=list)         # List of validation warning strings
-    errors: list = field(default_factory=list)           # List of validation error strings
+    metadata: list = field(default_factory=list)
+    instruments: list = field(default_factory=list)
+    equipment: list = field(default_factory=list)
+    loops: list = field(default_factory=list)
+    line_numbers: list = field(default_factory=list)
+    notes: list = field(default_factory=list)
+    warnings: list = field(default_factory=list)
+    errors: list = field(default_factory=list)
