@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Header } from "./header";
 import { Sidebar } from "./sidebar";
+import { AdminNotesWidget } from "./admin-notes-widget";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 
 interface ShellProps {
@@ -34,6 +35,9 @@ export function Shell({ children }: ShellProps) {
           </div>
         </main>
       </div>
+
+      {/* Admin-only floating notes widget */}
+      <AdminNotesWidget />
     </div>
   );
 }

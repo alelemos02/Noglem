@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { ClerkProvider } from "@clerk/nextjs";
 import { ptBR } from "@clerk/localizations";
+import { Suspense } from "react";
+import { PostHogProvider } from "@/components/posthog-provider";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -54,7 +56,9 @@ export default function RootLayout({
     <ClerkProvider localization={ptBR}>
       <html lang="pt-BR" className="dark">
         <body className="font-body antialiased">
-          {children}
+          <Suspense fallback={null}>
+            <PostHogProvider>{children}</PostHogProvider>
+          </Suspense>
         </body>
       </html>
     </ClerkProvider>
