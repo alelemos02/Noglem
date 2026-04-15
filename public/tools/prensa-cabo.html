@@ -14,17 +14,17 @@
   --surface3:  #1e2330;
   --border:    #252b38;
   --border2:   #2e3547;
-  --accent:    #4f8ef7;
-  --accent-dim:#1a2d52;
-  --green:     #34d058;
+  --accent:    #FF4D2D;
+  --accent-dim:#2a0e06;
+  --green:     #22C55E;
   --green-dim: #0d2016;
   --green-mid: #1a4028;
-  --yellow:    #f0b429;
+  --yellow:    #EAB308;
   --yellow-dim:#251c05;
-  --red:       #f75f5f;
+  --red:       #EF4444;
   --red-dim:   #250a0a;
-  --purple:    #a78bfa;
-  --purple-dim:#1a1040;
+  --purple:    #3B82F6;
+  --purple-dim:#0d1b36;
   --text:      #e2e8f4;
   --text2:     #7b8aaa;
   --text3:     #414d66;
@@ -78,7 +78,7 @@ body {
 }
 .topbar-icon {
   width: 30px; height: 30px;
-  background: linear-gradient(135deg, #1a4db5, #4f8ef7);
+  background: linear-gradient(135deg, #c23010, #FF4D2D);
   border-radius: 7px;
   display: flex; align-items: center; justify-content: center;
   font-size: 15px;
@@ -265,7 +265,7 @@ body {
 }
 .drop-zone:hover, .drop-zone.drag {
   border-color: var(--accent);
-  background: rgba(79,142,247,.04);
+  background: rgba(255,77,45,.04);
 }
 .drop-zone input {
   position: absolute; inset: 0;
@@ -386,7 +386,7 @@ body {
   cursor: pointer;
   transition: all .2s;
 }
-.btn-primary:hover { background: #6ba0ff; transform: translateY(-1px); }
+.btn-primary:hover { background: #ff6b4d; transform: translateY(-1px); }
 .btn-primary:disabled { opacity: .35; cursor: not-allowed; transform: none; }
 .btn-primary:active { transform: translateY(0); }
 
@@ -402,7 +402,7 @@ body {
 .cua-header {
   padding: 16px 20px;
   background: var(--purple-dim);
-  border-bottom: 1px solid rgba(167,139,250,.15);
+  border-bottom: 1px solid rgba(59,130,246,.15);
   display: flex; align-items: center; gap: 12px;
 }
 .cua-header-icon { font-size: 20px; }
@@ -414,17 +414,17 @@ body {
 
 .catalog-drop {
   position: relative;
-  border: 1.5px dashed rgba(167,139,250,.3);
+  border: 1.5px dashed rgba(59,130,246,.3);
   border-radius: var(--r);
   padding: 28px;
   text-align: center;
   cursor: pointer;
   transition: all .2s;
-  background: rgba(167,139,250,.03);
+  background: rgba(59,130,246,.03);
 }
 .catalog-drop:hover, .catalog-drop.drag {
   border-color: var(--purple);
-  background: rgba(167,139,250,.07);
+  background: rgba(59,130,246,.07);
 }
 .catalog-drop input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
 .catalog-drop-title { font-size: 14px; font-weight: 600; color: var(--purple); margin-bottom: 4px; }
@@ -459,8 +459,8 @@ body {
 
 .ai-box.idle .ai-box-header { background: var(--surface2); color: var(--text2); }
 .ai-box.idle { border-color: var(--border); }
-.ai-box.thinking .ai-box-header { background: rgba(167,139,250,.08); color: var(--purple); border-bottom: 1px solid rgba(167,139,250,.15); }
-.ai-box.thinking { border-color: rgba(167,139,250,.25); }
+.ai-box.thinking .ai-box-header { background: rgba(59,130,246,.08); color: var(--purple); border-bottom: 1px solid rgba(59,130,246,.15); }
+.ai-box.thinking { border-color: rgba(59,130,246,.25); }
 .ai-box.done .ai-box-header { background: var(--green-dim); color: var(--green); border-bottom: 1px solid rgba(52,208,88,.15); }
 .ai-box.done { border-color: rgba(52,208,88,.25); }
 .ai-box.err .ai-box-header { background: var(--red-dim); color: var(--red); border-bottom: 1px solid rgba(247,95,95,.15); }
@@ -469,7 +469,7 @@ body {
 .spin {
   display: inline-block;
   width: 13px; height: 13px;
-  border: 2px solid rgba(167,139,250,.25);
+  border: 2px solid rgba(59,130,246,.25);
   border-top-color: var(--purple);
   border-radius: 50%;
   animation: spin .6s linear infinite;
@@ -558,13 +558,13 @@ body {
   font-size: 12px; font-weight: 500;
   padding: 5px 12px;
   background: var(--accent-dim);
-  border: 1px solid rgba(79,142,247,.3);
+  border: 1px solid rgba(255,77,45,.3);
   border-radius: var(--r);
   color: var(--accent);
   cursor: pointer;
   transition: all .15s;
 }
-.btn-add:hover { background: rgba(79,142,247,.15); }
+.btn-add:hover { background: rgba(255,77,45,.15); }
 
 .btable { width: 100%; border-collapse: collapse; }
 .btable th {
@@ -584,7 +584,7 @@ body {
   vertical-align: middle;
 }
 .btable tbody tr:last-child td { border-bottom: none; }
-.btable tbody tr:hover td { background: rgba(79,142,247,.03); }
+.btable tbody tr:hover td { background: rgba(255,77,45,.03); }
 .btable input[type=text], .btable input[type=number] {
   width: 100%; min-width: 70px;
   background: transparent;
@@ -694,7 +694,7 @@ body {
   transition: background .1s;
 }
 .bom-item:last-child { border-bottom: none; }
-.bom-item:hover { background: rgba(79,142,247,.03); }
+.bom-item:hover { background: rgba(255,77,45,.03); }
 .bom-model { font-family: var(--mono); font-size: 12px; font-weight: 500; }
 .bom-qty {
   font-family: var(--mono); font-size: 12px;
@@ -741,7 +741,7 @@ body {
   white-space: nowrap;
 }
 .f-chip:hover { border-color: var(--border2); background: var(--surface3); color: var(--text); }
-.f-chip.active { background: rgba(79,142,247,.12); border-color: var(--accent); color: var(--accent); }
+.f-chip.active { background: rgba(255,77,45,.12); border-color: var(--accent); color: var(--accent); }
 .f-chip.ok.active  { background: var(--green-dim); border-color: rgba(52,208,88,.4); color: var(--green); }
 .f-chip.al.active  { background: var(--yellow-dim); border-color: rgba(240,180,41,.4); color: var(--yellow); }
 .f-chip.er.active  { background: var(--red-dim); border-color: rgba(247,95,95,.4); color: var(--red); }
@@ -784,15 +784,15 @@ body {
   border-bottom: 1px solid var(--border);
   white-space: nowrap;
 }
-.rtable thead th.group-desde { border-left: 2px solid rgba(79,142,247,.2); }
-.rtable thead th.group-ate   { border-left: 2px solid rgba(167,139,250,.2); }
+.rtable thead th.group-desde { border-left: 2px solid rgba(255,77,45,.2); }
+.rtable thead th.group-ate   { border-left: 2px solid rgba(59,130,246,.2); }
 .rtable td {
   padding: 7px 12px;
   border-bottom: 1px solid rgba(37,43,56,.5);
   vertical-align: middle;
   white-space: nowrap;
 }
-.rtable tbody tr:hover td { background: rgba(79,142,247,.03); }
+.rtable tbody tr:hover td { background: rgba(255,77,45,.03); }
 .rtable tbody tr.row-ok:hover td   { background: rgba(52,208,88,.03); }
 .rtable tbody tr.row-al:hover td   { background: rgba(240,180,41,.03); }
 .rtable tbody tr.row-er:hover td   { background: rgba(247,95,95,.04); }
@@ -813,8 +813,8 @@ body {
   color: var(--text3);
   border-bottom: none;
 }
-.th-desde { border-left: 2px solid rgba(79,142,247,.3); color: var(--accent); }
-.th-ate   { border-left: 2px solid rgba(167,139,250,.3); color: var(--purple); }
+.th-desde { border-left: 2px solid rgba(255,77,45,.3); color: var(--accent); }
+.th-ate   { border-left: 2px solid rgba(59,130,246,.3); color: var(--purple); }
 
 .badge-ok { display: inline-block; font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 99px; background: var(--green-dim); color: var(--green); border: 1px solid rgba(52,208,88,.25); }
 .badge-al { display: inline-block; font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 99px; background: var(--yellow-dim); color: var(--yellow); border: 1px solid rgba(240,180,41,.25); }
@@ -895,7 +895,7 @@ body {
     border-radius: 99px;
     background: var(--accent-dim);
     color: var(--accent);
-    border: 1px solid rgba(79,142,247,.3);
+    border: 1px solid rgba(255,77,45,.3);
   }
   .manual-table-scroll { overflow-x: auto; max-height: 420px; overflow-y: auto; }
   .ctable { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 12px; min-width: 900px; }
@@ -914,7 +914,7 @@ body {
     border-bottom: 1px solid rgba(37,43,56,.5);
     vertical-align: middle;
   }
-  .ctable tbody tr:hover td { background: rgba(79,142,247,.03); }
+  .ctable tbody tr:hover td { background: rgba(255,77,45,.03); }
   .ctable tbody tr:last-child td { border-bottom: none; }
   .ctable input, .ctable select {
     width: 100%;
@@ -1055,9 +1055,9 @@ body {
   .fab-active-badge {
     font-family: var(--mono); font-size: 10px;
     padding: 2px 7px; border-radius: 99px;
-    background: rgba(79,142,247,.12);
+    background: rgba(255,77,45,.12);
     color: var(--accent);
-    border: 1px solid rgba(79,142,247,.25);
+    border: 1px solid rgba(255,77,45,.25);
     white-space: nowrap;
   }
   /* Storage indicator */
@@ -1394,7 +1394,7 @@ body {
     gap: 0;
     padding: 24px 28px 20px;
     border-bottom: 1px solid var(--border);
-    background: linear-gradient(180deg, rgba(79,142,247,.03) 0%, transparent 100%);
+    background: linear-gradient(180deg, rgba(255,77,45,.03) 0%, transparent 100%);
   }
 
   /* Sides */
@@ -1412,8 +1412,8 @@ body {
     min-width: 120px; text-align: center;
     margin-bottom: 4px;
   }
-  .sg-device-inst  { border-color: rgba(79,142,247,.4);  background: rgba(79,142,247,.06); }
-  .sg-device-panel { border-color: rgba(167,139,250,.4); background: rgba(167,139,250,.06); }
+  .sg-device-inst  { border-color: rgba(255,77,45,.4);  background: rgba(255,77,45,.06); }
+  .sg-device-panel { border-color: rgba(59,130,246,.4); background: rgba(59,130,246,.06); }
   .sg-device-icon  { font-size: 26px; line-height: 1; }
   .sg-device-label { font-size: 12px; font-weight: 700; color: var(--text); }
   .sg-device-sub   { font-size: 10px; color: var(--text3); font-family: var(--mono); }
@@ -1435,9 +1435,9 @@ body {
   .sg-bubble-val {
     font-family: var(--mono); font-size: 12px; font-weight: 600;
   }
-  .sg-bubble-blue  { border-color: rgba(79,142,247,.3); }
+  .sg-bubble-blue  { border-color: rgba(255,77,45,.3); }
   .sg-bubble-blue .sg-bubble-val  { color: var(--accent); }
-  .sg-bubble-purple { border-color: rgba(167,139,250,.3); }
+  .sg-bubble-purple { border-color: rgba(59,130,246,.3); }
   .sg-bubble-purple .sg-bubble-val { color: var(--purple); }
 
   /* Cable center */
@@ -1463,7 +1463,7 @@ body {
     padding: 10px 14px;
     display: flex; flex-direction: column; gap: 7px;
     min-width: 180px;
-    box-shadow: 0 0 0 4px rgba(79,142,247,.06);
+    box-shadow: 0 0 0 4px rgba(255,77,45,.06);
   }
   .sg-ci-row {
     display: flex; flex-direction: column; gap: 2px;
@@ -1481,7 +1481,7 @@ body {
     color: var(--accent); font-weight: 700;
     background: var(--accent-dim);
     padding: 2px 10px; border-radius: 99px;
-    border: 1px solid rgba(79,142,247,.3);
+    border: 1px solid rgba(255,77,45,.3);
   }
 
   /* ── SHEET PREVIEW ── */
@@ -1516,15 +1516,15 @@ body {
     color: var(--text2);
   }
   .sg-sheet-table tbody tr:last-child td { border-bottom: none; }
-  .sg-sheet-table tbody tr:hover td { background: rgba(79,142,247,.03); }
+  .sg-sheet-table tbody tr:hover td { background: rgba(255,77,45,.03); }
   .sg-row-faded td { opacity: .45; }
 
   /* Column color coding */
-  .sgt-tag  { color: var(--text) !important; border-right: 2px solid rgba(79,142,247,.2); }
+  .sgt-tag  { color: var(--text) !important; border-right: 2px solid rgba(255,77,45,.2); }
   .sgt-form { color: var(--green) !important; }
   .sgt-desde, .sgt-cd { color: var(--accent) !important; }
   .sgt-ate,   .sgt-ca { color: var(--purple) !important; }
-  .sg-sheet-table td:nth-child(1) { color: var(--text) !important; font-weight: 600; border-right: 2px solid rgba(79,142,247,.1); }
+  .sg-sheet-table td:nth-child(1) { color: var(--text) !important; font-weight: 600; border-right: 2px solid rgba(255,77,45,.1); }
   .sg-sheet-table td:nth-child(2) { color: var(--green) !important; }
   .sg-sheet-table td:nth-child(3), .sg-sheet-table td:nth-child(4) { color: var(--accent) !important; }
   .sg-sheet-table td:nth-child(5), .sg-sheet-table td:nth-child(6) { color: var(--purple) !important; }
@@ -1545,8 +1545,10 @@ body {
   <!-- TOPBAR -->
   <header class="topbar">
     <div class="topbar-logo">
-      <div class="topbar-icon">⚙️</div>
-      <span class="topbar-name">Prensa Cabo Analyzer</span>
+      <div class="topbar-icon">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+      </div>
+      <span class="topbar-name">Prensa Cabo</span>
     </div>
     <div class="topbar-sep"></div>
     <span class="topbar-sub">INSTRUMENTAÇÃO &amp; AUTOMAÇÃO</span>
@@ -1675,63 +1677,6 @@ body {
               <button class="sg-skip" onclick="document.getElementById('sheet-guide').style.display='none'">Entendi ✕</button>
             </div>
 
-            <!-- DIAGRAMA CABLE -->
-            <div class="sg-diagram">
-
-              <!-- Lado esquerdo: instrumento -->
-              <div class="sg-side sg-side-left">
-                <div class="sg-device sg-device-inst">
-                  <div class="sg-device-icon">⬡</div>
-                  <div class="sg-device-label">Instrumento</div>
-                  <div class="sg-device-sub">TAG do campo</div>
-                </div>
-                <div class="sg-field-bubble sg-bubble-blue">
-                  <div class="sg-bubble-col">DESDE</div>
-                  <div class="sg-bubble-val">PT-101</div>
-                </div>
-                <div class="sg-field-bubble sg-bubble-blue" style="opacity:.75">
-                  <div class="sg-bubble-col">CONEXÃO DESDE</div>
-                  <div class="sg-bubble-val">1/2" NPT</div>
-                </div>
-              </div>
-
-              <!-- Cabo central -->
-              <div class="sg-cable-center">
-                <div class="sg-cable-line">
-                  <div class="sg-cable-wire"></div>
-                  <div class="sg-cable-info">
-                    <div class="sg-ci-row">
-                      <span class="sg-ci-col">TAG CABO</span>
-                      <span class="sg-ci-val">CABLE-001</span>
-                    </div>
-                    <div class="sg-ci-row">
-                      <span class="sg-ci-col">FORMAÇÃO</span>
-                      <span class="sg-ci-val">1X(2XAWG16)AG</span>
-                    </div>
-                  </div>
-                  <div class="sg-cable-wire"></div>
-                </div>
-                <div class="sg-cable-label">CABO</div>
-              </div>
-
-              <!-- Lado direito: painel/caixa -->
-              <div class="sg-side sg-side-right">
-                <div class="sg-device sg-device-panel">
-                  <div class="sg-device-icon">▣</div>
-                  <div class="sg-device-label">Caixa / Painel</div>
-                  <div class="sg-device-sub">Junction box, MCC...</div>
-                </div>
-                <div class="sg-field-bubble sg-bubble-purple">
-                  <div class="sg-bubble-col">ATÉ</div>
-                  <div class="sg-bubble-val">JB-101</div>
-                </div>
-                <div class="sg-field-bubble sg-bubble-purple" style="opacity:.75">
-                  <div class="sg-bubble-col">CONEXÃO ATÉ</div>
-                  <div class="sg-bubble-val">3/4" NPT</div>
-                </div>
-              </div>
-
-            </div><!-- /sg-diagram -->
 
             <!-- Mini preview da planilha -->
             <div class="sg-sheet-preview">
@@ -2065,7 +2010,7 @@ body {
                     <th>CONEXÃO</th>
                     <th>PC</th>
                     <th>REDUTOR</th>
-                    <th class="group-ate" style="border-left:2px solid rgba(167,139,250,.2)">CAIXA / PAINEL</th>
+                    <th class="group-ate" style="border-left:2px solid rgba(59,130,246,.2)">CAIXA / PAINEL</th>
                     <th>CONEXÃO</th>
                     <th>PC</th>
                     <th>REDUTOR</th>
@@ -3045,11 +2990,11 @@ function renderTable(){
       <td class="col-tag">${esc(r.tag)}</td>
       <td class="col-form">${esc(r.form)}</td>
       <td class="col-diam">${r.diam}</td>
-      <td style="border-left:2px solid rgba(79,142,247,.1)" class="col-con">${esc(r.desde)}</td>
+      <td style="border-left:2px solid rgba(255,77,45,.1)" class="col-con">${esc(r.desde)}</td>
       <td class="col-con">${esc(r.con_d)}</td>
       <td class="col-pc${r.pc_d==='—'?' na':''}">${esc(r.pc_d)}</td>
       <td class="col-red">${esc(r.red_d)||'—'}</td>
-      <td style="border-left:2px solid rgba(167,139,250,.1)" class="col-con">${esc(r.ate)}</td>
+      <td style="border-left:2px solid rgba(59,130,246,.1)" class="col-con">${esc(r.ate)}</td>
       <td class="col-con">${esc(r.con_a)}</td>
       <td class="col-pc${r.pc_a==='—'?' na':''}">${esc(r.pc_a)}</td>
       <td class="col-red">${esc(r.red_a)||'—'}</td>
