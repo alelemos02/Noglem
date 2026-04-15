@@ -13,6 +13,7 @@ import {
   GitCompare,
   FileSpreadsheet,
   Mail,
+  Package,
   type LucideIcon,
 } from "lucide-react";
 
@@ -157,6 +158,15 @@ export const tools: Tool[] = [
     href: "/dashboard/elaboracao-folha-dados",
     category: "instrumentacao",
     status: "coming_soon",
+  },
+  {
+    id: "prensa-cabo",
+    title: "Prensa Cabo Analyzer",
+    description: "Seleção de prensa cabos, geração de BOM e análise de lista de cabos",
+    icon: Package,
+    href: "/dashboard/prensa-cabo",
+    category: "instrumentacao",
+    status: "beta",
   },
 ];
 

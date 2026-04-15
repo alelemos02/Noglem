@@ -1,0 +1,4061 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Prensa Cabo Analyzer</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root {
+  --bg:        #0a0c10;
+  --surface:   #111318;
+  --surface2:  #181c23;
+  --surface3:  #1e2330;
+  --border:    #252b38;
+  --border2:   #2e3547;
+  --accent:    #4f8ef7;
+  --accent-dim:#1a2d52;
+  --green:     #34d058;
+  --green-dim: #0d2016;
+  --green-mid: #1a4028;
+  --yellow:    #f0b429;
+  --yellow-dim:#251c05;
+  --red:       #f75f5f;
+  --red-dim:   #250a0a;
+  --purple:    #a78bfa;
+  --purple-dim:#1a1040;
+  --text:      #e2e8f4;
+  --text2:     #7b8aaa;
+  --text3:     #414d66;
+  --mono:      'JetBrains Mono', monospace;
+  --ui:        'Inter', sans-serif;
+  --r:         8px;
+  --r2:        12px;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--ui);
+  font-size: 14px;
+  line-height: 1.5;
+  min-height: 100vh;
+}
+
+/* ── SCROLLBAR ── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 99px; }
+
+/* ── LAYOUT ── */
+.app-shell {
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  grid-template-rows: 56px 1fr;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* ── TOPBAR ── */
+.topbar {
+  grid-column: 1 / -1;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+  gap: 16px;
+  z-index: 100;
+}
+.topbar-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+.topbar-icon {
+  width: 30px; height: 30px;
+  background: linear-gradient(135deg, #1a4db5, #4f8ef7);
+  border-radius: 7px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 15px;
+}
+.topbar-name {
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: -.3px;
+}
+.topbar-sep {
+  width: 1px; height: 20px;
+  background: var(--border2);
+  margin: 0 4px;
+}
+.topbar-sub {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text3);
+  letter-spacing: .5px;
+}
+.topbar-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.pill {
+  font-family: var(--mono);
+  font-size: 10px;
+  padding: 3px 9px;
+  border-radius: 99px;
+  border: 1px solid var(--border2);
+  color: var(--text3);
+}
+.pill.active { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+
+/* ── SIDEBAR ── */
+.sidebar {
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.sidebar-section {
+  padding: 20px 16px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.sidebar-section:last-child { border-bottom: none; flex: 1; overflow-y: auto; }
+
+.section-label {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: var(--text3);
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.section-label::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+/* STEP INDICATORS */
+.steps { display: flex; flex-direction: column; gap: 4px; }
+.step-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: var(--r);
+  cursor: pointer;
+  transition: background .15s;
+}
+.step-item:hover { background: var(--surface2); }
+.step-item.active { background: var(--accent-dim); }
+.step-num {
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  background: var(--surface3);
+  border: 1.5px solid var(--border2);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700;
+  color: var(--text3);
+  flex-shrink: 0;
+  transition: all .2s;
+}
+.step-item.active .step-num {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.step-item.done .step-num {
+  background: var(--green-mid);
+  border-color: var(--green);
+  color: var(--green);
+}
+.step-item.done .step-num::before { content: '✓'; font-size: 12px; }
+.step-item.done .step-num span { display: none; }
+.step-text { flex: 1; }
+.step-title { font-size: 13px; font-weight: 600; color: var(--text2); }
+.step-item.active .step-title { color: var(--text); }
+.step-item.done .step-title { color: var(--text2); }
+.step-desc { font-size: 11px; color: var(--text3); margin-top: 1px; }
+.step-item.done .step-desc { color: var(--green); font-size: 10px; }
+
+/* BANCO MINI STATS */
+.banco-stats { display: flex; flex-direction: column; gap: 6px; }
+.bstat {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 10px;
+  background: var(--surface2);
+  border-radius: var(--r);
+  font-size: 12px;
+}
+.bstat-label { color: var(--text2); }
+.bstat-val {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent);
+  background: var(--accent-dim);
+  padding: 1px 7px;
+  border-radius: 99px;
+}
+.banco-actions { display: flex; gap: 6px; margin-top: 10px; }
+.btn-sm {
+  flex: 1;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 6px 8px;
+  background: var(--surface3);
+  border: 1px solid var(--border2);
+  border-radius: var(--r);
+  color: var(--text2);
+  cursor: pointer;
+  transition: all .15s;
+  text-align: center;
+}
+.btn-sm:hover { background: var(--surface2); color: var(--text); border-color: var(--border2); }
+
+/* ── MAIN PANEL ── */
+.main-panel {
+  overflow-y: auto;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── CONTENT SECTIONS ── */
+.content-section { display: none; flex: 1; }
+.content-section.visible { display: flex; flex-direction: column; }
+
+/* ── STEP PANELS ── */
+.step-panel {
+  padding: 32px 40px;
+  flex: 1;
+}
+.panel-header { margin-bottom: 28px; }
+.panel-title {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -.5px;
+  margin-bottom: 6px;
+}
+.panel-desc { font-size: 14px; color: var(--text2); line-height: 1.6; }
+
+/* UPLOAD ZONE */
+.drop-zone {
+  position: relative;
+  border: 2px dashed var(--border2);
+  border-radius: var(--r2);
+  padding: 48px 32px;
+  text-align: center;
+  cursor: pointer;
+  transition: all .2s;
+  background: var(--surface);
+}
+.drop-zone:hover, .drop-zone.drag {
+  border-color: var(--accent);
+  background: rgba(79,142,247,.04);
+}
+.drop-zone input {
+  position: absolute; inset: 0;
+  opacity: 0; cursor: pointer;
+  width: 100%; height: 100%;
+}
+.drop-icon {
+  width: 56px; height: 56px;
+  background: var(--surface3);
+  border-radius: 14px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 26px;
+  margin: 0 auto 16px;
+  transition: transform .2s;
+}
+.drop-zone:hover .drop-icon { transform: translateY(-3px); }
+.drop-title { font-size: 16px; font-weight: 600; margin-bottom: 6px; }
+.drop-sub { font-size: 13px; color: var(--text2); }
+.drop-hint {
+  margin-top: 12px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text3);
+}
+
+/* FILE LOADED STATE */
+.file-loaded {
+  display: flex; align-items: center; gap: 14px;
+  padding: 16px 20px;
+  background: var(--surface);
+  border: 1px solid var(--green-mid);
+  border-radius: var(--r2);
+  margin-bottom: 24px;
+}
+.file-loaded-icon {
+  width: 40px; height: 40px;
+  background: var(--green-mid);
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px;
+  flex-shrink: 0;
+}
+.file-loaded-info { flex: 1; }
+.file-loaded-name { font-weight: 600; font-size: 14px; color: var(--green); }
+.file-loaded-meta { font-family: var(--mono); font-size: 11px; color: var(--text2); margin-top: 2px; }
+.file-change-btn {
+  font-size: 12px; font-weight: 500;
+  padding: 6px 14px;
+  background: var(--surface3);
+  border: 1px solid var(--border2);
+  border-radius: var(--r);
+  color: var(--text2);
+  cursor: pointer;
+  transition: all .15s;
+}
+.file-change-btn:hover { color: var(--text); border-color: var(--border2); }
+
+/* MAPPER */
+.mapper-wrap {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r2);
+  overflow: hidden;
+}
+.mapper-header {
+  padding: 14px 20px;
+  background: var(--surface2);
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 8px;
+}
+.mapper-header-title { font-size: 13px; font-weight: 600; }
+.mapper-header-sub { font-size: 12px; color: var(--text2); margin-left: auto; }
+.mapper-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0;
+}
+.mapper-item {
+  padding: 14px 20px;
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+.mapper-item:nth-child(3n) { border-right: none; }
+.mapper-item:nth-last-child(-n+3) { border-bottom: none; }
+.mapper-label {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: .8px;
+  text-transform: uppercase;
+  color: var(--text3);
+  margin-bottom: 6px;
+}
+.mapper-select {
+  width: 100%;
+  background: var(--surface3);
+  border: 1px solid var(--border2);
+  border-radius: var(--r);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 12px;
+  padding: 7px 10px;
+  outline: none;
+  cursor: pointer;
+  transition: border .15s;
+}
+.mapper-select:focus { border-color: var(--accent); }
+.mapper-select.mapped { border-color: rgba(52,208,88,.3); }
+
+/* PRIMARY BTN */
+.btn-primary {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-size: 14px; font-weight: 600;
+  padding: 12px 28px;
+  background: var(--accent);
+  border: none;
+  border-radius: var(--r);
+  color: #fff;
+  cursor: pointer;
+  transition: all .2s;
+}
+.btn-primary:hover { background: #6ba0ff; transform: translateY(-1px); }
+.btn-primary:disabled { opacity: .35; cursor: not-allowed; transform: none; }
+.btn-primary:active { transform: translateY(0); }
+
+/* ── BANCO PANEL ── */
+.banco-panel { padding: 24px 40px; flex: 1; display: flex; flex-direction: column; gap: 24px; }
+
+.catalog-upload-area {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r2);
+  overflow: hidden;
+}
+.cua-header {
+  padding: 16px 20px;
+  background: var(--purple-dim);
+  border-bottom: 1px solid rgba(167,139,250,.15);
+  display: flex; align-items: center; gap: 12px;
+}
+.cua-header-icon { font-size: 20px; }
+.cua-header-text { flex: 1; }
+.cua-header-title { font-size: 14px; font-weight: 600; color: var(--purple); }
+.cua-header-sub { font-size: 12px; color: var(--text2); margin-top: 1px; }
+
+.cua-body { padding: 20px; }
+
+.catalog-drop {
+  position: relative;
+  border: 1.5px dashed rgba(167,139,250,.3);
+  border-radius: var(--r);
+  padding: 28px;
+  text-align: center;
+  cursor: pointer;
+  transition: all .2s;
+  background: rgba(167,139,250,.03);
+}
+.catalog-drop:hover, .catalog-drop.drag {
+  border-color: var(--purple);
+  background: rgba(167,139,250,.07);
+}
+.catalog-drop input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+.catalog-drop-title { font-size: 14px; font-weight: 600; color: var(--purple); margin-bottom: 4px; }
+.catalog-drop-sub { font-size: 12px; color: var(--text2); }
+
+/* AI STATUS */
+.ai-box {
+  margin-top: 16px;
+  border-radius: var(--r);
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+.ai-box-header {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 16px;
+  font-size: 13px; font-weight: 600;
+}
+.ai-box-body { padding: 0 16px 14px; }
+.ai-log-lines {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text2);
+  line-height: 1.9;
+  max-height: 120px;
+  overflow-y: auto;
+}
+.ai-log-lines .log-line { display: flex; align-items: flex-start; gap: 6px; }
+.ai-log-lines .log-line::before { content: '›'; color: var(--text3); flex-shrink: 0; }
+.log-warn { color: var(--yellow); }
+.log-ok { color: var(--green); }
+.log-err { color: var(--red); }
+
+.ai-box.idle .ai-box-header { background: var(--surface2); color: var(--text2); }
+.ai-box.idle { border-color: var(--border); }
+.ai-box.thinking .ai-box-header { background: rgba(167,139,250,.08); color: var(--purple); border-bottom: 1px solid rgba(167,139,250,.15); }
+.ai-box.thinking { border-color: rgba(167,139,250,.25); }
+.ai-box.done .ai-box-header { background: var(--green-dim); color: var(--green); border-bottom: 1px solid rgba(52,208,88,.15); }
+.ai-box.done { border-color: rgba(52,208,88,.25); }
+.ai-box.err .ai-box-header { background: var(--red-dim); color: var(--red); border-bottom: 1px solid rgba(247,95,95,.15); }
+.ai-box.err { border-color: rgba(247,95,95,.25); }
+
+.spin {
+  display: inline-block;
+  width: 13px; height: 13px;
+  border: 2px solid rgba(167,139,250,.25);
+  border-top-color: var(--purple);
+  border-radius: 50%;
+  animation: spin .6s linear infinite;
+  flex-shrink: 0;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* EXTRACTED PREVIEW */
+.ext-preview-wrap {
+  background: var(--surface);
+  border: 1px solid rgba(52,208,88,.2);
+  border-radius: var(--r2);
+  overflow: hidden;
+}
+.ext-preview-header {
+  padding: 12px 18px;
+  background: var(--green-dim);
+  border-bottom: 1px solid rgba(52,208,88,.12);
+  display: flex; align-items: center; gap: 8px;
+  font-size: 13px; font-weight: 600; color: var(--green);
+}
+.ext-cards-scroll {
+  padding: 14px 18px;
+  display: flex; flex-wrap: wrap; gap: 8px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+.ext-card {
+  background: var(--surface2);
+  border: 1px solid rgba(52,208,88,.2);
+  border-radius: var(--r);
+  padding: 8px 12px;
+  font-family: var(--mono);
+  font-size: 11px;
+  min-width: 140px;
+}
+.ext-card .ecm { color: var(--green); font-weight: 600; font-size: 12px; }
+.ext-card .ecd { color: var(--text2); margin-top: 2px; }
+.ext-card.is-red { border-color: rgba(240,180,41,.2); }
+.ext-card.is-red .ecm { color: var(--yellow); }
+.ext-preview-footer {
+  padding: 12px 18px;
+  border-top: 1px solid rgba(52,208,88,.12);
+  background: var(--surface2);
+  display: flex; align-items: center; gap: 12px;
+}
+.ext-count { font-size: 12px; color: var(--text2); flex: 1; }
+.btn-confirm {
+  display: inline-flex; align-items: center; gap: 7px;
+  font-size: 13px; font-weight: 600;
+  padding: 8px 20px;
+  background: var(--green-mid);
+  border: 1px solid rgba(52,208,88,.4);
+  border-radius: var(--r);
+  color: var(--green);
+  cursor: pointer;
+  transition: all .15s;
+}
+.btn-confirm:hover { background: rgba(52,208,88,.2); }
+.btn-confirm:disabled { opacity: .5; cursor: not-allowed; }
+
+/* BANCO TABLES */
+.banco-tables { display: flex; flex-direction: column; gap: 20px; }
+.banco-table-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r2);
+  overflow: hidden;
+}
+.btc-header {
+  padding: 12px 18px;
+  background: var(--surface2);
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.btc-title { font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+.btc-badge {
+  font-family: var(--mono);
+  font-size: 10px;
+  padding: 2px 7px;
+  border-radius: 99px;
+  background: var(--surface3);
+  color: var(--text3);
+}
+.btn-add {
+  font-size: 12px; font-weight: 500;
+  padding: 5px 12px;
+  background: var(--accent-dim);
+  border: 1px solid rgba(79,142,247,.3);
+  border-radius: var(--r);
+  color: var(--accent);
+  cursor: pointer;
+  transition: all .15s;
+}
+.btn-add:hover { background: rgba(79,142,247,.15); }
+
+.btable { width: 100%; border-collapse: collapse; }
+.btable th {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: .8px;
+  text-transform: uppercase;
+  color: var(--text3);
+  padding: 8px 14px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface2);
+  white-space: nowrap;
+}
+.btable td {
+  padding: 7px 14px;
+  border-bottom: 1px solid rgba(37,43,56,.6);
+  vertical-align: middle;
+}
+.btable tbody tr:last-child td { border-bottom: none; }
+.btable tbody tr:hover td { background: rgba(79,142,247,.03); }
+.btable input[type=text], .btable input[type=number] {
+  width: 100%; min-width: 70px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 12px;
+  padding: 3px 7px;
+  outline: none;
+  transition: border .15s, background .15s;
+}
+.btable input:hover { border-color: var(--border2); background: var(--surface3); }
+.btable input:focus { border-color: var(--accent); background: var(--surface3); }
+.npt-sel {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 12px;
+  padding: 3px 7px;
+  cursor: pointer;
+  outline: none;
+  width: 100%;
+  transition: border .15s, background .15s;
+}
+.npt-sel:hover { border-color: var(--border2); background: var(--surface3); }
+.npt-sel:focus { border-color: var(--accent); background: var(--surface3); }
+.npt-sel option { background: var(--surface2); }
+.del-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  color: var(--text3);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px 8px;
+  transition: all .15s;
+}
+.del-btn:hover { background: var(--red-dim); border-color: rgba(247,95,95,.3); color: var(--red); }
+
+/* ── RESULTS PANEL ── */
+.results-panel { padding: 24px 40px; flex: 1; display: flex; flex-direction: column; gap: 20px; }
+
+/* KPI STRIP */
+.kpi-strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.kpi {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r2);
+  padding: 16px 18px;
+  cursor: pointer;
+  transition: border-color .15s;
+}
+.kpi:hover { border-color: var(--border2); }
+.kpi.active-filter { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.kpi-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--text3);
+  margin-bottom: 8px;
+}
+.kpi-value { font-size: 30px; font-weight: 700; line-height: 1; }
+.kpi-sub { font-size: 11px; color: var(--text2); margin-top: 4px; }
+.kpi-ok  { border-top: 2px solid var(--green);  } .kpi-ok  .kpi-value { color: var(--green); }
+.kpi-al  { border-top: 2px solid var(--yellow); } .kpi-al  .kpi-value { color: var(--yellow); }
+.kpi-er  { border-top: 2px solid var(--red);    } .kpi-er  .kpi-value { color: var(--red); }
+.kpi-tot { border-top: 2px solid var(--accent);  } .kpi-tot .kpi-value { color: var(--accent); }
+
+/* BOM */
+.bom-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.bom-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r2);
+  overflow: hidden;
+}
+.bom-header {
+  padding: 11px 16px;
+  background: var(--surface2);
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+  font-size: 12px; font-weight: 600;
+}
+.bom-header-right { display: flex; align-items: center; gap: 8px; }
+.col-heads {
+  display: grid; grid-template-columns: 1fr 64px 64px;
+  padding: 6px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.col-head {
+  font-family: var(--mono);
+  font-size: 9px; letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--text3);
+  text-align: right;
+}
+.col-head:first-child { text-align: left; }
+.bom-list { max-height: 220px; overflow-y: auto; }
+.bom-item {
+  display: grid; grid-template-columns: 1fr 64px 64px;
+  padding: 8px 14px;
+  border-bottom: 1px solid rgba(37,43,56,.5);
+  align-items: center;
+  transition: background .1s;
+}
+.bom-item:last-child { border-bottom: none; }
+.bom-item:hover { background: rgba(79,142,247,.03); }
+.bom-model { font-family: var(--mono); font-size: 12px; font-weight: 500; }
+.bom-qty {
+  font-family: var(--mono); font-size: 12px;
+  text-align: right; color: var(--text2);
+}
+.bom-qty10 {
+  font-family: var(--mono); font-size: 12px; font-weight: 600;
+  text-align: right;
+}
+.bom-item.pc-row .bom-qty10 { color: var(--accent); }
+.bom-item.red-row .bom-qty10 { color: var(--yellow); }
+.empty-bom {
+  padding: 24px;
+  text-align: center;
+  font-size: 13px; color: var(--text3);
+}
+
+/* RESULTS TABLE */
+.results-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r2);
+  overflow: hidden;
+  flex: 1;
+  display: flex; flex-direction: column;
+}
+.results-toolbar {
+  padding: 10px 14px;
+  background: var(--surface2);
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 8px;
+  flex-wrap: wrap;
+}
+.filter-group { display: flex; gap: 4px; }
+.f-chip {
+  font-size: 12px; font-weight: 500;
+  padding: 5px 12px;
+  border-radius: 99px;
+  border: 1px solid var(--border2);
+  background: transparent;
+  color: var(--text2);
+  cursor: pointer;
+  transition: all .15s;
+  white-space: nowrap;
+}
+.f-chip:hover { border-color: var(--border2); background: var(--surface3); color: var(--text); }
+.f-chip.active { background: rgba(79,142,247,.12); border-color: var(--accent); color: var(--accent); }
+.f-chip.ok.active  { background: var(--green-dim); border-color: rgba(52,208,88,.4); color: var(--green); }
+.f-chip.al.active  { background: var(--yellow-dim); border-color: rgba(240,180,41,.4); color: var(--yellow); }
+.f-chip.er.active  { background: var(--red-dim); border-color: rgba(247,95,95,.4); color: var(--red); }
+.search-box {
+  flex: 1; min-width: 180px;
+  background: var(--surface3);
+  border: 1px solid var(--border2);
+  border-radius: var(--r);
+  color: var(--text);
+  font-size: 13px;
+  padding: 6px 12px;
+  outline: none;
+  transition: border .15s;
+}
+.search-box:focus { border-color: var(--accent); }
+.search-box::placeholder { color: var(--text3); }
+.result-count { font-family: var(--mono); font-size: 11px; color: var(--text3); white-space: nowrap; }
+.btn-export {
+  font-size: 12px; font-weight: 500;
+  padding: 6px 13px;
+  background: var(--green-dim);
+  border: 1px solid rgba(52,208,88,.3);
+  border-radius: var(--r);
+  color: var(--green);
+  cursor: pointer;
+  transition: all .15s;
+  white-space: nowrap;
+}
+.btn-export:hover { background: var(--green-mid); }
+
+.table-scroll { overflow: auto; flex: 1; }
+.rtable { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 11.5px; min-width: 1300px; }
+.rtable thead th {
+  position: sticky; top: 0; z-index: 2;
+  background: var(--surface2);
+  padding: 9px 12px;
+  text-align: left;
+  font-size: 10px; letter-spacing: .8px; text-transform: uppercase;
+  color: var(--text3); font-weight: 500;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+.rtable thead th.group-desde { border-left: 2px solid rgba(79,142,247,.2); }
+.rtable thead th.group-ate   { border-left: 2px solid rgba(167,139,250,.2); }
+.rtable td {
+  padding: 7px 12px;
+  border-bottom: 1px solid rgba(37,43,56,.5);
+  vertical-align: middle;
+  white-space: nowrap;
+}
+.rtable tbody tr:hover td { background: rgba(79,142,247,.03); }
+.rtable tbody tr.row-ok:hover td   { background: rgba(52,208,88,.03); }
+.rtable tbody tr.row-al:hover td   { background: rgba(240,180,41,.03); }
+.rtable tbody tr.row-er:hover td   { background: rgba(247,95,95,.04); }
+
+.col-tag   { font-weight: 600; color: var(--text); }
+.col-form  { color: var(--text2); max-width: 180px; overflow: hidden; text-overflow: ellipsis; }
+.col-diam  { color: var(--accent); font-weight: 600; text-align: center; }
+.col-con   { color: var(--text3); }
+.col-pc    { color: var(--green); font-weight: 600; }
+.col-pc.na { color: var(--red); }
+.col-red   { color: var(--yellow); }
+.col-alert { color: var(--red); font-size: 10px; max-width: 240px; white-space: normal; line-height: 1.4; }
+
+/* Group headers on table */
+.rtable thead tr.group-row th {
+  padding: 5px 12px 4px;
+  font-size: 9px; letter-spacing: 1.2px;
+  color: var(--text3);
+  border-bottom: none;
+}
+.th-desde { border-left: 2px solid rgba(79,142,247,.3); color: var(--accent); }
+.th-ate   { border-left: 2px solid rgba(167,139,250,.3); color: var(--purple); }
+
+.badge-ok { display: inline-block; font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 99px; background: var(--green-dim); color: var(--green); border: 1px solid rgba(52,208,88,.25); }
+.badge-al { display: inline-block; font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 99px; background: var(--yellow-dim); color: var(--yellow); border: 1px solid rgba(240,180,41,.25); }
+.badge-er { display: inline-block; font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 99px; background: var(--red-dim); color: var(--red); border: 1px solid rgba(247,95,95,.25); }
+
+/* ── EMPTY STATE ── */
+.empty-state {
+  flex: 1;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 12px;
+  padding: 60px;
+  color: var(--text3);
+}
+.empty-icon { font-size: 48px; opacity: .4; }
+.empty-title { font-size: 16px; font-weight: 600; color: var(--text2); }
+.empty-sub { font-size: 13px; text-align: center; max-width: 300px; line-height: 1.6; }
+
+/* HIDDEN */
+.hidden { display: none !important; }
+
+  /* ── INPUT MODE TOGGLE ── */
+  .mode-toggle {
+    display: flex;
+    gap: 0;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--r);
+    padding: 3px;
+    margin-bottom: 24px;
+    width: fit-content;
+  }
+  .mode-btn {
+    font-size: 13px; font-weight: 500;
+    padding: 8px 20px;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text2);
+    cursor: pointer;
+    transition: all .15s;
+    display: flex; align-items: center; gap: 7px;
+  }
+  .mode-btn:hover { color: var(--text); }
+  .mode-btn.active {
+    background: var(--surface);
+    color: var(--text);
+    box-shadow: 0 1px 4px rgba(0,0,0,.3);
+  }
+  .mode-btn.active .mode-dot { background: var(--accent); }
+  .mode-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--text3);
+    transition: background .15s;
+  }
+
+  /* ── MANUAL ENTRY TABLE ── */
+  .manual-wrap {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--r2);
+    overflow: hidden;
+  }
+  .manual-toolbar {
+    display: flex; align-items: center; gap: 10px;
+    padding: 11px 16px;
+    background: var(--surface2);
+    border-bottom: 1px solid var(--border);
+  }
+  .manual-toolbar-title {
+    font-size: 13px; font-weight: 600;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .cable-count-badge {
+    font-family: var(--mono);
+    font-size: 10px; padding: 2px 8px;
+    border-radius: 99px;
+    background: var(--accent-dim);
+    color: var(--accent);
+    border: 1px solid rgba(79,142,247,.3);
+  }
+  .manual-table-scroll { overflow-x: auto; max-height: 420px; overflow-y: auto; }
+  .ctable { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 12px; min-width: 900px; }
+  .ctable thead th {
+    position: sticky; top: 0; z-index: 2;
+    background: var(--surface2);
+    padding: 8px 12px;
+    text-align: left;
+    font-size: 10px; letter-spacing: .8px; text-transform: uppercase;
+    color: var(--text3); font-weight: 500;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  .ctable td {
+    padding: 4px 6px;
+    border-bottom: 1px solid rgba(37,43,56,.5);
+    vertical-align: middle;
+  }
+  .ctable tbody tr:hover td { background: rgba(79,142,247,.03); }
+  .ctable tbody tr:last-child td { border-bottom: none; }
+  .ctable input, .ctable select {
+    width: 100%;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 5px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 5px 8px;
+    outline: none;
+    transition: all .12s;
+  }
+  .ctable input:hover, .ctable select:hover {
+    border-color: var(--border2);
+    background: var(--surface3);
+  }
+  .ctable input:focus, .ctable select:focus {
+    border-color: var(--accent);
+    background: var(--surface3);
+  }
+  .ctable select option { background: var(--surface2); }
+  .ctable .row-num {
+    font-size: 10px; color: var(--text3);
+    text-align: center; padding: 0 8px;
+    width: 32px;
+    user-select: none;
+  }
+  .ctable .del-col { width: 36px; text-align: center; }
+  .manual-footer {
+    display: flex; align-items: center; gap: 10px;
+    padding: 11px 16px;
+    border-top: 1px solid var(--border);
+    background: var(--surface2);
+  }
+  .btn-add-cable {
+    font-size: 12px; font-weight: 500;
+    padding: 6px 14px;
+    background: var(--surface3);
+    border: 1px solid var(--border2);
+    border-radius: var(--r);
+    color: var(--text2);
+    cursor: pointer;
+    transition: all .15s;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .btn-add-cable:hover { color: var(--text); border-color: var(--accent); background: var(--accent-dim); }
+  .btn-clear-cables {
+    font-size: 12px; font-weight: 500;
+    padding: 6px 14px;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: var(--r);
+    color: var(--text3);
+    cursor: pointer;
+    transition: all .15s;
+  }
+  .btn-clear-cables:hover { color: var(--red); border-color: rgba(247,95,95,.4); background: var(--red-dim); }
+
+  /* highlight empty required cells */
+  .ctable input.required-empty { border-color: rgba(247,95,95,.4) !important; background: rgba(247,95,95,.04) !important; }
+
+
+  /* ── FABRICANTES PANEL ── */
+  .fab-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+  .fab-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 7px 10px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--r);
+    cursor: pointer;
+    transition: all .15s;
+    position: relative;
+  }
+  .fab-item:hover { border-color: var(--border2); background: var(--surface3); }
+  .fab-item.active {
+    border-color: var(--accent);
+    background: var(--accent-dim);
+  }
+  .fab-check {
+    width: 16px; height: 16px;
+    border-radius: 50%;
+    border: 2px solid var(--border2);
+    flex-shrink: 0;
+    transition: all .15s;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .fab-item.active .fab-check {
+    background: var(--accent);
+    border-color: var(--accent);
+  }
+  .fab-check::after {
+    content: '';
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: white;
+    display: none;
+  }
+  .fab-item.active .fab-check::after { display: block; }
+  .fab-info { flex: 1; min-width: 0; }
+  .fab-name { font-size: 12px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .fab-item.active .fab-name { color: var(--accent); }
+  .fab-count { font-family: var(--mono); font-size: 10px; color: var(--text3); }
+  .fab-del {
+    background: transparent; border: none;
+    color: var(--text3); cursor: pointer; font-size: 13px;
+    padding: 2px 4px; border-radius: 4px;
+    transition: all .15s; flex-shrink: 0;
+  }
+  .fab-del:hover { color: var(--red); background: var(--red-dim); }
+  .fab-all-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 10px;
+    background: var(--surface3);
+    border: 1px solid var(--border2);
+    border-radius: var(--r);
+    cursor: pointer;
+    transition: all .15s;
+    margin-bottom: 4px;
+  }
+  .fab-all-item:hover { border-color: var(--accent); }
+  .fab-all-item.active { border-color: var(--accent); background: var(--accent-dim); }
+  .fab-all-label { font-size: 11px; font-weight: 600; color: var(--text2); }
+  .fab-all-item.active .fab-all-label { color: var(--accent); }
+  .fab-empty {
+    font-family: var(--mono); font-size: 11px; color: var(--text3);
+    text-align: center; padding: 12px 8px;
+    border: 1px dashed var(--border); border-radius: var(--r);
+    line-height: 1.6;
+  }
+  .fab-section-label {
+    font-family: var(--mono); font-size: 10px; letter-spacing: 1px;
+    text-transform: uppercase; color: var(--text3);
+    margin-bottom: 8px; padding-bottom: 6px;
+    border-bottom: 1px solid var(--border);
+  }
+  .fab-active-badge {
+    font-family: var(--mono); font-size: 10px;
+    padding: 2px 7px; border-radius: 99px;
+    background: rgba(79,142,247,.12);
+    color: var(--accent);
+    border: 1px solid rgba(79,142,247,.25);
+    white-space: nowrap;
+  }
+  /* Storage indicator */
+  .storage-ok {
+    font-family: var(--mono); font-size: 10px; color: var(--green);
+    display: flex; align-items: center; gap: 4px; margin-top: 6px;
+  }
+  .storage-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); }
+
+
+  .btn-del-fab {
+    width: 100%;
+    font-size: 12px; font-weight: 600;
+    padding: 8px 12px;
+    background: var(--red-dim);
+    border: 1px solid rgba(247,95,95,.35);
+    border-radius: var(--r);
+    color: var(--red);
+    cursor: pointer;
+    transition: all .15s;
+    display: flex; align-items: center; justify-content: center; gap: 7px;
+    margin-top: 8px;
+  }
+  .btn-del-fab:hover { background: rgba(247,95,95,.2); border-color: var(--red); }
+  .btn-del-fab:disabled { opacity: .3; cursor: not-allowed; }
+
+
+  /* ── BANCO FILTER BAR ── */
+  .banco-filter-bar {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    padding: 10px 14px;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
+  }
+  .banco-filter-input {
+    flex: 1;
+    min-width: 140px;
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    border-radius: var(--r);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 6px 10px;
+    outline: none;
+    transition: border .15s;
+  }
+  .banco-filter-input:focus { border-color: var(--accent); }
+  .banco-filter-input::placeholder { color: var(--text3); }
+  .banco-filter-select {
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    border-radius: var(--r);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 6px 10px;
+    outline: none;
+    cursor: pointer;
+    transition: border .15s;
+  }
+  .banco-filter-select:focus { border-color: var(--accent); }
+  .banco-filter-select option { background: var(--surface2); }
+  .banco-filter-count {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text3);
+    white-space: nowrap;
+    margin-left: auto;
+  }
+  .banco-filter-clear {
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 5px 10px;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: var(--r);
+    color: var(--text3);
+    cursor: pointer;
+    transition: all .15s;
+    white-space: nowrap;
+  }
+  .banco-filter-clear:hover { color: var(--red); border-color: rgba(247,95,95,.4); }
+
+
+  /* ── INLINE COLUMN FILTERS (Excel style) ── */
+  .filter-row th {
+    background: var(--bg) !important;
+    padding: 4px 6px !important;
+    border-bottom: 2px solid var(--accent) !important;
+  }
+  .col-filter {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    border-radius: 4px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 4px 7px;
+    outline: none;
+    transition: border .15s, background .15s;
+    min-width: 60px;
+  }
+  .col-filter:focus {
+    border-color: var(--accent);
+    background: var(--surface3);
+  }
+  .col-filter::placeholder { color: var(--text3); font-size: 12px; }
+  .col-filter-clear {
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text3);
+    cursor: pointer;
+    font-size: 12px;
+    padding: 3px 6px;
+    transition: all .15s;
+    width: 100%;
+  }
+  .col-filter-clear:hover { color: var(--red); border-color: rgba(247,95,95,.5); background: var(--red-dim); }
+  /* highlight active filters */
+  .col-filter.has-value {
+    border-color: var(--accent);
+    background: var(--accent-dim);
+    color: var(--accent);
+    font-weight: 600;
+  }
+
+  /* ── VIEW TOGGLE ── */
+  .view-toggle {
+    display: flex;
+    background: var(--surface3);
+    border: 1px solid var(--border2);
+    border-radius: var(--r);
+    padding: 2px;
+    gap: 2px;
+  }
+  .vt-btn {
+    font-size: 12px; font-weight: 500;
+    padding: 4px 10px;
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    color: var(--text3);
+    cursor: pointer;
+    transition: all .15s;
+    display: flex; align-items: center; gap: 5px;
+  }
+  .vt-btn:hover { color: var(--text2); background: var(--surface2); }
+  .vt-btn.active { background: var(--surface); color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,.3); }
+
+  /* ── CARDS CONTAINER ── */
+  .cards-container { padding: 0; flex: 1; overflow-y: auto; }
+
+  /* Group header (ERRO / ALERTA / OK) */
+  .card-group-header {
+    display: flex; align-items: center; gap: 10px;
+    padding: 14px 16px 8px;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+    font-weight: 700;
+    position: sticky; top: 0; z-index: 5;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+  .card-group-header.grp-er  { color: var(--red);    background: rgba(10,12,16,.92); border-bottom: 1px solid rgba(247,95,95,.12); }
+  .card-group-header.grp-al  { color: var(--yellow);  background: rgba(10,12,16,.92); border-bottom: 1px solid rgba(240,180,41,.12); }
+  .card-group-header.grp-ok  { color: var(--green);   background: rgba(10,12,16,.92); border-bottom: 1px solid rgba(52,208,88,.12); }
+  .card-group-header .grp-badge {
+    font-family: var(--mono); font-size: 10px; font-weight: 700;
+    padding: 1px 8px; border-radius: 99px;
+  }
+  .grp-er .grp-badge  { background: var(--red-dim);    color: var(--red);    border: 1px solid rgba(247,95,95,.3); }
+  .grp-al .grp-badge  { background: var(--yellow-dim);  color: var(--yellow); border: 1px solid rgba(240,180,41,.3); }
+  .grp-ok .grp-badge  { background: var(--green-dim);   color: var(--green);  border: 1px solid rgba(52,208,88,.3); }
+  .grp-line { flex: 1; height: 1px; opacity: .25; }
+  .grp-er .grp-line { background: var(--red); }
+  .grp-al .grp-line { background: var(--yellow); }
+  .grp-ok .grp-line { background: var(--green); }
+
+  /* Card grid */
+  .cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 12px;
+    padding: 12px 16px 20px;
+  }
+
+  /* Individual cable card */
+  .cable-card {
+    background: var(--surface);
+    border-radius: var(--r2);
+    overflow: hidden;
+    border: 1px solid var(--border);
+    transition: transform .15s, box-shadow .15s, border-color .15s;
+    cursor: default;
+  }
+  .cable-card:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,.35); }
+  .cable-card.card-er { border-top: 3px solid var(--red);    }
+  .cable-card.card-al { border-top: 3px solid var(--yellow);  }
+  .cable-card.card-ok { border-top: 3px solid var(--green);   }
+  .cable-card:hover.card-er { border-color: rgba(247,95,95,.4);  box-shadow: 0 8px 24px rgba(247,95,95,.12); }
+  .cable-card:hover.card-al { border-color: rgba(240,180,41,.4); box-shadow: 0 8px 24px rgba(240,180,41,.1); }
+  .cable-card:hover.card-ok { border-color: rgba(52,208,88,.3);  box-shadow: 0 8px 24px rgba(52,208,88,.08); }
+
+  /* Card header */
+  .cc-head {
+    display: flex; align-items: center; gap: 10px;
+    padding: 12px 14px 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  .cc-tag {
+    font-family: var(--mono); font-size: 13px; font-weight: 700;
+    color: var(--text); flex: 1; min-width: 0;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .cc-diam-chip {
+    font-family: var(--mono); font-size: 10px; font-weight: 600;
+    padding: 2px 8px; border-radius: 99px;
+    background: var(--surface3); color: var(--text2);
+    border: 1px solid var(--border2); white-space: nowrap;
+  }
+  .cc-status-dot {
+    width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+  }
+  .card-er .cc-status-dot { background: var(--red);    box-shadow: 0 0 6px var(--red); }
+  .card-al .cc-status-dot { background: var(--yellow);  box-shadow: 0 0 6px var(--yellow); }
+  .card-ok .cc-status-dot { background: var(--green);   box-shadow: 0 0 6px var(--green); }
+
+  /* Card subheader (form) */
+  .cc-form {
+    font-family: var(--mono); font-size: 10px;
+    color: var(--text3); padding: 5px 14px;
+    background: var(--surface2);
+    letter-spacing: .3px;
+  }
+
+  /* Card body: two endpoint columns */
+  .cc-body {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 0;
+  }
+  .cc-endpoint {
+    padding: 10px 14px 12px;
+  }
+  .cc-endpoint:first-child { border-right: 1px solid var(--border); }
+  .cc-ep-label {
+    font-family: var(--mono); font-size: 9px;
+    letter-spacing: 1px; text-transform: uppercase;
+    color: var(--text3); margin-bottom: 5px;
+    display: flex; align-items: center; gap: 5px;
+  }
+  .cc-ep-label::before { content: ''; width: 3px; height: 3px; border-radius: 50%; background: currentColor; }
+  .cc-ep-name {
+    font-size: 11px; font-weight: 600; color: var(--text);
+    margin-bottom: 6px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .cc-ep-conn {
+    font-family: var(--mono); font-size: 10px; color: var(--text2);
+    margin-bottom: 4px;
+  }
+  .cc-ep-pc {
+    font-family: var(--mono); font-size: 11px; font-weight: 600;
+    color: var(--accent); margin-bottom: 3px;
+  }
+  .cc-ep-pc.na { color: var(--red); }
+  .cc-ep-red {
+    font-family: var(--mono); font-size: 10px;
+    color: var(--yellow);
+    display: flex; align-items: center; gap: 4px;
+  }
+  .cc-ep-red::before { content: '↘'; font-size: 9px; }
+  .cc-ep-fab {
+    font-family: var(--mono); font-size: 9px;
+    color: var(--text3); margin-top: 2px;
+  }
+
+  /* Card footer (alerts) */
+  .cc-footer {
+    padding: 8px 14px;
+    background: var(--surface2);
+    border-top: 1px solid var(--border);
+    font-family: var(--mono); font-size: 10px;
+    line-height: 1.5;
+  }
+  .cc-footer.has-alert { background: var(--red-dim); color: var(--red); border-top-color: rgba(247,95,95,.2); }
+  .cc-footer.has-warn  { background: var(--yellow-dim); color: var(--yellow); border-top-color: rgba(240,180,41,.15); }
+  .cc-footer.clean     { color: var(--green); }
+
+  /* ═══════════════════════════════════════
+     SHEET GUIDE
+  ═══════════════════════════════════════ */
+  .sheet-guide {
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    border-radius: var(--r2);
+    overflow: hidden;
+    margin-bottom: 20px;
+  }
+
+  /* Header */
+  .sg-header {
+    display: flex; align-items: center; gap: 14px;
+    padding: 14px 20px;
+    background: var(--surface2);
+    border-bottom: 1px solid var(--border);
+  }
+  .sg-icon { font-size: 22px; flex-shrink: 0; }
+  .sg-title { font-size: 14px; font-weight: 700; margin-bottom: 2px; }
+  .sg-sub   { font-size: 12px; color: var(--text2); }
+  .sg-skip  {
+    margin-left: auto; font-size: 11px; font-weight: 500;
+    padding: 5px 12px;
+    background: transparent;
+    border: 1px solid var(--border2);
+    border-radius: var(--r); color: var(--text3);
+    cursor: pointer; transition: all .15s; white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .sg-skip:hover { color: var(--text); border-color: var(--border2); background: var(--surface3); }
+
+  /* ── DIAGRAM ── */
+  .sg-diagram {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: 0;
+    padding: 24px 28px 20px;
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(180deg, rgba(79,142,247,.03) 0%, transparent 100%);
+  }
+
+  /* Sides */
+  .sg-side { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  .sg-side-left  { align-items: flex-end; }
+  .sg-side-right { align-items: flex-start; }
+
+  /* Device boxes */
+  .sg-device {
+    display: flex; flex-direction: column; align-items: center;
+    gap: 6px; padding: 14px 20px;
+    border-radius: var(--r2);
+    border: 1.5px solid var(--border2);
+    background: var(--surface2);
+    min-width: 120px; text-align: center;
+    margin-bottom: 4px;
+  }
+  .sg-device-inst  { border-color: rgba(79,142,247,.4);  background: rgba(79,142,247,.06); }
+  .sg-device-panel { border-color: rgba(167,139,250,.4); background: rgba(167,139,250,.06); }
+  .sg-device-icon  { font-size: 26px; line-height: 1; }
+  .sg-device-label { font-size: 12px; font-weight: 700; color: var(--text); }
+  .sg-device-sub   { font-size: 10px; color: var(--text3); font-family: var(--mono); }
+
+  /* Field bubbles */
+  .sg-field-bubble {
+    display: flex; flex-direction: column; align-items: flex-start;
+    padding: 7px 12px; border-radius: var(--r);
+    border: 1px solid var(--border);
+    background: var(--surface3);
+    min-width: 160px;
+  }
+  .sg-side-right .sg-field-bubble { align-items: flex-start; }
+  .sg-bubble-col {
+    font-family: var(--mono); font-size: 9px;
+    letter-spacing: 1px; text-transform: uppercase;
+    color: var(--text3); margin-bottom: 3px;
+  }
+  .sg-bubble-val {
+    font-family: var(--mono); font-size: 12px; font-weight: 600;
+  }
+  .sg-bubble-blue  { border-color: rgba(79,142,247,.3); }
+  .sg-bubble-blue .sg-bubble-val  { color: var(--accent); }
+  .sg-bubble-purple { border-color: rgba(167,139,250,.3); }
+  .sg-bubble-purple .sg-bubble-val { color: var(--purple); }
+
+  /* Cable center */
+  .sg-cable-center {
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+    padding: 0 16px;
+  }
+  .sg-cable-line {
+    display: flex; align-items: center; gap: 0;
+  }
+  .sg-cable-wire {
+    width: 32px; height: 3px;
+    background: linear-gradient(90deg, var(--border2), var(--accent));
+    border-radius: 2px;
+  }
+  .sg-cable-wire:last-child {
+    background: linear-gradient(90deg, var(--accent), var(--purple));
+  }
+  .sg-cable-info {
+    background: var(--surface2);
+    border: 1.5px solid var(--accent);
+    border-radius: var(--r2);
+    padding: 10px 14px;
+    display: flex; flex-direction: column; gap: 7px;
+    min-width: 180px;
+    box-shadow: 0 0 0 4px rgba(79,142,247,.06);
+  }
+  .sg-ci-row {
+    display: flex; flex-direction: column; gap: 2px;
+  }
+  .sg-ci-col {
+    font-family: var(--mono); font-size: 9px;
+    letter-spacing: 1px; text-transform: uppercase; color: var(--text3);
+  }
+  .sg-ci-val {
+    font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--text);
+  }
+  .sg-cable-label {
+    font-family: var(--mono); font-size: 9px;
+    letter-spacing: 2px; text-transform: uppercase;
+    color: var(--accent); font-weight: 700;
+    background: var(--accent-dim);
+    padding: 2px 10px; border-radius: 99px;
+    border: 1px solid rgba(79,142,247,.3);
+  }
+
+  /* ── SHEET PREVIEW ── */
+  .sg-sheet-preview {
+    padding: 18px 20px 20px;
+  }
+  .sg-sheet-label {
+    font-family: var(--mono); font-size: 10px;
+    letter-spacing: 1px; text-transform: uppercase;
+    color: var(--text3); margin-bottom: 10px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .sg-sheet-label::after {
+    content: ''; flex: 1; height: 1px; background: var(--border);
+  }
+  .sg-sheet-scroll { overflow-x: auto; border-radius: var(--r); border: 1px solid var(--border); margin-bottom: 12px; }
+  .sg-sheet-table {
+    width: 100%; border-collapse: collapse;
+    font-family: var(--mono); font-size: 11px;
+    white-space: nowrap;
+  }
+  .sg-sheet-table thead th {
+    padding: 7px 14px;
+    background: var(--surface2);
+    border-bottom: 2px solid var(--border2);
+    font-size: 10px; letter-spacing: .6px; text-transform: uppercase;
+    color: var(--text3); font-weight: 700; text-align: left;
+  }
+  .sg-sheet-table tbody td {
+    padding: 7px 14px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text2);
+  }
+  .sg-sheet-table tbody tr:last-child td { border-bottom: none; }
+  .sg-sheet-table tbody tr:hover td { background: rgba(79,142,247,.03); }
+  .sg-row-faded td { opacity: .45; }
+
+  /* Column color coding */
+  .sgt-tag  { color: var(--text) !important; border-right: 2px solid rgba(79,142,247,.2); }
+  .sgt-form { color: var(--green) !important; }
+  .sgt-desde, .sgt-cd { color: var(--accent) !important; }
+  .sgt-ate,   .sgt-ca { color: var(--purple) !important; }
+  .sg-sheet-table td:nth-child(1) { color: var(--text) !important; font-weight: 600; border-right: 2px solid rgba(79,142,247,.1); }
+  .sg-sheet-table td:nth-child(2) { color: var(--green) !important; }
+  .sg-sheet-table td:nth-child(3), .sg-sheet-table td:nth-child(4) { color: var(--accent) !important; }
+  .sg-sheet-table td:nth-child(5), .sg-sheet-table td:nth-child(6) { color: var(--purple) !important; }
+
+  /* Notes */
+  .sg-sheet-notes { display: flex; flex-direction: column; gap: 5px; }
+  .sg-note {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 12px; color: var(--text2); line-height: 1.4;
+  }
+  .sg-note-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+
+</style>
+</head>
+<body>
+<div class="app-shell">
+
+  <!-- TOPBAR -->
+  <header class="topbar">
+    <div class="topbar-logo">
+      <div class="topbar-icon">⚙️</div>
+      <span class="topbar-name">Prensa Cabo Analyzer</span>
+    </div>
+    <div class="topbar-sep"></div>
+    <span class="topbar-sub">INSTRUMENTAÇÃO &amp; AUTOMAÇÃO</span>
+    <div class="topbar-right">
+      <span class="pill" id="pill-pc">0 PC</span>
+      <span class="pill" id="pill-fm">0 Formações</span>
+      <span class="pill active" id="pill-v">v3.1</span>
+    </div>
+  </header>
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+
+    <!-- WORKFLOW STEPS -->
+    <div class="sidebar-section">
+      <div class="section-label">Fluxo de trabalho</div>
+      <div class="steps">
+        <div class="step-item active" id="nav-step1" onclick="goToStep(1)">
+          <div class="step-num"><span>1</span></div>
+          <div class="step-text">
+            <div class="step-title">Lista de Cabos</div>
+            <div class="step-desc" id="s1-desc">Carregue o arquivo .xlsx</div>
+          </div>
+        </div>
+        <div class="step-item" id="nav-step2" onclick="goToStep(2)">
+          <div class="step-num"><span>2</span></div>
+          <div class="step-text">
+            <div class="step-title">Banco de Dados</div>
+            <div class="step-desc" id="s2-desc">Catálogo + formações</div>
+          </div>
+        </div>
+        <div class="step-item" id="nav-step3" onclick="goToStep(3)">
+          <div class="step-num"><span>3</span></div>
+          <div class="step-text">
+            <div class="step-title">Resultado</div>
+            <div class="step-desc" id="s3-desc">Análise e BOM</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- FABRICANTES + BANCO -->
+    <div class="sidebar-section" style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:0">
+      <div class="fab-section-label">Fabricantes cadastrados</div>
+
+      <div style="margin-bottom:8px">
+        <div class="fab-all-item active" id="fab-all" onclick="selectFab('__ALL__')">
+          <div class="fab-check" id="fab-all-check" style="border-radius:3px"></div>
+          <span class="fab-all-label">Todos os fabricantes</span>
+          <span class="fab-active-badge" id="stat-pc-total">0 PC</span>
+        </div>
+      </div>
+
+      <div class="fab-list" id="fab-list">
+        <div class="fab-empty" id="fab-empty">
+          Nenhum catálogo carregado.<br>Vá ao Step 2 → Catálogo do Fornecedor.
+        </div>
+      </div>
+
+      <button class="btn-del-fab" id="btn-del-fab" disabled onclick="deleteSelectedFab()">
+        🗑 Apagar fabricante selecionado
+      </button>
+
+      <div class="fab-section-label" style="margin-top:14px">Formações</div>
+      <div class="banco-stats" style="margin-bottom:8px">
+        <div class="bstat">
+          <span class="bstat-label">Cadastradas</span>
+          <span class="bstat-val" id="stat-fm">10</span>
+        </div>
+      </div>
+
+      <div class="banco-actions">
+        <button class="btn-sm" onclick="exportBanco()">💾 Exportar banco</button>
+        <button class="btn-sm" onclick="document.getElementById('importBanco').click()">📥 Importar banco</button>
+        <input type="file" id="importBanco" accept=".json" class="hidden" onchange="importBancoFn(this)">
+      </div>
+      <div class="storage-ok" id="storage-indicator" style="display:none">
+        <span class="storage-dot"></span> Salvo automaticamente
+      </div>
+    </div>
+
+  </aside>
+
+  <!-- MAIN PANEL -->
+  <div class="main-panel" id="main-panel">
+
+    <!-- ═══════════ STEP 1: LISTA DE CABOS ═══════════ -->
+    <div class="content-section visible" id="section-step1">
+      <div class="step-panel">
+        <div class="panel-header">
+          <div class="panel-title">Lista de Cabos</div>
+          <div class="panel-desc">Carregue um arquivo Excel ou insira os cabos manualmente.</div>
+        </div>
+
+        <!-- MODE TOGGLE -->
+        <div class="mode-toggle">
+          <button class="mode-btn active" id="mode-btn-file" onclick="setInputMode('file')">
+            <span class="mode-dot"></span> Importar arquivo
+          </button>
+          <button class="mode-btn" id="mode-btn-manual" onclick="setInputMode('manual')">
+            <span class="mode-dot"></span> Entrada manual
+          </button>
+        </div>
+
+        <!-- ── FILE MODE ── -->
+        <div id="mode-file">
+          <!-- FILE LOADED BAR -->
+          <div id="file-loaded-bar" class="file-loaded hidden">
+            <div class="file-loaded-icon">📊</div>
+            <div class="file-loaded-info">
+              <div class="file-loaded-name" id="fl-name">—</div>
+              <div class="file-loaded-meta" id="fl-meta">—</div>
+            </div>
+            <button class="file-change-btn" onclick="resetFile()">Trocar arquivo</button>
+          </div>
+
+          <!-- GUIA VISUAL DA PLANILHA -->
+          <div class="sheet-guide" id="sheet-guide">
+
+            <div class="sg-header">
+              <span class="sg-icon">📋</span>
+              <div>
+                <div class="sg-title">Como montar a planilha</div>
+                <div class="sg-sub">Cada linha = 1 cabo. O app mapeia as colunas automaticamente.</div>
+              </div>
+              <button class="sg-skip" onclick="document.getElementById('sheet-guide').style.display='none'">Entendi ✕</button>
+            </div>
+
+            <!-- DIAGRAMA CABLE -->
+            <div class="sg-diagram">
+
+              <!-- Lado esquerdo: instrumento -->
+              <div class="sg-side sg-side-left">
+                <div class="sg-device sg-device-inst">
+                  <div class="sg-device-icon">⬡</div>
+                  <div class="sg-device-label">Instrumento</div>
+                  <div class="sg-device-sub">TAG do campo</div>
+                </div>
+                <div class="sg-field-bubble sg-bubble-blue">
+                  <div class="sg-bubble-col">DESDE</div>
+                  <div class="sg-bubble-val">PT-101</div>
+                </div>
+                <div class="sg-field-bubble sg-bubble-blue" style="opacity:.75">
+                  <div class="sg-bubble-col">CONEXÃO DESDE</div>
+                  <div class="sg-bubble-val">1/2" NPT</div>
+                </div>
+              </div>
+
+              <!-- Cabo central -->
+              <div class="sg-cable-center">
+                <div class="sg-cable-line">
+                  <div class="sg-cable-wire"></div>
+                  <div class="sg-cable-info">
+                    <div class="sg-ci-row">
+                      <span class="sg-ci-col">TAG CABO</span>
+                      <span class="sg-ci-val">CABLE-001</span>
+                    </div>
+                    <div class="sg-ci-row">
+                      <span class="sg-ci-col">FORMAÇÃO</span>
+                      <span class="sg-ci-val">1X(2XAWG16)AG</span>
+                    </div>
+                  </div>
+                  <div class="sg-cable-wire"></div>
+                </div>
+                <div class="sg-cable-label">CABO</div>
+              </div>
+
+              <!-- Lado direito: painel/caixa -->
+              <div class="sg-side sg-side-right">
+                <div class="sg-device sg-device-panel">
+                  <div class="sg-device-icon">▣</div>
+                  <div class="sg-device-label">Caixa / Painel</div>
+                  <div class="sg-device-sub">Junction box, MCC...</div>
+                </div>
+                <div class="sg-field-bubble sg-bubble-purple">
+                  <div class="sg-bubble-col">ATÉ</div>
+                  <div class="sg-bubble-val">JB-101</div>
+                </div>
+                <div class="sg-field-bubble sg-bubble-purple" style="opacity:.75">
+                  <div class="sg-bubble-col">CONEXÃO ATÉ</div>
+                  <div class="sg-bubble-val">3/4" NPT</div>
+                </div>
+              </div>
+
+            </div><!-- /sg-diagram -->
+
+            <!-- Mini preview da planilha -->
+            <div class="sg-sheet-preview">
+              <div class="sg-sheet-label">Exemplo de planilha aceita</div>
+              <div class="sg-sheet-scroll">
+                <table class="sg-sheet-table">
+                  <thead>
+                    <tr>
+                      <th class="sgt-tag">TAG CABO</th>
+                      <th class="sgt-form">FORMAÇÃO</th>
+                      <th class="sgt-desde">DESDE</th>
+                      <th class="sgt-cd">CONEXÃO DESDE</th>
+                      <th class="sgt-ate">ATÉ</th>
+                      <th class="sgt-ca">CONEXÃO ATÉ</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr><td>CABLE-001</td><td>1X(2XAWG16)AG</td><td>PT-101</td><td>1/2" NPT</td><td>JB-101</td><td>3/4" NPT</td></tr>
+                    <tr><td>CABLE-002</td><td>1X(3XAWG16)AG</td><td>TT-205</td><td>3/4" NPT</td><td>JB-101</td><td>3/4" NPT</td></tr>
+                    <tr class="sg-row-faded"><td>CABLE-003</td><td>4Pr 24AWG - UTP</td><td>FT-310</td><td>1/2" NPT</td><td>MCC-01</td><td>1" NPT</td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <div class="sg-sheet-notes">
+                <div class="sg-note"><span class="sg-note-dot" style="background:var(--accent)"></span>O nome exato das colunas não importa — o app detecta automaticamente</div>
+                <div class="sg-note"><span class="sg-note-dot" style="background:var(--yellow)"></span>A <b>Formação</b> precisa estar cadastrada no Banco de Dados (Step 2)</div>
+                <div class="sg-note"><span class="sg-note-dot" style="background:var(--green)"></span>Conexões aceitas: NPT, BSPT e rosca métrica (M20, M25...)</div>
+              </div>
+            </div>
+
+          </div><!-- /sheet-guide -->
+
+          <!-- DROP ZONE -->
+          <div class="drop-zone" id="dz1">
+            <input type="file" accept=".xlsx,.xls,.csv" id="fileInput">
+            <div class="drop-icon">📂</div>
+            <div class="drop-title">Arraste ou clique para selecionar</div>
+            <div class="drop-sub">Arquivo Excel com a Lista de Cabos do projeto</div>
+            <div class="drop-hint">.xlsx · .xls · .csv</div>
+          </div>
+
+          <!-- COLUMN MAPPER -->
+          <div id="mapper-section" class="hidden" style="margin-top:24px">
+            <div class="mapper-wrap">
+              <div class="mapper-header">
+                <span class="mapper-header-title">Mapeamento de colunas</span>
+                <span class="mapper-header-sub" id="mapper-sub-info"></span>
+              </div>
+              <div class="mapper-grid" id="mapper-grid"></div>
+            </div>
+            <div style="display:flex;justify-content:flex-end;margin-top:16px">
+              <button class="btn-primary" id="btn-analyze" disabled onclick="runAnalysisFromFile()">
+                🔍 Analisar Lista
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── MANUAL MODE ── -->
+        <div id="mode-manual" class="hidden">
+          <div class="manual-wrap">
+            <div class="manual-toolbar">
+              <div class="manual-toolbar-title">
+                Cabos do projeto
+                <span class="cable-count-badge" id="cable-count">0 cabos</span>
+              </div>
+              <div style="margin-left:auto;display:flex;gap:8px">
+                <button class="btn-sm" onclick="importManualFromXlsx()" title="Importar de arquivo para editar aqui">📥 Importar .xlsx</button>
+                <input type="file" id="manualImportInput" accept=".xlsx,.xls,.csv" class="hidden" onchange="handleManualImport(this)">
+              </div>
+            </div>
+            <div class="manual-table-scroll">
+              <table class="ctable">
+                <thead>
+                  <tr>
+                    <th style="width:32px">#</th>
+                    <th>TAG CABO</th>
+                    <th>FORMAÇÃO</th>
+                    <th>DESDE (instrumento)</th>
+                    <th>CONEXÃO DESDE</th>
+                    <th>ATÉ (caixa/painel)</th>
+                    <th>CONEXÃO ATÉ</th>
+                    <th class="del-col"></th>
+                  </tr>
+                </thead>
+                <tbody id="manual-tbody"></tbody>
+              </table>
+            </div>
+            <div class="manual-footer">
+              <button class="btn-add-cable" onclick="addManualRow()">＋ Adicionar cabo</button>
+              <button class="btn-add-cable" onclick="addManualRows(5)" style="opacity:.7">＋ 5 linhas</button>
+              <button class="btn-clear-cables" onclick="clearManualRows()">Limpar tudo</button>
+              <div style="margin-left:auto;display:flex;align-items:center;gap:10px">
+                <span id="manual-status" style="font-family:var(--mono);font-size:11px;color:var(--text3)"></span>
+                <button class="btn-primary" id="btn-analyze-manual" onclick="runAnalysisFromManual()">
+                  🔍 Analisar Lista
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ═══════════ STEP 2: BANCO ═══════════ -->
+    <div class="content-section" id="section-step2">
+      <div class="banco-panel">
+
+        <div class="panel-header" style="margin-bottom:0">
+          <div class="panel-title">Banco de Dados</div>
+          <div class="panel-desc">Carregue o catálogo do fornecedor para popular automaticamente. Edite os dados diretamente nas tabelas.</div>
+        </div>
+
+        <!-- CATALOG UPLOAD -->
+        <div class="catalog-upload-area">
+          <div class="cua-header">
+            <span class="cua-header-icon">🤖</span>
+            <div class="cua-header-text">
+              <div class="cua-header-title">Leitura automática de catálogo</div>
+              <div class="cua-header-sub">PDF ou imagens do catálogo do fornecedor — qualquer fabricante</div>
+            </div>
+          </div>
+          <div class="cua-body">
+            <div class="catalog-drop" id="dz-catalog">
+              <input type="file" accept=".pdf,image/*" multiple id="catalogInput">
+              <div class="catalog-drop-title">📋 Catálogo do Fornecedor</div>
+              <div class="catalog-drop-sub">PDF ou imagens (JPG, PNG, WEBP) · múltiplos arquivos</div>
+            </div>
+            <div id="ai-box" class="ai-box idle" style="display:none"></div>
+            <div id="ext-preview" class="hidden" style="margin-top:16px"></div>
+          </div>
+        </div>
+
+        <!-- TABLES -->
+        <div class="banco-tables">
+
+          <!-- PRENSA CABOS -->
+          <div class="banco-table-card">
+            <div class="btc-header">
+              <div class="btc-title">
+                Prensa Cabos
+                <span class="btc-badge" id="badge-pc">0</span>
+              </div>
+              <button class="btn-add" onclick="addPcRow()">+ Adicionar</button>
+            </div>
+
+            <div style="overflow-x:auto;max-height:480px;overflow-y:auto">
+              <table class="btable">
+                <thead>
+                  <tr>
+                    <th>Modelo</th>
+                    <th>Tipo de Conexão</th>
+                    <th>Diâm. Mín (mm)</th>
+                    <th>Diâm. Máx (mm)</th>
+                    <th>Fabricante</th>
+                    <th>Obs</th>
+                    <th style="width:36px"></th>
+                  </tr>
+                  <tr class="filter-row" id="pc-filter-row">
+                    <th><input class="col-filter" id="pcf-modelo"    placeholder="🔍" oninput="applyPCFilter()"></th>
+                    <th><input class="col-filter" id="pcf-npt"       placeholder="🔍" oninput="applyPCFilter()" list="npt-datalist"><datalist id="npt-datalist"></datalist></th>
+                    <th><input class="col-filter" id="pcf-min"       placeholder="🔍" oninput="applyPCFilter()" type="text" style="width:70px"></th>
+                    <th><input class="col-filter" id="pcf-max"       placeholder="🔍" oninput="applyPCFilter()" type="text" style="width:70px"></th>
+                    <th><input class="col-filter" id="pcf-fab"       placeholder="🔍" oninput="applyPCFilter()" list="fab-datalist"><datalist id="fab-datalist"></datalist></th>
+                    <th><input class="col-filter" id="pcf-obs"       placeholder="🔍" oninput="applyPCFilter()"></th>
+                    <th><button class="col-filter-clear" onclick="clearPCFilter()" title="Limpar filtros">✕</button></th>
+                  </tr>
+                </thead>
+                <tbody id="tbody-pc"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- FORMAÇÕES -->
+          <div class="banco-table-card">
+            <div class="btc-header">
+              <div class="btc-title">
+                Formações de Cabo
+                <span class="btc-badge" id="badge-fm">0</span>
+              </div>
+              <button class="btn-add" onclick="addFmRow()">+ Adicionar</button>
+            </div>
+
+            <div style="overflow-x:auto;max-height:380px;overflow-y:auto">
+              <table class="btable">
+                <thead>
+                  <tr>
+                    <th>Formação</th>
+                    <th>Diâm. Externo (mm)</th>
+                    <th>Aplicação</th>
+                    <th style="width:36px"></th>
+                  </tr>
+                  <tr class="filter-row">
+                    <th><input class="col-filter" id="fmf-formacao" placeholder="🔍" oninput="applyFMFilter()"></th>
+                    <th><input class="col-filter" id="fmf-diam"     placeholder="🔍" oninput="applyFMFilter()" style="width:70px"></th>
+                    <th><input class="col-filter" id="fmf-ap"       placeholder="🔍" oninput="applyFMFilter()"></th>
+                    <th><button class="col-filter-clear" onclick="clearFMFilter()" title="Limpar filtros">✕</button></th>
+                  </tr>
+                </thead>
+                <tbody id="tbody-fm"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- REDUTORES (read-only) -->
+          <div class="banco-table-card">
+            <div class="btc-header">
+              <div class="btc-title">
+                Redutores NPT
+                <span class="btc-badge" id="badge-red">0</span>
+              </div>
+              <span style="font-size:11px;color:var(--text3)">Gerados automaticamente a partir dos NPTs cadastrados</span>
+            </div>
+            <div style="overflow-x:auto;max-height:220px;overflow-y:auto">
+              <table class="btable">
+                <thead><tr>
+                  <th>Código</th><th>De</th><th>Para</th><th>Fonte</th>
+                </tr></thead>
+                <tbody id="tbody-red"></tbody>
+              </table>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════ STEP 3: RESULTADOS ═══════════ -->
+    <div class="content-section" id="section-step3">
+
+      <!-- EMPTY STATE (before analysis) -->
+      <div class="empty-state" id="empty-results">
+        <div class="empty-icon">📊</div>
+        <div class="empty-title">Nenhuma análise ainda</div>
+        <div class="empty-sub">Carregue a lista de cabos no Step 1 e clique em "Analisar Lista" para ver os resultados aqui.</div>
+        <button class="btn-primary" style="margin-top:8px" onclick="goToStep(1)">Ir para Step 1</button>
+      </div>
+
+      <!-- RESULTS (shown after analysis) -->
+      <div id="results-content" class="hidden" style="display:flex;flex-direction:column;flex:1">
+        <div class="results-panel">
+
+          <!-- KPIs -->
+          <div class="kpi-strip">
+            <div class="kpi kpi-ok" onclick="kpiFilter(this,'OK')">
+              <div class="kpi-label">✅ OK</div>
+              <div class="kpi-value" id="d-ok">—</div>
+              <div class="kpi-sub">sem pendência</div>
+            </div>
+            <div class="kpi kpi-al" onclick="kpiFilter(this,'ALERTA')">
+              <div class="kpi-label">⚠️ Alerta</div>
+              <div class="kpi-value" id="d-al">—</div>
+              <div class="kpi-sub">precisam redutor</div>
+            </div>
+            <div class="kpi kpi-er" onclick="kpiFilter(this,'ERRO')">
+              <div class="kpi-label">❌ Erro</div>
+              <div class="kpi-value" id="d-er">—</div>
+              <div class="kpi-sub">revisão obrigatória</div>
+            </div>
+            <div class="kpi kpi-tot" onclick="kpiFilter(this,'all')">
+              <div class="kpi-label">📊 Total</div>
+              <div class="kpi-value" id="d-tot">—</div>
+              <div class="kpi-sub">cabos analisados</div>
+            </div>
+          </div>
+
+          <!-- BOM -->
+          <div class="bom-row">
+            <div class="bom-card">
+              <div class="bom-header">
+                Prensa Cabos necessários
+                <div class="bom-header-right">
+                  <button class="btn-export" onclick="exportBOM()">📊 Exportar BOM</button>
+                </div>
+              </div>
+              <div class="col-heads" style="grid-template-columns:1fr 64px 64px">
+                <div class="col-head" style="text-align:left">Modelo · Conexão · Fabricante</div>
+                <div class="col-head">Pontos</div>
+                <div class="col-head">+10%</div>
+              </div>
+              <div class="bom-list" id="bom-pc"></div>
+            </div>
+            <div class="bom-card">
+              <div class="bom-header">Redutores necessários</div>
+              <div class="col-heads">
+                <div class="col-head">Redutor</div>
+                <div class="col-head">Pontos</div>
+                <div class="col-head">+10%</div>
+              </div>
+              <div class="bom-list" id="bom-red"></div>
+            </div>
+          </div>
+
+          <!-- TABLE -->
+          <div class="results-card" id="view-table">
+            <div class="results-toolbar">
+              <div class="filter-group">
+                <button class="f-chip active" onclick="setF(this,'all')">Todos</button>
+                <button class="f-chip ok" onclick="setF(this,'OK')">OK</button>
+                <button class="f-chip al" onclick="setF(this,'ALERTA')">Alerta</button>
+                <button class="f-chip er" onclick="setF(this,'ERRO')">Erro</button>
+              </div>
+              <input class="search-box" type="text" placeholder="Buscar TAG, instrumento, formação..." id="sinput" oninput="applyF()">
+              <span class="result-count" id="rcount"></span>
+              <div class="view-toggle">
+                <button class="vt-btn" id="vt-card" onclick="setViewMode('card')" title="Modo cards">⊞ Cards</button>
+                <button class="vt-btn active" id="vt-table" onclick="setViewMode('table')" title="Modo tabela">≡ Tabela</button>
+              </div>
+              <button class="btn-export" onclick="exportAnalise()">📊 Exportar .xlsx</button>
+            </div>
+
+            <!-- CARDS VIEW -->
+            <div class="cards-container hidden" id="cards-view"></div>
+
+            <!-- TABLE VIEW -->
+            <div class="table-scroll" id="table-view">
+              <table class="rtable">
+                <thead>
+                  <tr class="group-row">
+                    <th colspan="3"></th>
+                    <th colspan="4" class="th-desde">DESDE</th>
+                    <th colspan="4" class="th-ate">ATÉ</th>
+                    <th colspan="2"></th>
+                  </tr>
+                  <tr>
+                    <th>TAG CABO</th>
+                    <th>FORMAÇÃO</th>
+                    <th style="text-align:center">DIÂM</th>
+                    <th class="group-desde">INSTRUMENTO</th>
+                    <th>CONEXÃO</th>
+                    <th>PC</th>
+                    <th>REDUTOR</th>
+                    <th class="group-ate" style="border-left:2px solid rgba(167,139,250,.2)">CAIXA / PAINEL</th>
+                    <th>CONEXÃO</th>
+                    <th>PC</th>
+                    <th>REDUTOR</th>
+                    <th>STATUS</th>
+                    <th>ALERTAS</th>
+                  </tr>
+                </thead>
+                <tbody id="rtbody"></tbody>
+              </table>
+            </div><!-- /table-view -->
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /main-panel -->
+</div><!-- /app-shell -->
+
+<script>
+// ════════════════════════════════════════════════
+// BANCO DE DADOS
+// ════════════════════════════════════════════════
+let B = {
+  pc:[
+    {modelo:"EXPA 2S017",npt:'1/2" NPT',min:4,  max:12, fab:"Peppers",obs:"UTP, cabos finos"},
+    {modelo:"EXPA 2S027",npt:'3/4" NPT',min:4,  max:12, fab:"Peppers",obs:""},
+    {modelo:"EXPA 2M017",npt:'1/2" NPT',min:10.5,max:16,fab:"Peppers",obs:""},
+    {modelo:"EXPA 2M027",npt:'3/4" NPT',min:10.5,max:16,fab:"Peppers",obs:""},
+    {modelo:"EXPA 2L027",npt:'3/4" NPT',min:13, max:21, fab:"Peppers",obs:""},
+    {modelo:"EXPA 2L037",npt:'1" NPT',  min:13, max:21, fab:"Peppers",obs:""},
+    {modelo:"EXPA 3M027",npt:'3/4" NPT',min:17, max:24, fab:"Peppers",obs:""},
+    {modelo:"EXPA 3M037",npt:'1" NPT',  min:17, max:24, fab:"Peppers",obs:"Multicondutores"},
+    {modelo:"EXPA 3L037",npt:'1" NPT',  min:21, max:30, fab:"Peppers",obs:""},
+    {modelo:"EXPA 3L057",npt:'1-1/2" NPT',min:21,max:30,fab:"Peppers",obs:""},
+    {modelo:"EXPA 4M057",npt:'1-1/2" NPT',min:25,max:38,fab:"Peppers",obs:"Cabos grandes"},
+    {modelo:"EXPA 4M087",npt:'2" NPT',  min:25, max:38, fab:"Peppers",obs:""},
+  ],
+  fm:[
+    {formacao:"1X(2XAWG16)AG",   diam:10.5,ap:"Sinal analógico/digital"},
+    {formacao:"1X(3XAWG16)AG",   diam:17.0,ap:"Sinal analógico/digital"},
+    {formacao:"2X(2XAWG20)AI+AG",diam:12.5,ap:"Sinal analógico/digital"},
+    {formacao:"2X(2XAWG24)AI+AG",diam:12.5,ap:"Sinal baixa corrente"},
+    {formacao:"6X(2XAWG20)AI+AG",diam:19.0,ap:"Multisinal"},
+    {formacao:"6X(3XAWG20)AI+AG",diam:20.0,ap:"Multisinal"},
+    {formacao:"12X(2XAWG20)AI+AG",diam:22.0,ap:"Multisinal pesado"},
+    {formacao:"4Pr 24AWG - UTP", diam:6.0, ap:"Comunicação / rede"},
+    {formacao:"ALIMENTACIÓN",    diam:20.0,ap:"Alimentação"},
+    {formacao:"rs485",           diam:12.0,ap:"Comunicação serial"},
+  ],
+  red_extra:[]
+};
+
+const NPTS=['1/2" NPT','3/4" NPT','1" NPT','1-1/2" NPT','2" NPT'];
+const NR={'1/2" NPT':1,'3/4" NPT':2,'1" NPT':3,'1-1/2" NPT':4,'2" NPT':5};
+
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');}
+
+
+// ════════════════════════════════════════════════
+// BANCO FILTERS — inline column (Excel style)
+// ════════════════════════════════════════════════
+function gv(id){ const el=document.getElementById(id); return el?el.value.toLowerCase().trim():''; }
+
+function populatePCFilterDropdowns(){
+  // Populate datalists for NPT and Fabricante autocomplete
+  const rows = buildPCRows();
+  const nptDl = document.getElementById('npt-datalist');
+  const fabDl = document.getElementById('fab-datalist');
+  if(nptDl){
+    const npts = [...new Set(rows.map(r=>r.data.npt).filter(Boolean))].sort();
+    nptDl.innerHTML = npts.map(n=>`<option value="${esc(n)}">`).join('');
+  }
+  if(fabDl){
+    const fabs = [...new Set(rows.map(r=>r.data.fab).filter(Boolean))].sort();
+    fabDl.innerHTML = fabs.map(f=>`<option value="${esc(f)}">`).join('');
+  }
+}
+
+function getFilteredPCRows(){
+  const fModelo = gv('pcf-modelo');
+  const fNpt    = gv('pcf-npt');
+  const fMin    = gv('pcf-min');
+  const fMax    = gv('pcf-max');
+  const fFab    = gv('pcf-fab');
+  const fObs    = gv('pcf-obs');
+  return buildPCRows().filter(row=>{
+    const d = row.data;
+    return (!fModelo || (d.modelo||'').toLowerCase().includes(fModelo))
+        && (!fNpt    || (d.npt||'').toLowerCase().includes(fNpt))
+        && (!fMin    || String(d.min||'').includes(fMin))
+        && (!fMax    || String(d.max||'').includes(fMax))
+        && (!fFab    || (d.fab||'').toLowerCase().includes(fFab))
+        && (!fObs    || (d.obs||'').toLowerCase().includes(fObs));
+  });
+}
+
+function applyPCFilter(){
+  // Highlight active inputs
+  ['pcf-modelo','pcf-npt','pcf-min','pcf-max','pcf-fab','pcf-obs'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el) el.classList.toggle('has-value', el.value.trim()!=='');
+  });
+  renderPCTable();
+}
+
+function clearPCFilter(){
+  ['pcf-modelo','pcf-npt','pcf-min','pcf-max','pcf-fab','pcf-obs'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el){ el.value=''; el.classList.remove('has-value'); }
+  });
+  renderPCTable();
+}
+
+function getFilteredFMRows(){
+  const fForm = gv('fmf-formacao');
+  const fDiam = gv('fmf-diam');
+  const fAp   = gv('fmf-ap');
+  return B.fm.map((r,i)=>({data:r,idx:i})).filter(row=>{
+    const d=row.data;
+    return (!fForm || (d.formacao||'').toLowerCase().includes(fForm))
+        && (!fDiam || String(d.diam||'').includes(fDiam))
+        && (!fAp   || (d.ap||'').toLowerCase().includes(fAp));
+  });
+}
+
+function applyFMFilter(){
+  ['fmf-formacao','fmf-diam','fmf-ap'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el) el.classList.toggle('has-value', el.value.trim()!=='');
+  });
+  renderFMTable();
+}
+
+function clearFMFilter(){
+  ['fmf-formacao','fmf-diam','fmf-ap'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el){ el.value=''; el.classList.remove('has-value'); }
+  });
+  renderFMTable();
+}
+
+// Render only the PC table body (called by filter + renderBanco)
+function renderPCTable(){
+  const filtered = getFilteredPCRows();
+  const allRows  = buildPCRows();
+  const badge = document.getElementById('badge-pc');
+  const anyFilter = ['pcf-modelo','pcf-npt','pcf-min','pcf-max','pcf-fab','pcf-obs'].some(id=>{const el=document.getElementById(id);return el&&el.value.trim();});
+  if(badge) badge.textContent = anyFilter ? `${filtered.length}/${allRows.length}` : allRows.length;
+  document.getElementById('tbody-pc').innerHTML = filtered.map(row=>`<tr>
+    <td><input type="text" value="${esc(row.data.modelo)}" onchange="setPCField('${esc(row.fab)}',${row.idx},'modelo',this.value);updateStats()"></td>
+    <td>${NPTS.includes(row.data.npt)?`<select class="npt-sel" onchange="setPCField('${esc(row.fab)}',${row.idx},'npt',this.value)">${NPTS.map(o=>`<option${o===row.data.npt?' selected':''}>${o}</option>`).join('')}</select>`:`<input type="text" value="${esc(row.data.npt)}" style="min-width:130px" onchange="setPCField('${esc(row.fab)}',${row.idx},'npt',this.value)">`}</td>
+    <td><input type="number" value="${row.data.min}" step="0.5" style="width:80px" onchange="setPCField('${esc(row.fab)}',${row.idx},'min',+this.value)"></td>
+    <td><input type="number" value="${row.data.max}" step="0.5" style="width:80px" onchange="setPCField('${esc(row.fab)}',${row.idx},'max',+this.value)"></td>
+    <td><input type="text" value="${esc(row.data.fab)}" onchange="setPCField('${esc(row.fab)}',${row.idx},'fab',this.value)"></td>
+    <td><input type="text" value="${esc(row.data.obs||'')}" onchange="setPCField('${esc(row.fab)}',${row.idx},'obs',this.value)"></td>
+    <td><button class="del-btn" onclick="delPC('${esc(row.fab)}',${row.idx})" title="Remover">✕</button></td>
+  </tr>`).join('');
+}
+
+// Render only the FM table body
+function renderFMTable(){
+  const filtered = getFilteredFMRows();
+  const badgeFm = document.getElementById('badge-fm');
+  const anyFilterFm = ['fmf-formacao','fmf-diam','fmf-ap'].some(id=>{const el=document.getElementById(id);return el&&el.value.trim();});
+  if(badgeFm) badgeFm.textContent = anyFilterFm ? `${filtered.length}/${B.fm.length}` : B.fm.length;
+  document.getElementById('tbody-fm').innerHTML = filtered.map(row=>`<tr>
+    <td><input type="text" value="${esc(row.data.formacao)}" style="min-width:200px" onchange="B.fm[${row.idx}].formacao=this.value;updateStats();saveToStorage()"></td>
+    <td><input type="number" value="${row.data.diam}" step="0.1" style="width:90px" onchange="B.fm[${row.idx}].diam=+this.value;saveToStorage()"></td>
+    <td><input type="text" value="${esc(row.data.ap||'')}" style="min-width:180px" onchange="B.fm[${row.idx}].ap=this.value;saveToStorage()"></td>
+    <td><button class="del-btn" onclick="B.fm.splice(${row.idx},1);renderBanco();saveToStorage()" title="Remover">✕</button></td>
+  </tr>`).join('');
+}
+
+// ── RENDER BANCO ──────────────────────────────
+function renderBanco(){
+  // PC table — delegate to renderPCTable (filter-aware)
+  populatePCFilterDropdowns();
+  renderPCTable();
+
+  // FM table — delegate to renderFMTable (filter-aware)
+  renderFMTable();
+
+  // Reducers table
+  const sorted = NPTS.map(n=>({n,r:NR[n]})).sort((a,b)=>b.r-a.r);
+  const pairs = [];
+  for(let i=0;i<sorted.length;i++) for(let j=i+1;j<sorted.length;j++) pairs.push({de:sorted[i].n,para:sorted[j].n,src:'Auto'});
+  (B.red_extra||[]).forEach(r=>pairs.push({...r,src:'Catálogo'}));
+  document.getElementById('tbody-red').innerHTML = pairs.map(p=>`<tr>
+    <td style="font-family:var(--mono);font-size:11px;color:var(--text2)">${redcod(p.de,p.para)}</td>
+    <td style="font-size:12px">${p.de}</td>
+    <td style="font-size:12px">${p.para}</td>
+    <td style="font-size:11px;color:${p.src==='Catálogo'?'var(--purple)':'var(--text3)'}">${p.src}</td>
+  </tr>`).join('');
+
+  updateStats();
+}
+
+
+
+function redcod(de,para){
+  const f = s => s.replace('" NPT','').replace(/-/g,'').replace(/\//g,'').replace(/ /g,'');
+  return `RED-${f(de)}-${f(para)}`;
+}
+function addFmRow(){B.fm.push({formacao:'NOVA FORMAÇÃO',diam:10,ap:''});renderBanco();}
+
+
+
+
+// ════════════════════════════════════════════════
+// NAVIGATION
+// ════════════════════════════════════════════════
+let currentStep = 1;
+
+function goToStep(n){
+  // Não ir para step 3 sem análise
+  if(n===3 && analysis.length===0){ goToStep(1); return; }
+
+  currentStep = n;
+  document.querySelectorAll('.content-section').forEach(s => s.classList.remove('visible'));
+  document.getElementById(`section-step${n}`).classList.add('visible');
+
+  document.querySelectorAll('.step-item').forEach((el,i) => {
+    el.classList.remove('active');
+    if(i+1 < n) el.classList.add('done');
+    else el.classList.remove('done');
+  });
+  document.getElementById(`nav-step${n}`).classList.add('active');
+  document.getElementById(`nav-step${n}`).classList.remove('done');
+  document.getElementById('main-panel').scrollTop = 0;
+}
+
+// ════════════════════════════════════════════════
+// CATALOG AI EXTRACTION
+// ════════════════════════════════════════════════
+const dzc = document.getElementById('dz-catalog');
+dzc.addEventListener('dragover', e=>{e.preventDefault();dzc.classList.add('drag');});
+dzc.addEventListener('dragleave', ()=>dzc.classList.remove('drag'));
+dzc.addEventListener('drop', e=>{e.preventDefault();dzc.classList.remove('drag');if(e.dataTransfer.files.length)processCatalog(e.dataTransfer.files);});
+document.getElementById('catalogInput').addEventListener('change', function(){if(this.files.length)processCatalog(this.files);this.value='';});
+
+let logLines = [];
+
+function setAI(type, title, lines){
+  const box = document.getElementById('ai-box');
+  box.style.display = '';
+  box.className = `ai-box ${type}`;
+  const icons = {idle:'🤖', thinking:'', done:'✅', err:'❌'};
+  const spin = type==='thinking' ? '<span class="spin"></span>' : '';
+  const logsHtml = lines && lines.length
+    ? `<div class="ai-box-body"><div class="ai-log-lines">${lines.map(l=>{
+        const cls = l.startsWith('✓')||l.startsWith('[')&&l.includes('✓') ? 'log-ok'
+                  : l.includes('ERRO')||l.includes('✗') ? 'log-err'
+                  : l.includes('⚠️') ? 'log-warn' : '';
+        return `<div class="log-line${cls?' '+cls:''}"">${esc(l)}</div>`;
+      }).join('')}</div></div>` : '';
+  box.innerHTML = `<div class="ai-box-header">${spin}${icons[type]||''}&nbsp;${title}</div>${logsHtml}`;
+  // scroll log to bottom
+  const logEl = box.querySelector('.ai-log-lines');
+  if(logEl) logEl.scrollTop = logEl.scrollHeight;
+}
+
+async function toB64(file){
+  return new Promise((res,rej)=>{const r=new FileReader();r.onload=e=>res(e.target.result.split(',')[1]);r.onerror=rej;r.readAsDataURL(file);});
+}
+function mime(file){
+  if(file.type) return file.type;
+  const e = file.name.split('.').pop().toLowerCase();
+  return {pdf:'application/pdf',jpg:'image/jpeg',jpeg:'image/jpeg',png:'image/png',webp:'image/webp'}[e]||'application/octet-stream';
+}
+
+function repairJSON(raw){
+  let s = raw.trim().replace(/^```json\s*/,'').replace(/^```\s*/,'').replace(/\s*```$/,'');
+  try{ return JSON.parse(s); } catch(_){}
+  const fabMatch = s.match(/"fabricante"\s*:\s*"([^"]+)"/);
+  const fabricante = fabMatch ? fabMatch[1] : 'Desconhecido';
+  const prensa_cabos = [];
+  const pcRegex = /\{\s*"modelo"\s*:\s*"([^"]+)"\s*,\s*"npt"\s*:\s*"([^"]+)"\s*,\s*"min_mm"\s*:\s*([\d.]+)\s*,\s*"max_mm"\s*:\s*([\d.]+)(?:\s*,\s*"obs"\s*:\s*"([^"]*)")?[^}]*\}/g;
+  let m;
+  while((m=pcRegex.exec(s))!==null) prensa_cabos.push({modelo:m[1],npt:m[2],min_mm:parseFloat(m[3]),max_mm:parseFloat(m[4]),obs:m[5]||''});
+  const redutores = [];
+  const redRegex = /\{\s*"de"\s*:\s*"([^"]+)"\s*,\s*"para"\s*:\s*"([^"]+)"\s*\}/g;
+  while((m=redRegex.exec(s))!==null) redutores.push({de:m[1],para:m[2]});
+  if(prensa_cabos.length===0) throw new Error('Não foi possível extrair nenhum modelo do catálogo.');
+  return {fabricante, prensa_cabos, redutores};
+}
+
+async function callAPI(blocks, SYS, logs, label){
+  logs.push(`Analisando ${label} com IA...`);
+  const resp = await fetch('/api/prensa-cabo/extract-catalog',{
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:16000,system:SYS,messages:[{role:'user',content:blocks}]})
+  });
+  if(!resp.ok){const e=await resp.json().catch(()=>({}));throw new Error(`API ${resp.status}: ${e.error?.message||resp.statusText}`);}
+  const data = await resp.json();
+  if(data.stop_reason==='max_tokens') logs.push(`⚠️ Resposta cortada em ${label} — ativando recuperação...`);
+  return data.content.filter(c=>c.type==='text').map(c=>c.text).join('');
+}
+
+async function processCatalog(files){
+  document.getElementById('ext-preview').classList.add('hidden');
+  const arr = Array.from(files);
+  const logs = ['Arquivos: '+arr.map(f=>f.name).join(', ')];
+  setAI('thinking','Preparando análise...', logs);
+
+  const SYS=`Você é especialista em instrumentação industrial. Extraia do catálogo ABSOLUTAMENTE TODOS os modelos de prensa cabo, sem exceção e sem filtro.\nRetorne SOMENTE um objeto JSON válido, sem texto antes/depois, sem markdown.\n\n{\n  "fabricante": "nome do fabricante",\n  "prensa_cabos": [\n    { "modelo": "código exato", "conexao": "tipo e tamanho da rosca como aparece no catálogo", "min_mm": 4.0, "max_mm": 12.0, "obs": "Cable Armado, IIB, etc" }\n  ],\n  "redutores": [\n    { "de": "rosca maior", "para": "rosca menor" }\n  ]\n}\n\nREGRAS CRÍTICAS:\n- Inclua NPT, BSPT, métrica (M16, M20, M25, M32, M40, M50, M63) e qualquer outro tipo presente\n- NÃO filtre por tipo de rosca. Copie o campo de rosca EXATAMENTE como aparece (ex: NPT-1/2", BSPT-3/4", METRICA-M20)\n- min_mm e max_mm são números\n- Se não houver redutores retorne []\n- Não omita NENHUMA linha da tabela do catálogo\n\nREGRA ESPECIAL — DIÂMETROS EM CABOS ARMADOS:\nAlguns prensa cabos são para cabos armados (Cable Armado / Armoured). Nesses casos o catálogo apresenta DOIS pares de diâmetros:\n  1. Diâmetro EXTERNO do cabo (sobre a armadura) — é o diâmetro MAIOR\n  2. Diâmetro INTERNO (do condutor sem armadura) — é o diâmetro MENOR\nUSE SEMPRE o diâmetro EXTERNO (o maior) para preencher min_mm e max_mm.\nIgnore completamente o diâmetro interno. O critério de seleção é sempre o diâmetro externo total do cabo.`;
+
+  let allPcs=[], allReds=[], fab='Desconhecido';
+
+  for(let fi=0; fi<arr.length; fi++){
+    const file = arr[fi];
+    logs.push(`[${fi+1}/${arr.length}] Carregando ${file.name} (${(file.size/1024).toFixed(0)} KB)...`);
+    setAI('thinking',`Carregando arquivo ${fi+1} de ${arr.length}...`, logs);
+    let b64, mt;
+    try{ b64=await toB64(file); mt=mime(file); }
+    catch(e){ logs.push(`✗ Erro ao ler ${file.name}: ${e.message}`); continue; }
+    const blocks = [];
+    blocks.push(mt==='application/pdf'
+      ?{type:'document',source:{type:'base64',media_type:'application/pdf',data:b64}}
+      :{type:'image',source:{type:'base64',media_type:mt,data:b64}});
+    blocks.push({type:'text',text:'Analise o catálogo acima e retorne apenas o JSON conforme instruído.'});
+    setAI('thinking',`Analisando ${file.name}...`, logs);
+    try{
+      const raw = await callAPI(blocks, SYS, logs, file.name);
+      logs.push(`Processando resposta de ${file.name}...`);
+      setAI('thinking','Processando...', logs);
+      const parsed = repairJSON(raw);
+      if(parsed.fabricante&&parsed.fabricante!=='Desconhecido') fab=parsed.fabricante;
+      const pcs=(parsed.prensa_cabos||[]).filter(p=>p.modelo&&(p.conexao||p.npt)&&p.min_mm!=null&&p.max_mm!=null);
+      const reds=(parsed.redutores||[]).filter(r=>r.de&&r.para);
+      allPcs=allPcs.concat(pcs);
+      allReds=allReds.concat(reds);
+      logs.push(`✓ ${file.name}: ${pcs.length} modelo(s), ${reds.length} redutor(es)`);
+    }catch(e){ logs.push(`✗ ${file.name}: ${e.message}`); }
+    setAI('thinking',`${fi+1} de ${arr.length} arquivo(s) processado(s)`, logs);
+  }
+
+  // Dedup
+  const seen=new Set(); allPcs=allPcs.filter(p=>{const k=p.modelo.toUpperCase();if(seen.has(k))return false;seen.add(k);return true;});
+  const seenR=new Set(); allReds=allReds.filter(r=>{const k=r.de+'|'+r.para;if(seenR.has(k))return false;seenR.add(k);return true;});
+
+  logs.push(`Total: ${allPcs.length} prensa cabo(s), ${allReds.length} redutor(es) — ${fab}`);
+
+  if(allPcs.length===0){
+    setAI('err','Nenhum modelo extraído. Verifique se o PDF contém tabelas legíveis.', logs);
+    return;
+  }
+
+  showPreview(fab, allPcs, allReds, ()=>{
+    mergeIntoBanco(fab, allPcs, allReds);
+    setAI('done',`${allPcs.length} modelo(s) adicionado(s) ao banco — ${fab}`, logs);
+  });
+  setAI('thinking',`Extração concluída. ${allPcs.length} modelo(s) encontrado(s). Confirme para salvar.`, logs);
+}
+
+function showPreview(fab, pcs, reds, onConfirm){
+  const prev = document.getElementById('ext-preview');
+  const cards = [
+    ...pcs.map(p=>`<div class="ext-card"><div class="ecm">${esc(p.modelo)}</div><div class="ecd">${esc(p.npt)} · ${p.min_mm}–${p.max_mm}mm</div>${p.obs?`<div class="ecd">${esc(p.obs)}</div>`:''}</div>`),
+    ...reds.map(r=>`<div class="ext-card is-red"><div class="ecm">Redutor</div><div class="ecd">${esc(r.de)} → ${esc(r.para)}</div></div>`)
+  ].join('');
+  const total = pcs.length + reds.length;
+  prev.innerHTML = `
+    <div class="ext-preview-wrap">
+      <div class="ext-preview-header">📦 Prévia da extração — ${esc(fab)}</div>
+      <div class="ext-cards-scroll">${cards}</div>
+      <div class="ext-preview-footer">
+        <span class="ext-count">${pcs.length} prensa cabo(s)${reds.length?', '+reds.length+' redutor(es)':''}</span>
+        <button class="btn-confirm" id="confirm-btn">✅ Salvar no banco</button>
+      </div>
+    </div>`;
+  prev.classList.remove('hidden');
+  document.getElementById('confirm-btn').onclick = function(){
+    onConfirm();
+    this.textContent = '✓ Salvo!';
+    this.disabled = true;
+  };
+}
+
+function normNPT(s){
+  if(!s) return null;
+  s = String(s).trim();
+  if(!s) return null;
+  // Try direct match against known NPT list
+  const direct = NPTS.find(o => o.toLowerCase() === s.toLowerCase());
+  if(direct) return direct;
+  // Normalize "NPT-1/2"" or "NPT-3/4"" formats to standard
+  const nptM = s.match(/^NPT[-\s]+([\d\/\s]+)/i);
+  if(nptM){
+    const num = nptM[1].trim().replace(/\s+(\d+\/\d+)/, '-$1').replace(/\s/g,'');
+    const found = NPTS.find(o => o.startsWith(num+'"'));
+    if(found) return found;
+  }
+  // For BSPT, Metric, or anything else — store exactly as-is
+  return s;
+}
+
+
+
+// ════════════════════════════════════════════════
+// STEP 1 — FILE UPLOAD
+// ════════════════════════════════════════════════
+let rawData=[], sheetCols=[], analysis=[];
+
+const CAMPOS=[
+  {key:'tag',  label:'TAG CABO'},
+  {key:'form', label:'FORMAÇÃO'},
+  {key:'desde',label:'DESDE (instrumento)'},
+  {key:'con_d',label:'CONEXÃO DESDE'},
+  {key:'ate',  label:'ATÉ (caixa/painel)'},
+  {key:'con_a',label:'CONEXÃO ATÉ'},
+];
+const GUESS={
+  tag:  ['tag cabo','tag','cabo'],
+  form: ['formação','formacao','tipo cabo','formation'],
+  desde:['desde','from','origem'],
+  con_d:['conexão desde','conexao desde','npt desde','entry desde'],
+  ate:  ['até','ate','to','destino'],
+  con_a:['conexão até','conexao ate','npt ate','entry ate'],
+};
+function guessCol(k,cols){for(const p of GUESS[k]||[]){const f=cols.find(c=>c.toLowerCase().includes(p));if(f)return f;}return '';}
+
+const dz1 = document.getElementById('dz1');
+dz1.addEventListener('dragover',e=>{e.preventDefault();dz1.classList.add('drag');});
+dz1.addEventListener('dragleave',()=>dz1.classList.remove('drag'));
+dz1.addEventListener('drop',e=>{e.preventDefault();dz1.classList.remove('drag');if(e.dataTransfer.files[0])loadFile(e.dataTransfer.files[0]);});
+document.getElementById('fileInput').addEventListener('change',function(){if(this.files[0])loadFile(this.files[0]);});
+
+function loadFile(file){
+  const r = new FileReader();
+  r.onload = e => {
+    const wb = XLSX.read(e.target.result,{type:'array'});
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const json = XLSX.utils.sheet_to_json(ws,{defval:''});
+    if(!json.length){ alert('Planilha vazia.'); return; }
+    rawData=json; sheetCols=Object.keys(json[0]);
+    showFileLoaded(file.name, json.length, wb.SheetNames[0]);
+    buildMapper();
+  };
+  r.readAsArrayBuffer(file);
+}
+
+function showFileLoaded(name, rows, sheet){
+  document.getElementById('dz1').classList.add('hidden');
+  document.getElementById('file-loaded-bar').classList.remove('hidden');
+  document.getElementById('fl-name').textContent = name;
+  document.getElementById('fl-meta').textContent = `${rows} linhas · aba "${sheet}"`;
+  document.getElementById('s1-desc').textContent = `${rows} linhas carregadas`;
+  document.getElementById(`nav-step1`).classList.add('done');
+  document.getElementById(`nav-step1`).classList.remove('active');
+  // Esconde o guia visual quando planilha é carregada
+  const guide = document.getElementById('sheet-guide');
+  if(guide) guide.style.display = 'none';
+}
+
+function resetFile(){
+  rawData=[]; sheetCols=[];
+  document.getElementById('dz1').classList.remove('hidden');
+  document.getElementById('file-loaded-bar').classList.add('hidden');
+  document.getElementById('mapper-section').classList.add('hidden');
+  document.getElementById('btn-analyze').disabled = true;
+  document.getElementById('s1-desc').textContent = 'Carregue o arquivo .xlsx';
+  document.getElementById('nav-step1').classList.remove('done');
+}
+
+function buildMapper(){
+  const grid = document.getElementById('mapper-grid');
+  grid.innerHTML = CAMPOS.map(c=>{
+    const g = guessCol(c.key, sheetCols);
+    return `<div class="mapper-item">
+      <div class="mapper-label">${c.label}</div>
+      <select id="map-${c.key}" class="mapper-select${g?' mapped':''}" onchange="this.classList.toggle('mapped',!!this.value);chkMap()">
+        <option value="">Selecionar coluna...</option>
+        ${sheetCols.map(col=>`<option value="${esc(col)}"${col===g?' selected':''}>${esc(col)}</option>`).join('')}
+      </select>
+    </div>`;
+  }).join('');
+  document.getElementById('mapper-sub-info').textContent = `${rawData.length} linhas · ${sheetCols.length} colunas detectadas`;
+  document.getElementById('mapper-section').classList.remove('hidden');
+  chkMap();
+}
+
+function chkMap(){
+  const ok = CAMPOS.every(c=>{const el=document.getElementById(`map-${c.key}`);return el&&el.value;});
+  document.getElementById('btn-analyze').disabled = !ok;
+}
+
+
+// ════════════════════════════════════════════════
+// INPUT MODE (file vs manual)
+// ════════════════════════════════════════════════
+let inputMode = 'file'; // 'file' | 'manual'
+
+// Manual table rows: [{tag, form, desde, con_d, ate, con_a}]
+let manualRows = [];
+
+function setInputMode(mode){
+  inputMode = mode;
+  document.getElementById('mode-btn-file').classList.toggle('active', mode==='file');
+  document.getElementById('mode-btn-manual').classList.toggle('active', mode==='manual');
+  document.getElementById('mode-file').classList.toggle('hidden', mode!=='file');
+  document.getElementById('mode-manual').classList.toggle('hidden', mode!=='manual');
+  if(mode==='manual' && manualRows.length===0) addManualRows(3);
+}
+
+// ── Available connections for dropdown ──
+function getConnOptions(){
+  // Collect all unique connection types from banco
+  const conns = new Set();
+  NPTS.forEach(n=>conns.add(n));
+  B.pc.forEach(p=>{ if(p.npt) conns.add(p.npt); });
+  return Array.from(conns).sort();
+}
+
+// ── Available formations for dropdown ──
+function getFormOptions(){
+  return B.fm.map(f=>f.formacao);
+}
+
+function buildManualRow(idx, row){
+  const connOpts = getConnOptions().map(c=>`<option value="${esc(c)}"${c===row.con_d?' selected':''}>${esc(c)}</option>`).join('');
+  const connOptsA = getConnOptions().map(c=>`<option value="${esc(c)}"${c===row.con_a?' selected':''}>${esc(c)}</option>`).join('');
+  const formOpts = getFormOptions().map(f=>`<option value="${esc(f)}"${f===row.form?' selected':''}>${esc(f)}</option>`).join('');
+
+  return `<tr id="mrow-${idx}">
+    <td class="row-num">${idx+1}</td>
+    <td><input type="text" value="${esc(row.tag)}" placeholder="TAG-001"
+      onchange="manualRows[${idx}].tag=this.value;updateManualStatus()"
+      onkeydown="manualRowKeyNav(event,${idx},'tag')"></td>
+    <td><select onchange="manualRows[${idx}].form=this.value;updateManualStatus()">
+      <option value="">Selecionar...</option>${formOpts}
+    </select></td>
+    <td><input type="text" value="${esc(row.desde)}" placeholder="CALL-PT-001"
+      onchange="manualRows[${idx}].desde=this.value"
+      onkeydown="manualRowKeyNav(event,${idx},'desde')"></td>
+    <td><select onchange="manualRows[${idx}].con_d=this.value">
+      <option value="">Selecionar...</option>${connOpts}
+    </select></td>
+    <td><input type="text" value="${esc(row.ate)}" placeholder="CALL-JB-001"
+      onchange="manualRows[${idx}].ate=this.value"
+      onkeydown="manualRowKeyNav(event,${idx},'ate')"></td>
+    <td><select onchange="manualRows[${idx}].con_a=this.value">
+      <option value="">Selecionar...</option>${connOptsA}
+    </select></td>
+    <td class="del-col"><button class="del-btn" onclick="deleteManualRow(${idx})" title="Remover">✕</button></td>
+  </tr>`;
+}
+
+function renderManualTable(){
+  document.getElementById('manual-tbody').innerHTML =
+    manualRows.map((r,i)=>buildManualRow(i,r)).join('');
+  updateManualStatus();
+}
+
+function updateManualStatus(){
+  const filled = manualRows.filter(r=>r.tag.trim()).length;
+  document.getElementById('cable-count').textContent = filled + ' cabo' + (filled!==1?'s':'');
+  document.getElementById('manual-status').textContent =
+    filled===0 ? 'Adicione ao menos 1 cabo' : `${filled} cabo(s) preenchido(s)`;
+}
+
+function addManualRow(data){
+  manualRows.push(data||{tag:'',form:'',desde:'',con_d:'',ate:'',con_a:''});
+  renderManualTable();
+  // Focus the TAG field of the new row
+  setTimeout(()=>{
+    const rows = document.querySelectorAll('#manual-tbody tr');
+    if(rows.length){
+      const last = rows[rows.length-1];
+      const inp = last.querySelector('input');
+      if(inp){ inp.focus(); inp.select(); }
+    }
+  }, 30);
+}
+
+function addManualRows(n){
+  for(let i=0;i<n;i++) manualRows.push({tag:'',form:'',desde:'',con_d:'',ate:'',con_a:''});
+  renderManualTable();
+}
+
+function deleteManualRow(idx){
+  manualRows.splice(idx,1);
+  renderManualTable();
+}
+
+function clearManualRows(){
+  if(manualRows.some(r=>r.tag)||confirm('Limpar todos os cabos?')){
+    manualRows=[];
+    renderManualTable();
+  }
+}
+
+// Tab/Enter navigation between cells
+function manualRowKeyNav(e, rowIdx, field){
+  if(e.key==='Enter'){
+    e.preventDefault();
+    // Go to next row same field, or add row if last
+    if(rowIdx === manualRows.length-1){
+      addManualRow();
+    } else {
+      const nextRow = document.querySelector(`#mrow-${rowIdx+1}`);
+      if(nextRow){
+        const inp = nextRow.querySelector('input');
+        if(inp){ inp.focus(); inp.select(); }
+      }
+    }
+  }
+}
+
+// Import xlsx into manual table
+function importManualFromXlsx(){
+  document.getElementById('manualImportInput').click();
+}
+function handleManualImport(input){
+  const file = input.files[0]; if(!file) return;
+  const r = new FileReader();
+  r.onload = e => {
+    const wb = XLSX.read(e.target.result,{type:'array'});
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const json = XLSX.utils.sheet_to_json(ws,{defval:''});
+    if(!json.length){ alert('Planilha vazia.'); return; }
+    // Try to auto-map columns
+    const cols = Object.keys(json[0]);
+    const G = {
+      tag:  cols.find(c=>c.toLowerCase().includes('tag')||c.toLowerCase().includes('cabo'))||cols[0],
+      form: cols.find(c=>c.toLowerCase().includes('forma')||c.toLowerCase().includes('tipo'))||cols[1]||'',
+      desde:cols.find(c=>c.toLowerCase().includes('desde')||c.toLowerCase().includes('from')||c.toLowerCase().includes('origem'))||cols[2]||'',
+      con_d:cols.find(c=>c.toLowerCase().includes('con')&&(c.toLowerCase().includes('desde')||c.toLowerCase().includes('from')))||cols[3]||'',
+      ate:  cols.find(c=>c.toLowerCase().includes('até')||c.toLowerCase().includes('ate')||c.toLowerCase().includes('to'))||cols[4]||'',
+      con_a:cols.find(c=>c.toLowerCase().includes('con')&&(c.toLowerCase().includes('até')||c.toLowerCase().includes('ate')))||cols[5]||'',
+    };
+    manualRows = json
+      .map(row=>({
+        tag:   String(row[G.tag]||'').trim(),
+        form:  String(row[G.form]||'').trim(),
+        desde: String(row[G.desde]||'').trim(),
+        con_d: String(row[G.con_d]||'').trim(),
+        ate:   String(row[G.ate]||'').trim(),
+        con_a: String(row[G.con_a]||'').trim(),
+      }))
+      .filter(r=>r.tag);
+    renderManualTable();
+    alert(`${manualRows.length} cabo(s) importado(s). Revise e corrija se necessário.`);
+  };
+  r.readAsArrayBuffer(file);
+  input.value='';
+}
+
+function runAnalysisFromManual(){
+  const valid = manualRows.filter(r=>r.tag.trim());
+  if(valid.length===0){ alert('Adicione ao menos 1 cabo com TAG preenchida.'); return; }
+
+  // Validate and highlight empty required fields
+  let hasEmpty = false;
+  manualRows.forEach((r,i)=>{
+    if(!r.tag.trim()) return;
+    const row = document.getElementById(`mrow-${i}`);
+    if(!row) return;
+    const inputs = row.querySelectorAll('input, select');
+    inputs.forEach(el=>{
+      const empty = !el.value.trim();
+      el.classList.toggle('required-empty', empty);
+      if(empty) hasEmpty=true;
+    });
+  });
+
+  if(hasEmpty){
+    if(!confirm('Alguns campos estão vazios. Continuar mesmo assim?')) return;
+  }
+
+  // Build rawData equivalent and run analysis
+  const fm = fmMap();
+  // Pre-build optimised model map
+  const combosM=[];
+  valid.forEach(r=>{
+    const diam=fm[r.form.trim().toUpperCase()];
+    if(diam===undefined) return;
+    if(r.con_d) combosM.push({diam,nptCx:r.con_d});
+    if(r.con_a) combosM.push({diam,nptCx:r.con_a});
+  });
+  buildOptMap(combosM);
+  analysis = valid.map(r=>{
+    const {tag,form,desde,con_d,ate,con_a} = r;
+    const diam = fm[form.trim().toUpperCase()];
+    if(diam===undefined) return{tag,form,desde,con_d,ate,con_a,diam:'?',pc_d:'—',npt_d:'—',red_d:'',pc_a:'—',npt_a:'—',red_a:'',status:'ERRO',alertas:`Formação "${form}" não mapeada`};
+    const rd=findPC(diam,con_d), ra=findPC(diam,con_a);
+    let status='OK';
+    if(rd.status==='ERRO'||ra.status==='ERRO') status='ERRO';
+    else if(rd.status==='ALERTA'||ra.status==='ALERTA') status='ALERTA';
+    const alertas=[rd.nota&&'DESDE: '+rd.nota, ra.nota&&'ATÉ: '+ra.nota].filter(Boolean).join(' | ');
+    return{tag,form,desde,con_d,ate,con_a,diam,pc_d:rd.modelo,npt_d:rd.npt,red_d:rd.red,pc_a:ra.modelo,npt_a:ra.npt,red_a:ra.red,status,alertas};
+  }).filter(Boolean);
+
+  const ok=analysis.filter(r=>r.status==='OK').length;
+  const al=analysis.filter(r=>r.status==='ALERTA').length;
+  const er=analysis.filter(r=>r.status==='ERRO').length;
+  document.getElementById('s1-desc').textContent = `${valid.length} cabos · ${ok} OK`;
+  document.getElementById('s3-desc').textContent = `${ok} OK · ${al} alertas · ${er} erros`;
+  document.getElementById('nav-step1').classList.add('done');
+  document.getElementById('nav-step1').classList.remove('active');
+
+  renderResults();
+  goToStep(3);
+}
+
+// ════════════════════════════════════════════════
+// MOTOR DE ANÁLISE  (com optimização de modelos)
+// ════════════════════════════════════════════════
+function fmMap(){const m={};B.fm.forEach(r=>{m[r.formacao.trim().toUpperCase()]=r.diam;});return m;}
+
+// ── Optimiser: build a global "preferred model" map per (npt, diam) ──────────
+// Called once before runAnalysis.
+// For each unique (connection-type, diameter) pair in the cable list, it picks
+// the single PC model that covers the *widest* range — maximising reuse across
+// different cable diameters that share the same NPT, and minimising distinct
+// model count.  Within candidates that all fit the cable, the model with the
+// widest span (max-min) wins; ties broken by largest max.
+let _optMap = {};   // key: "NPT|diam" → {modelo, npt, red, status, nota}
+
+function buildOptMap(cablesInfo){
+  // cablesInfo: [{diam, nptCx}]  – deduplicated combos needed
+  _optMap = {};
+
+  // Group by connection type so we optimise within the same connection family
+  const byConn = {};
+  cablesInfo.forEach(({diam, nptCx})=>{
+    const key = `${nptCx}||${diam}`;
+    if(_optMap[key]) return;          // already resolved
+    if(!byConn[nptCx]) byConn[nptCx]=[];
+    byConn[nptCx].push(diam);
+  });
+
+  Object.entries(byConn).forEach(([nptCx, diams])=>{
+    const uniqueDiams = [...new Set(diams)].sort((a,b)=>a-b);
+    const rx = NR[nptCx]||0;
+    const connType = nptCx.split(/[-\s]/)[0].toUpperCase();
+
+    uniqueDiams.forEach(diam=>{
+      const key = `${nptCx}||${diam}`;
+
+      // All PCs that physically fit this cable
+      const fits = getActivePCs().filter(p=>p.min<=diam&&diam<=p.max);
+      if(!fits.length){
+        _optMap[key]={modelo:'—',npt:'—',red:'',status:'ERRO',nota:`Sem PC para diâm ${diam}mm no banco`};
+        return;
+      }
+
+      // --- Step 1: exact NPT match ---
+      const exactNPT = fits.filter(p=>p.npt===nptCx||p.npt.toLowerCase()===nptCx.toLowerCase());
+      if(exactNPT.length){
+        // Pick widest range to maximise sharing with other diameters on same NPT
+        const best = exactNPT.sort((a,b)=>(b.max-b.min)-(a.max-a.min)||(b.max-a.max))[0];
+        _optMap[key]={modelo:best.modelo,npt:best.npt,red:'',status:'OK',nota:''};
+        return;
+      }
+
+      // --- Step 2: NPT smaller than connection → need reducer (prefer widest) ---
+      if(rx>0){
+        const smaller = fits.filter(p=>(NR[p.npt]||0)<rx&&(NR[p.npt]||0)>0)
+                            .sort((a,b)=>(NR[b.npt]||0)-(NR[a.npt]||0)||(b.max-b.min)-(a.max-a.min));
+        if(smaller.length){
+          const b=smaller[0];
+          const red=`${nptCx} → ${b.npt}`;
+          _optMap[key]={modelo:b.modelo,npt:b.npt,red,status:'ALERTA',nota:`Redutor: ${red}`};
+          return;
+        }
+        // NPT larger than connection → cable won't pass the thread
+        const larger = fits.filter(p=>(NR[p.npt]||0)>rx)
+                           .sort((a,b)=>(NR[a.npt]||0)-(NR[b.npt]||0));
+        if(larger.length){
+          const b=larger[0];
+          _optMap[key]={modelo:b.modelo,npt:b.npt,red:'',status:'ERRO',nota:`Cabo ${diam}mm não passa pela rosca ${nptCx}`};
+          return;
+        }
+      }
+
+      // --- Step 3: non-NPT (BSPT / metric) – same prefix, widest ---
+      const sameType = fits.filter(p=>p.npt.toUpperCase().startsWith(connType))
+                           .sort((a,b)=>(b.max-b.min)-(a.max-a.min));
+      if(sameType.length){
+        const b=sameType[0];
+        _optMap[key]={modelo:b.modelo,npt:b.npt,red:`${nptCx} → ${b.npt}`,
+                      status:'ALERTA',nota:`Tamanho diferente: ${b.npt} (conexão: ${nptCx})`};
+        return;
+      }
+
+      // --- Step 4: any fit ---
+      const b=fits.sort((a,b)=>(b.max-b.min)-(a.max-a.min))[0];
+      _optMap[key]={modelo:b.modelo,npt:b.npt,red:'',status:'ALERTA',
+                    nota:`Conexão ${nptCx} não encontrada exatamente — verificar`};
+    });
+  });
+}
+
+function findPC(diam, nptCx){
+  nptCx=(nptCx||'').trim();
+  const key=`${nptCx}||${diam}`;
+  if(_optMap[key]) return _optMap[key];
+  // Fallback if called without pre-build (e.g. manual single call)
+  return _findPCSingle(diam, nptCx);
+}
+
+function _findPCSingle(diam, nptCx){
+  const rx=NR[nptCx]||0;
+  const fits=getActivePCs().filter(p=>p.min<=diam&&diam<=p.max);
+  if(!fits.length) return{modelo:'—',npt:'—',red:'',status:'ERRO',nota:`Sem PC para diâm ${diam}mm no banco`};
+  const ex=fits.find(p=>p.npt===nptCx||p.npt.toLowerCase()===nptCx.toLowerCase());
+  if(ex) return{modelo:ex.modelo,npt:ex.npt,red:'',status:'OK',nota:''};
+  if(rx>0){
+    const mn=fits.filter(p=>(NR[p.npt]||0)<rx&&(NR[p.npt]||0)>0).sort((a,b)=>(NR[b.npt]||0)-(NR[a.npt]||0));
+    if(mn.length){const b=mn[0];return{modelo:b.modelo,npt:b.npt,red:`${nptCx} → ${b.npt}`,status:'ALERTA',nota:`Redutor: ${nptCx} → ${b.npt}`};}
+    const ma=fits.filter(p=>(NR[p.npt]||0)>rx).sort((a,b)=>(NR[a.npt]||0)-(NR[b.npt]||0));
+    if(ma.length) return{modelo:ma[0].modelo,npt:ma[0].npt,red:'',status:'ERRO',nota:`Cabo ${diam}mm não passa pela rosca ${nptCx}`};
+  }
+  const ct=nptCx.split(/[-\s]/)[0].toUpperCase();
+  const st=fits.filter(p=>p.npt.toUpperCase().startsWith(ct));
+  if(st.length) return{modelo:st[0].modelo,npt:st[0].npt,red:`${nptCx} → ${st[0].npt}`,status:'ALERTA',nota:`Tamanho diferente: ${st[0].npt}`};
+  return{modelo:fits[0].modelo,npt:fits[0].npt,red:'',status:'ALERTA',nota:`Conexão ${nptCx} não encontrada — verificar`};
+}
+
+function runAnalysisFromFile(){runAnalysis();}
+function runAnalysis(){
+  const map={};
+  CAMPOS.forEach(c=>{const el=document.getElementById(`map-${c.key}`);map[c.key]=el?el.value:'';});
+  const fm=fmMap();
+
+  // Pre-build optimised model map for all (diam, npt) combos in this cable list
+  const combos=[];
+  rawData.forEach(row=>{
+    const form=String(row[map.form]||'').trim();
+    const diam=fm[form.toUpperCase()];
+    if(diam===undefined) return;
+    const con_d=String(row[map.con_d]||'').trim();
+    const con_a=String(row[map.con_a]||'').trim();
+    if(con_d) combos.push({diam,nptCx:con_d});
+    if(con_a) combos.push({diam,nptCx:con_a});
+  });
+  buildOptMap(combos);
+
+  analysis = rawData.map(row=>{
+    const tag=String(row[map.tag]||'').trim(); if(!tag) return null;
+    const form=String(row[map.form]||'').trim();
+    const desde=String(row[map.desde]||'').trim();
+    const con_d=String(row[map.con_d]||'').trim();
+    const ate=String(row[map.ate]||'').trim();
+    const con_a=String(row[map.con_a]||'').trim();
+    const diam=fm[form.toUpperCase()];
+    if(diam===undefined) return{tag,form,desde,con_d,ate,con_a,diam:'?',pc_d:'—',npt_d:'—',red_d:'',pc_a:'—',npt_a:'—',red_a:'',status:'ERRO',alertas:`Formação "${form}" não mapeada`};
+    const rd=findPC(diam,con_d), ra=findPC(diam,con_a);
+    let status='OK';
+    if(rd.status==='ERRO'||ra.status==='ERRO') status='ERRO';
+    else if(rd.status==='ALERTA'||ra.status==='ALERTA') status='ALERTA';
+    const alertas=[rd.nota&&'DESDE: '+rd.nota, ra.nota&&'ATÉ: '+ra.nota].filter(Boolean).join(' | ');
+    return{tag,form,desde,con_d,ate,con_a,diam,pc_d:rd.modelo,npt_d:rd.npt,red_d:rd.red,pc_a:ra.modelo,npt_a:ra.npt,red_a:ra.red,status,alertas};
+  }).filter(Boolean);
+
+  // Update step status
+  const ok=analysis.filter(r=>r.status==='OK').length;
+  const al=analysis.filter(r=>r.status==='ALERTA').length;
+  const er=analysis.filter(r=>r.status==='ERRO').length;
+  document.getElementById('s3-desc').textContent = `${ok} OK · ${al} alertas · ${er} erros`;
+
+  const ok2=analysis.filter(r=>r.status==='OK').length;
+  const al2=analysis.filter(r=>r.status==='ALERTA').length;
+  const er2=analysis.filter(r=>r.status==='ERRO').length;
+  document.getElementById('s3-desc').textContent = `${ok2} OK · ${al2} alertas · ${er2} erros`;
+  document.getElementById('nav-step1').classList.add('done');
+  document.getElementById('nav-step1').classList.remove('active');
+  renderResults();
+  goToStep(3);
+}
+
+// ════════════════════════════════════════════════
+// RESULTS
+// ════════════════════════════════════════════════
+let curF = 'all';
+
+function kpiFilter(el, f){
+  curF = f;
+  document.querySelectorAll('.kpi').forEach(k=>k.classList.remove('active-filter'));
+  el.classList.add('active-filter');
+  // sync chips
+  document.querySelectorAll('.f-chip').forEach(c=>{
+    c.classList.toggle('active', c.getAttribute('onclick').includes(`'${f}'`));
+  });
+  renderTable();
+}
+
+function setF(btn, f){
+  curF = f;
+  document.querySelectorAll('.f-chip').forEach(c=>c.classList.remove('active'));
+  btn.classList.add('active');
+  // sync KPIs
+  document.querySelectorAll('.kpi').forEach(k=>k.classList.remove('active-filter'));
+  renderTable();
+}
+
+function applyF(){ renderTable(); }
+
+function renderResults(){
+  const ok=analysis.filter(r=>r.status==='OK').length;
+  const al=analysis.filter(r=>r.status==='ALERTA').length;
+  const er=analysis.filter(r=>r.status==='ERRO').length;
+  document.getElementById('d-ok').textContent = ok;
+  document.getElementById('d-al').textContent = al;
+  document.getElementById('d-er').textContent = er;
+  document.getElementById('d-tot').textContent = analysis.length;
+  renderBOM();
+  renderTable();
+  document.getElementById('empty-results').classList.add('hidden');
+  document.getElementById('results-content').classList.remove('hidden');
+  document.getElementById('results-content').style.display = 'flex';
+}
+
+function counts(){
+  const pc={},red={};
+  analysis.forEach(r=>{
+    if(r.pc_d&&r.pc_d!=='—') pc[r.pc_d]=(pc[r.pc_d]||0)+1;
+    if(r.pc_a&&r.pc_a!=='—') pc[r.pc_a]=(pc[r.pc_a]||0)+1;
+    if(r.red_d) red[r.red_d]=(red[r.red_d]||0)+1;
+    if(r.red_a) red[r.red_a]=(red[r.red_a]||0)+1;
+  });
+  return{pc,red};
+}
+
+// Return detail string for a PC model: "1/2" NPT · GEVELUX"
+function pcDetail(modelo){
+  const allPCs = Object.values(fabricantes).flatMap(f=>f.pc||[]);
+  const found  = allPCs.find(p=>p.modelo===modelo);
+  if(!found) return '';
+  const parts = [found.npt];
+  if(found.fab) parts.push(found.fab);
+  return parts.join(' · ');
+}
+
+// Return fabricante for a PC model
+function pcFab(modelo){
+  const allPCs = Object.values(fabricantes).flatMap(f=>f.pc||[]);
+  const found  = allPCs.find(p=>p.modelo===modelo);
+  return found ? (found.fab||'') : '';
+}
+
+function renderBOM(){
+  const{pc,red}=counts();
+  const pcItems=Object.entries(pc).sort((a,b)=>b[1]-a[1]);
+  const redItems=Object.entries(red).sort((a,b)=>b[1]-a[1]);
+  document.getElementById('bom-pc').innerHTML = pcItems.length
+    ? pcItems.map(([m,q])=>{
+        const det = pcDetail(m);
+        return `<div class="bom-item pc-row">
+          <div style="flex:1;min-width:0">
+            <div class="bom-model">${esc(m)}</div>
+            ${det?`<div style="font-family:var(--mono);font-size:10px;color:var(--text2);margin-top:2px">${esc(det)}</div>`:''}
+          </div>
+          <span class="bom-qty">${q}</span>
+          <span class="bom-qty10">${Math.ceil(q*1.1)}</span>
+        </div>`;
+      }).join('')
+    : '<div class="empty-bom">Nenhum</div>';
+  document.getElementById('bom-red').innerHTML = redItems.length
+    ? redItems.map(([m,q])=>`<div class="bom-item red-row"><span class="bom-model">${esc(m)}</span><span class="bom-qty">${q}</span><span class="bom-qty10">${Math.ceil(q*1.1)}</span></div>`).join('')
+    : '<div class="empty-bom" style="color:var(--green)">Nenhum redutor necessário</div>';
+}
+
+function renderTable(){
+  const q = document.getElementById('sinput').value.toLowerCase();
+  const filtered = analysis.filter(r=>{
+    const mf = curF==='all'||r.status===curF;
+    const ms = !q||(r.tag+r.form+r.desde+r.ate+r.alertas).toLowerCase().includes(q);
+    return mf&&ms;
+  });
+  document.getElementById('rcount').textContent = `${filtered.length} / ${analysis.length} linhas`;
+  document.getElementById('rtbody').innerHTML = filtered.map(r=>{
+    const bc = r.status==='OK'?'badge-ok':r.status==='ALERTA'?'badge-al':'badge-er';
+    const rowCls = r.status==='OK'?'row-ok':r.status==='ALERTA'?'row-al':'row-er';
+    return `<tr class="${rowCls}">
+      <td class="col-tag">${esc(r.tag)}</td>
+      <td class="col-form">${esc(r.form)}</td>
+      <td class="col-diam">${r.diam}</td>
+      <td style="border-left:2px solid rgba(79,142,247,.1)" class="col-con">${esc(r.desde)}</td>
+      <td class="col-con">${esc(r.con_d)}</td>
+      <td class="col-pc${r.pc_d==='—'?' na':''}">${esc(r.pc_d)}</td>
+      <td class="col-red">${esc(r.red_d)||'—'}</td>
+      <td style="border-left:2px solid rgba(167,139,250,.1)" class="col-con">${esc(r.ate)}</td>
+      <td class="col-con">${esc(r.con_a)}</td>
+      <td class="col-pc${r.pc_a==='—'?' na':''}">${esc(r.pc_a)}</td>
+      <td class="col-red">${esc(r.red_a)||'—'}</td>
+      <td><span class="${bc}">${r.status}</span></td>
+      <td class="${r.alertas?'col-alert':''}">${esc(r.alertas)||''}</td>
+    </tr>`;
+  }).join('');
+  renderCards(filtered);
+}
+
+// ── VIEW MODE TOGGLE ──────────────────────────────
+let viewMode = 'table';
+
+function setViewMode(mode){
+  viewMode = mode;
+  document.getElementById('vt-table').classList.toggle('active', mode==='table');
+  document.getElementById('vt-card').classList.toggle('active', mode==='card');
+  document.getElementById('table-view').classList.toggle('hidden', mode!=='table');
+  document.getElementById('cards-view').classList.toggle('hidden', mode!=='card');
+}
+
+function renderCards(filtered){
+  const cv = document.getElementById('cards-view');
+  if(!filtered || !filtered.length){
+    cv.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text3);font-size:13px">Nenhum cabo para exibir.</div>';
+    return;
+  }
+
+  // Group by status: ERRO first, then ALERTA, then OK
+  const groups = [
+    { key:'ERRO',   cls:'grp-er', icon:'❌', rows: filtered.filter(r=>r.status==='ERRO')   },
+    { key:'ALERTA', cls:'grp-al', icon:'⚠️', rows: filtered.filter(r=>r.status==='ALERTA') },
+    { key:'OK',     cls:'grp-ok', icon:'✅', rows: filtered.filter(r=>r.status==='OK')     },
+  ].filter(g=>g.rows.length);
+
+  cv.innerHTML = groups.map(g=>`
+    <div class="card-group-header ${g.cls}">
+      ${g.icon}&nbsp;${g.key}
+      <span class="grp-badge">${g.rows.length}</span>
+      <span class="grp-line"></span>
+    </div>
+    <div class="cards-grid">
+      ${g.rows.map(r=>buildCableCard(r)).join('')}
+    </div>
+  `).join('');
+}
+
+function buildCableCard(r){
+  const cls = r.status==='ERRO'?'card-er':r.status==='ALERTA'?'card-al':'card-ok';
+
+  function epBlock(label, name, conn, pc, red, fab){
+    const pcIsNA = !pc || pc==='—';
+    return `
+      <div class="cc-endpoint">
+        <div class="cc-ep-label">${label}</div>
+        <div class="cc-ep-name" title="${esc(name)}">${esc(name)||'—'}</div>
+        <div class="cc-ep-conn">${esc(conn)||'—'}</div>
+        <div class="cc-ep-pc${pcIsNA?' na':''}">${esc(pc)||'—'}</div>
+        ${red?`<div class="cc-ep-red">${esc(red)}</div>`:''}
+        ${fab&&!pcIsNA?`<div class="cc-ep-fab">${esc(fab)}</div>`:''}
+      </div>`;
+  }
+
+  const fabD = pcFab(r.pc_d);
+  const fabA = pcFab(r.pc_a);
+
+  let footerCls = 'clean', footerContent = '✓ Sem pendências';
+  if(r.alertas){
+    if(r.status==='ERRO'){
+      footerCls='has-alert';
+      footerContent = r.alertas.split(' | ').map(a=>`⚠ ${a}`).join('<br>');
+    } else {
+      footerCls='has-warn';
+      footerContent = r.alertas.split(' | ').map(a=>`↘ ${a}`).join('<br>');
+    }
+  }
+
+  return `<div class="cable-card ${cls}">
+    <div class="cc-head">
+      <div class="cc-status-dot"></div>
+      <div class="cc-tag" title="${esc(r.tag)}">${esc(r.tag)}</div>
+      <div class="cc-diam-chip">∅ ${r.diam} mm</div>
+    </div>
+    <div class="cc-form">${esc(r.form)}</div>
+    <div class="cc-body">
+      ${epBlock('Desde', r.desde, r.con_d, r.pc_d, r.red_d, fabD)}
+      ${epBlock('Até',   r.ate,   r.con_a, r.pc_a, r.red_a, fabA)}
+    </div>
+    <div class="cc-footer ${footerCls}">${footerContent}</div>
+  </div>`;
+}
+
+// ════════════════════════════════════════════════
+// EXPORTS — FORMATTED
+// ════════════════════════════════════════════════
+
+// ── Palette (matches the app's dark theme translated to Excel fills) ──
+const XL = {
+  // Cell styles returned as objects for SheetJS-style (limited, uses !cols for widths)
+  // We use a small helper to build the binary xlsx with proper styles via a workaround:
+  // SheetJS CE doesn't support styles natively, so we generate a styled HTML table
+  // and download as .xls (HTML-based), which Excel opens perfectly formatted.
+
+  blue_dark:  '#1F3864',
+  blue_mid:   '#2E5FA3',
+  blue_light: '#BDD7EE',
+  green_dark: '#1E4620',
+  green_mid:  '#375623',
+  green_fill: '#E2EFDA',
+  yellow_fill:'#FFF2CC',
+  yellow_dark:'#7F4500',
+  red_fill:   '#FCE4D6',
+  red_dark:   '#C00000',
+  purple:     '#5C3293',
+  gray_fill:  '#F2F2F2',
+  gray_dark:  '#404040',
+  white:      '#FFFFFF',
+  border_color:'#BFC5D0',
+};
+
+// Helper: build a styled HTML table that Excel renders correctly
+// Encode to UTF-8 bytes then base64 — works inside iframes, no Blob/createObjectURL needed
+function toBase64UTF8(str){
+  const bytes = new TextEncoder().encode(str);
+  let bin = '';
+  bytes.forEach(b => bin += String.fromCharCode(b));
+  return btoa(bin);
+}
+
+function styledXlsContent(htmlContent){
+  return `<html xmlns:o="urn:schemas-microsoft-com:office:office"
+    xmlns:x="urn:schemas-microsoft-com:office:excel"
+    xmlns="http://www.w3.org/TR/REC-html40">
+  <head><meta charset="UTF-8">
+  <!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets>
+  <x:ExcelWorksheet><x:Name>Análise</x:Name>
+  <x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions>
+  </x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]-->
+  <style>
+    body { font-family: Calibri, Arial, sans-serif; font-size: 10pt; }
+    table { border-collapse: collapse; }
+    td, th { border: 1px solid #BFC5D0; padding: 4px 8px; white-space: nowrap; vertical-align: middle; }
+    .hdr-main   { background:#1F3864; color:#FFFFFF; font-weight:bold; font-size:11pt; text-align:center; }
+    .hdr-group  { background:#2E5FA3; color:#FFFFFF; font-weight:bold; text-align:center; font-size:9pt; }
+    .hdr-col    { background:#355E9E; color:#FFFFFF; font-weight:bold; font-size:9pt; }
+    .hdr-desde  { background:#1F4E79; color:#FFFFFF; font-weight:bold; font-size:9pt; }
+    .hdr-ate    { background:#3E2069; color:#FFFFFF; font-weight:bold; font-size:9pt; }
+    .hdr-status { background:#1F3864; color:#FFFFFF; font-weight:bold; font-size:9pt; }
+    .col-tag    { font-weight:bold; color:#1F3864; }
+    .col-diam   { text-align:center; font-weight:bold; color:#1F4E79; background:#EBF3FB; }
+    .col-pc     { color:#1E4620; font-weight:bold; background:#E2EFDA; }
+    .col-pc-na  { color:#C00000; font-weight:bold; }
+    .col-red    { color:#7F4500; background:#FFF2CC; }
+    .col-con    { color:#404040; }
+    .row-ok     { background:#FFFFFF; }
+    .row-ok-alt { background:#F7FBF7; }
+    .row-al     { background:#FFFCE8; }
+    .row-al-alt { background:#FFF8D6; }
+    .row-er     { background:#FFF0EE; }
+    .row-er-alt { background:#FFE8E5; }
+    .st-ok      { background:#E2EFDA; color:#1E4620; font-weight:bold; text-align:center; }
+    .st-al      { background:#FFF2CC; color:#7F4500; font-weight:bold; text-align:center; }
+    .st-er      { background:#FCE4D6; color:#C00000; font-weight:bold; text-align:center; }
+    .alert-txt  { color:#C00000; font-size:8pt; }
+    .bom-title  { background:#1F3864; color:#FFFFFF; font-weight:bold; font-size:11pt; text-align:center; }
+    .bom-hdr    { background:#2E5FA3; color:#FFFFFF; font-weight:bold; text-align:center; }
+    .bom-pc     { color:#1E4620; font-weight:bold; background:#E2EFDA; }
+    .bom-pc10   { color:#1F4E79; font-weight:bold; background:#BDD7EE; text-align:center; }
+    .bom-red    { color:#7F4500; background:#FFF2CC; }
+    .bom-red10  { color:#7F3500; font-weight:bold; background:#FFE599; text-align:center; }
+    .num        { text-align:center; }
+    .summary-ok { background:#E2EFDA; color:#1E4620; font-weight:bold; }
+    .summary-al { background:#FFF2CC; color:#7F4500; font-weight:bold; }
+    .summary-er { background:#FCE4D6; color:#C00000; font-weight:bold; }
+    .summary-tot{ background:#BDD7EE; color:#1F3864; font-weight:bold; }
+  </style></head><body>${htmlContent}</body></html>`;
+}
+
+function downloadAsDataURI(content, filename, mimeType){
+  try {
+    // Method 1: data URI with base64 (works in iframes)
+    const b64 = toBase64UTF8(content);
+    const a = document.createElement('a');
+    a.href = `data:${mimeType};base64,${b64}`;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  } catch(e) {
+    // Method 2: open in new window if download attr is blocked
+    const b64 = toBase64UTF8(content);
+    window.open(`data:${mimeType};base64,${b64}`, '_blank');
+  }
+}
+
+// Keep old name for compatibility
+function downloadBlob(content, filename){
+  // content is now a string (not a Blob)
+  downloadAsDataURI(content, filename, 'application/vnd.ms-excel;charset=utf-8');
+}
+
+function exportAnalise(){
+  const now = new Date().toLocaleDateString('pt-BR');
+  const ok  = analysis.filter(r=>r.status==='OK').length;
+  const al  = analysis.filter(r=>r.status==='ALERTA').length;
+  const er  = analysis.filter(r=>r.status==='ERRO').length;
+
+  let html = `
+  <!-- TITLE -->
+  <table style="margin-bottom:16px;width:100%">
+    <tr><td colspan="13" class="hdr-main" style="font-size:14pt;padding:10px">
+      ⚙ ANÁLISE DE PRENSA CABOS — Instrumentação & Automação
+    </td></tr>
+    <tr>
+      <td class="hdr-group" style="background:#2C3E6B">Projeto</td>
+      <td colspan="3" style="font-weight:bold;padding:5px 10px">—</td>
+      <td class="hdr-group" style="background:#2C3E6B">Data</td>
+      <td colspan="2" style="padding:5px 10px">${now}</td>
+      <td class="hdr-group" style="background:#2C3E6B">Total Cabos</td>
+      <td class="num" style="font-weight:bold">${analysis.length}</td>
+      <td class="summary-ok">✅ OK</td><td class="summary-ok num">${ok}</td>
+      <td class="summary-al">⚠ Alerta</td><td class="summary-al num">${al}</td>
+    </tr>
+    <tr>
+      <td colspan="9"></td>
+      <td class="summary-er">❌ Erro</td><td class="summary-er num">${er}</td>
+      <td class="summary-tot">📊 Total</td><td class="summary-tot num">${analysis.length}</td>
+    </tr>
+  </table>
+
+  <!-- ANALYSIS TABLE -->
+  <table>
+    <!-- GROUP HEADERS -->
+    <tr>
+      <th class="hdr-col" rowspan="2" style="width:120px">TAG CABO</th>
+      <th class="hdr-col" rowspan="2">FORMAÇÃO</th>
+      <th class="hdr-col" rowspan="2" style="width:60px">DIÂM (mm)</th>
+      <th class="hdr-desde" colspan="5" style="text-align:center">◀ DESDE (Instrumento)</th>
+      <th class="hdr-ate"   colspan="5" style="text-align:center">ATÉ (Caixa / Painel) ▶</th>
+      <th class="hdr-status" rowspan="2">STATUS</th>
+      <th class="hdr-status" rowspan="2">ALERTAS</th>
+    </tr>
+    <tr>
+      <th class="hdr-desde">Instrumento</th>
+      <th class="hdr-desde">Conexão</th>
+      <th class="hdr-desde">Prensa Cabo</th>
+      <th class="hdr-desde">Conexão PC</th>
+      <th class="hdr-desde" style="background:#1a5c2a">Fornecedor</th>
+      <th class="hdr-ate">Caixa / Painel</th>
+      <th class="hdr-ate">Conexão</th>
+      <th class="hdr-ate">Prensa Cabo</th>
+      <th class="hdr-ate">Conexão PC</th>
+      <th class="hdr-ate" style="background:#3a1060">Fornecedor</th>
+    </tr>`;
+
+  analysis.forEach((r, i)=>{
+    const isAlt = i % 2 === 1;
+    const rowCls = r.status==='OK' ? (isAlt?'row-ok-alt':'row-ok')
+                 : r.status==='ALERTA' ? (isAlt?'row-al-alt':'row-al')
+                 : (isAlt?'row-er-alt':'row-er');
+    const stCls  = r.status==='OK'?'st-ok':r.status==='ALERTA'?'st-al':'st-er';
+    const pcDCls = r.pc_d==='—' ? 'col-pc-na' : 'col-pc';
+    const pcACls = r.pc_a==='—' ? 'col-pc-na' : 'col-pc';
+
+    const fabD = pcFab(r.pc_d);
+    const fabA = pcFab(r.pc_a);
+    html += `<tr class="${rowCls}">
+      <td class="col-tag">${esc(r.tag)}</td>
+      <td class="col-con">${esc(r.form)}</td>
+      <td class="col-diam">${r.diam}</td>
+      <td class="col-con" style="border-left:2px solid #1F4E79">${esc(r.desde)}</td>
+      <td class="col-con">${esc(r.con_d)}</td>
+      <td class="${pcDCls}">${esc(r.pc_d)}</td>
+      <td class="col-con">${esc(r.npt_d)||'—'}</td>
+      <td style="color:#1a5c2a;font-weight:600">${esc(fabD)}</td>
+      <td class="${r.red_d?'col-red':''}">${esc(r.red_d)||'—'}</td>
+      <td class="col-con" style="border-left:2px solid #3E2069">${esc(r.ate)}</td>
+      <td class="col-con">${esc(r.con_a)}</td>
+      <td class="${pcACls}">${esc(r.pc_a)}</td>
+      <td class="col-con">${esc(r.npt_a)||'—'}</td>
+      <td style="color:#3a1060;font-weight:600">${esc(fabA)}</td>
+      <td class="${r.red_a?'col-red':''}">${esc(r.red_a)||'—'}</td>
+      <td class="${stCls}">${r.status}</td>
+      <td class="${r.alertas?'alert-txt':''}">${esc(r.alertas)||''}</td>
+    </tr>`;
+  });
+
+  html += `</table>`;
+
+  // ── Build HTML for "Resumo" tab ──
+  const resumoHtml = buildResumoHtml(now);
+
+  downloadTwoTabXls(
+    {name:'Análise', html},
+    {name:'Resumo',  html: resumoHtml}
+  );
+}
+
+// ── Build the Resumo tab HTML ──────────────────────────────────────
+function buildResumoHtml(now){
+  const {pc: pcC, red: redC} = counts();
+  const pcIt  = Object.entries(pcC).sort((a,b)=>b[1]-a[1]);
+  const redIt = Object.entries(redC).sort((a,b)=>b[1]-a[1]);
+  const allPCs = Object.values(fabricantes).flatMap(f=>f.pc||[]);
+
+  let h = `
+  <table style="margin-bottom:20px;min-width:680px">
+    <tr><td colspan="7" class="bom-title" style="font-size:14pt;padding:10px">
+      📦 RESUMO — Bill of Materials
+    </td></tr>
+    <tr>
+      <td class="hdr-group" style="background:#2C3E6B">Data</td>
+      <td colspan="6" style="padding:5px 10px">${now}</td>
+    </tr>
+  </table>
+
+  <!-- PRENSA CABOS -->
+  <table style="margin-bottom:20px;min-width:680px">
+    <tr><td colspan="7" class="bom-title" style="font-size:12pt;padding:8px">🔩 Prensa Cabos — Detalhes e Quantidades</td></tr>
+    <tr>
+      <th class="bom-hdr" style="width:140px">Modelo</th>
+      <th class="bom-hdr" style="width:110px">Conexão</th>
+      <th class="bom-hdr" style="width:80px">Range Mín (mm)</th>
+      <th class="bom-hdr" style="width:80px">Range Máx (mm)</th>
+      <th class="bom-hdr" style="width:110px">Fabricante</th>
+      <th class="bom-hdr" style="width:80px">Qtd. Pontos</th>
+      <th class="bom-hdr" style="width:100px">Qtd. c/ +10%</th>
+    </tr>`;
+
+  pcIt.forEach(([m,q],i)=>{
+    const found = allPCs.find(p=>p.modelo===m);
+    const npt   = found ? found.npt  : '—';
+    const rmin  = found ? found.min  : '—';
+    const rmax  = found ? found.max  : '—';
+    const fab   = found ? found.fab  : '—';
+    const bg    = i%2===0 ? '#E2EFDA' : '#F0F7ED';
+    h += `<tr>
+      <td class="bom-pc" style="background:${bg}">${esc(m)}</td>
+      <td style="background:${bg};font-family:monospace">${esc(npt)}</td>
+      <td class="num" style="background:${bg}">${rmin}</td>
+      <td class="num" style="background:${bg}">${rmax}</td>
+      <td style="background:${bg};color:#1a5c2a;font-weight:600">${esc(fab)}</td>
+      <td class="num" style="background:${bg}">${q}</td>
+      <td class="bom-pc10" style="background:${i%2===0?'#BDD7EE':'#D0E8F5'}">${Math.ceil(q*1.1)}</td>
+    </tr>`;
+  });
+
+  h += `<tr style="border-top:2px solid #1F3864">
+    <td colspan="5" style="font-weight:bold;background:#1F3864;color:white">TOTAL</td>
+    <td class="num" style="font-weight:bold;background:#1F3864;color:white">${pcIt.reduce((s,[,q])=>s+q,0)}</td>
+    <td class="num" style="font-weight:bold;background:#1F3864;color:white">${Math.ceil(pcIt.reduce((s,[,q])=>s+q,0)*1.1)}</td>
+  </tr></table>`;
+
+  if(redIt.length){
+    h += `
+    <table style="min-width:480px">
+      <tr><td colspan="3" class="bom-title" style="font-size:12pt;padding:8px;background:#3E2069">🔧 Redutores NPT</td></tr>
+      <tr>
+        <th class="bom-hdr" style="background:#3E2069;width:220px">Redutor</th>
+        <th class="bom-hdr" style="background:#3E2069;width:100px">Qtd. Pontos</th>
+        <th class="bom-hdr" style="background:#3E2069;width:120px">Qtd. c/ +10%</th>
+      </tr>
+      ${redIt.map(([m,q],i)=>`<tr>
+        <td class="bom-red" style="background:${i%2===0?'#FFF2CC':'#FFF8E0'}">${esc(m)}</td>
+        <td class="num" style="background:${i%2===0?'#FFF2CC':'#FFF8E0'}">${q}</td>
+        <td class="bom-red10" style="background:${i%2===0?'#FFE599':'#FFEDB5'}">${Math.ceil(q*1.1)}</td>
+      </tr>`).join('')}
+      <tr style="border-top:2px solid #3E2069">
+        <td style="font-weight:bold;background:#3E2069;color:white">TOTAL</td>
+        <td class="num" style="font-weight:bold;background:#3E2069;color:white">${redIt.reduce((s,[,q])=>s+q,0)}</td>
+        <td class="num" style="font-weight:bold;background:#3E2069;color:white">${Math.ceil(redIt.reduce((s,[,q])=>s+q,0)*1.1)}</td>
+      </tr>
+    </table>`;
+  }
+  return h;
+}
+
+// ── Export two-sheet XLS (HTML multi-table trick with named worksheets) ───────
+function downloadTwoTabXls(sheet1, sheet2){
+  // SpreadsheetML XML format — gives true separate named sheets,
+  // no page-break ambiguity, works in all Excel versions.
+  // We convert the HTML content to plain cell data via a temporary DOM parse.
+
+  const xmlHeader = `<?xml version="1.0" encoding="UTF-8"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+  xmlns:o="urn:schemas-microsoft-com:office:office"
+  xmlns:x="urn:schemas-microsoft-com:office:excel"
+  xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
+  xmlns:html="http://www.w3.org/TR/REC-html40">
+<Styles>
+  <Style ss:ID="hMain"><Font ss:Bold="1" ss:Size="12" ss:Color="#FFFFFF"/><Interior ss:Color="#1F3864" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center" ss:Vertical="Center"/></Style>
+  <Style ss:ID="hBlue"><Font ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#1F4E79" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center"/></Style>
+  <Style ss:ID="hPurp"><Font ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#3E2069" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center"/></Style>
+  <Style ss:ID="hMid" ><Font ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#2E5FA3" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center"/></Style>
+  <Style ss:ID="hGrn" ><Font ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#1E4620" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center"/></Style>
+  <Style ss:ID="cTag" ><Font ss:Bold="1" ss:Color="#1F3864"/></Style>
+  <Style ss:ID="cPCok"><Font ss:Bold="1" ss:Color="#1E4620"/><Interior ss:Color="#E2EFDA" ss:Pattern="Solid"/></Style>
+  <Style ss:ID="cPCer"><Font ss:Bold="1" ss:Color="#C00000"/></Style>
+  <Style ss:ID="cRed" ><Font ss:Color="#7F4500"/><Interior ss:Color="#FFF2CC" ss:Pattern="Solid"/></Style>
+  <Style ss:ID="cDim" ><Font ss:Bold="1" ss:Color="#1F4E79"/><Interior ss:Color="#EBF3FB" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center"/></Style>
+  <Style ss:ID="stOK" ><Font ss:Bold="1" ss:Color="#1E4620"/><Interior ss:Color="#E2EFDA" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center"/></Style>
+  <Style ss:ID="stAL" ><Font ss:Bold="1" ss:Color="#7F4500"/><Interior ss:Color="#FFF2CC" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center"/></Style>
+  <Style ss:ID="stER" ><Font ss:Bold="1" ss:Color="#C00000"/><Interior ss:Color="#FCE4D6" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center"/></Style>
+  <Style ss:ID="rowAL"><Interior ss:Color="#FFFCE8" ss:Pattern="Solid"/></Style>
+  <Style ss:ID="rowER"><Interior ss:Color="#FFF0EE" ss:Pattern="Solid"/></Style>
+  <Style ss:ID="cAlt" ><Interior ss:Color="#F7FBF7" ss:Pattern="Solid"/></Style>
+  <Style ss:ID="cFab" ><Font ss:Bold="1" ss:Color="#1a5c2a"/></Style>
+  <Style ss:ID="cFabA"><Font ss:Bold="1" ss:Color="#3a1060"/></Style>
+  <Style ss:ID="cNum" ><Alignment ss:Horizontal="Center"/></Style>
+  <Style ss:ID="cBold"><Font ss:Bold="1"/></Style>
+  <Style ss:ID="totPC"><Font ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#1F3864" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center"/></Style>
+  <Style ss:ID="totRD"><Font ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#3E2069" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center"/></Style>
+  <Style ss:ID="hGrnBOM"><Font ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#1E4620" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center"/></Style>
+  <Style ss:ID="cGrnPC"><Font ss:Bold="1" ss:Color="#1E4620"/><Interior ss:Color="#E2EFDA" ss:Pattern="Solid"/></Style>
+  <Style ss:ID="cBluPC"><Font ss:Bold="1" ss:Color="#1F4E79"/><Interior ss:Color="#BDD7EE" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center"/></Style>
+  <Style ss:ID="cRedBOM"><Font ss:Color="#7F4500"/><Interior ss:Color="#FFF2CC" ss:Pattern="Solid"/></Style>
+  <Style ss:ID="cYelBOM"><Font ss:Bold="1" ss:Color="#7F3500"/><Interior ss:Color="#FFE599" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center"/></Style>
+  <Style ss:ID="errTxt"><Font ss:Color="#C00000" ss:Size="8"/></Style>
+  <Style ss:ID="alert" ><Interior ss:Color="#FFF8DC" ss:Pattern="Solid"/></Style>
+</Styles>`;
+
+  function xmlCell(v, style, type){
+    const t = type||'String';
+    const s = style ? ` ss:StyleID="${style}"` : '';
+    const val = String(v===null||v===undefined?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    return `<Cell${s}><Data ss:Type="${t}">${val}</Data></Cell>`;
+  }
+  function xmlRow(...cells){ return `<Row>${cells.join('')}</Row>`; }
+  function xmlSheet(name, rowsXml, colWidths){
+    const cols = colWidths ? colWidths.map(w=>`<Column ss:Width="${w}"/>`).join('') : '';
+    return `<Worksheet ss:Name="${name.replace(/&/g,'&amp;')}">
+<Table>${cols}
+${rowsXml}
+</Table></Worksheet>`;
+  }
+
+  // ── Sheet 1: Análise ─────────────────────────────────────────────
+  const now2 = new Date().toLocaleDateString('pt-BR');
+  const ok2  = analysis.filter(r=>r.status==='OK').length;
+  const al2  = analysis.filter(r=>r.status==='ALERTA').length;
+  const er2  = analysis.filter(r=>r.status==='ERRO').length;
+
+  let s1rows = '';
+  // Title row
+  s1rows += `<Row ss:Height="28"><Cell ss:MergeAcross="16" ss:StyleID="hMain"><Data ss:Type="String">ANÁLISE DE PRENSA CABOS — Instrumentação &amp; Automação</Data></Cell></Row>`;
+  s1rows += xmlRow(
+    xmlCell('Data','hMid'), xmlCell(now2), xmlCell(''), xmlCell(''),
+    xmlCell('Total','hMid'), xmlCell(analysis.length,'cNum','Number'),
+    xmlCell('OK','stOK'), xmlCell(ok2,'stOK','Number'),
+    xmlCell('Alerta','stAL'), xmlCell(al2,'stAL','Number'),
+    xmlCell('Erro','stER'), xmlCell(er2,'stER','Number'),
+    xmlCell(''),xmlCell(''),xmlCell(''),xmlCell(''),xmlCell('')
+  );
+  s1rows += `<Row ss:Height="6"></Row>`;
+  // Group header
+  s1rows += `<Row ss:Height="20">
+    ${xmlCell('TAG CABO','hMid')}${xmlCell('FORMAÇÃO','hMid')}${xmlCell('DIÂM (mm)','hMid')}
+    ${xmlCell('◀ DESDE','hBlue')}${xmlCell('CONEXÃO','hBlue')}${xmlCell('PRENSA CABO','hBlue')}${xmlCell('NPT PC','hBlue')}${xmlCell('FORNECEDOR','hGrn')}${xmlCell('REDUTOR','hBlue')}
+    ${xmlCell('ATÉ ▶','hPurp')}${xmlCell('CONEXÃO','hPurp')}${xmlCell('PRENSA CABO','hPurp')}${xmlCell('NPT PC','hPurp')}${xmlCell('FORNECEDOR','hGrnBOM')}${xmlCell('REDUTOR','hPurp')}
+    ${xmlCell('STATUS','hMain')}${xmlCell('ALERTAS','hMain')}
+  </Row>`;
+
+  analysis.forEach((r,i)=>{
+    const isAlt = i%2===1;
+    const stID  = r.status==='OK'?'stOK':r.status==='ALERTA'?'stAL':'stER';
+    const rowSt = r.status==='ALERTA'?(isAlt?'rowAL':'rowAL'):r.status==='ERRO'?(isAlt?'rowER':'rowER'):(isAlt?'cAlt':'');
+    const pcDst = r.pc_d==='—'?'cPCer':'cPCok';
+    const pcAst = r.pc_a==='—'?'cPCer':'cPCok';
+    const fabD  = pcFab(r.pc_d);
+    const fabA  = pcFab(r.pc_a);
+    s1rows += `<Row${rowSt?' ss:StyleID="'+rowSt+'"':''}>
+      ${xmlCell(r.tag,'cTag')}${xmlCell(r.form,rowSt||'')}${xmlCell(r.diam,'cDim','Number')}
+      ${xmlCell(r.desde,rowSt||'')}${xmlCell(r.con_d,rowSt||'')}${xmlCell(r.pc_d,pcDst)}${xmlCell(r.npt_d,rowSt||'')}${xmlCell(fabD,'cFab')}${xmlCell(r.red_d||'—',r.red_d?'cRed':'')}
+      ${xmlCell(r.ate,rowSt||'')}${xmlCell(r.con_a,rowSt||'')}${xmlCell(r.pc_a,pcAst)}${xmlCell(r.npt_a,rowSt||'')}${xmlCell(fabA,'cFabA')}${xmlCell(r.red_a||'—',r.red_a?'cRed':'')}
+      ${xmlCell(r.status,stID)}${xmlCell(r.alertas||'','errTxt')}
+    </Row>`;
+  });
+
+  const s1ColW = [120,140,50,120,80,100,80,90,90, 120,80,100,80,90,90, 60,200];
+  const sheet1Xml = xmlSheet('Análise', s1rows, s1ColW);
+
+  // ── Sheet 2: Resumo ──────────────────────────────────────────────
+  const {pc: pcC, red: redC} = counts();
+  const pcIt  = Object.entries(pcC).sort((a,b)=>b[1]-a[1]);
+  const redIt = Object.entries(redC).sort((a,b)=>b[1]-a[1]);
+  const allPCs = Object.values(fabricantes).flatMap(f=>f.pc||[]);
+
+  let s2rows = '';
+  s2rows += `<Row ss:Height="28"><Cell ss:MergeAcross="6" ss:StyleID="hMain"><Data ss:Type="String">📦 RESUMO — Bill of Materials</Data></Cell></Row>`;
+  s2rows += xmlRow(xmlCell('Data','hMid'), xmlCell(now2), xmlCell(''),xmlCell(''),xmlCell(''),xmlCell(''),xmlCell(''));
+  s2rows += `<Row ss:Height="8"></Row>`;
+  // PC section header
+  s2rows += `<Row ss:Height="20"><Cell ss:MergeAcross="6" ss:StyleID="hMain"><Data ss:Type="String">🔩 Prensa Cabos — Detalhes e Quantidades</Data></Cell></Row>`;
+  s2rows += xmlRow(
+    xmlCell('Modelo','hMid'), xmlCell('Conexão','hMid'),
+    xmlCell('Range Mín (mm)','hMid'), xmlCell('Range Máx (mm)','hMid'),
+    xmlCell('Fabricante','hGrn'),
+    xmlCell('Qtd. Pontos','hMid'), xmlCell('Qtd. c/ +10%','hBlue')
+  );
+
+  pcIt.forEach(([m,q],i)=>{
+    const found = allPCs.find(p=>p.modelo===m);
+    const npt  = found?found.npt:'—';
+    const rmin = found?found.min:'—';
+    const rmax = found?found.max:'—';
+    const fab  = found?found.fab:'—';
+    const bg   = i%2===0?'cGrnPC':'cGrnPC';
+    s2rows += xmlRow(
+      xmlCell(m,'cGrnPC'), xmlCell(npt,''), xmlCell(rmin,'cNum','Number'), xmlCell(rmax,'cNum','Number'),
+      xmlCell(fab,'cFab'), xmlCell(q,'cNum','Number'), xmlCell(Math.ceil(q*1.1),'cBluPC','Number')
+    );
+  });
+
+  const totalPC = pcIt.reduce((s,[,q])=>s+q,0);
+  s2rows += `<Row ss:StyleID="totPC">
+    <Cell ss:MergeAcross="4"><Data ss:Type="String">TOTAL PRENSA CABOS</Data></Cell>
+    <Cell><Data ss:Type="Number">${totalPC}</Data></Cell>
+    <Cell><Data ss:Type="Number">${Math.ceil(totalPC*1.1)}</Data></Cell>
+  </Row>`;
+
+  if(redIt.length){
+    s2rows += `<Row ss:Height="8"></Row>`;
+    s2rows += `<Row ss:Height="20"><Cell ss:MergeAcross="2" ss:StyleID="hPurp"><Data ss:Type="String">🔧 Redutores NPT</Data></Cell></Row>`;
+    s2rows += xmlRow(xmlCell('Redutor','hPurp'), xmlCell('Qtd. Pontos','hPurp'), xmlCell('Qtd. c/ +10%','hPurp'));
+    redIt.forEach(([m,q],i)=>{
+      s2rows += xmlRow(xmlCell(m,'cRedBOM'), xmlCell(q,'cNum','Number'), xmlCell(Math.ceil(q*1.1),'cYelBOM','Number'));
+    });
+    const totalRed = redIt.reduce((s,[,q])=>s+q,0);
+    s2rows += `<Row ss:StyleID="totRD">
+      <Cell><Data ss:Type="String">TOTAL</Data></Cell>
+      <Cell><Data ss:Type="Number">${totalRed}</Data></Cell>
+      <Cell><Data ss:Type="Number">${Math.ceil(totalRed*1.1)}</Data></Cell>
+    </Row>`;
+  }
+
+  const s2ColW = [140,110,90,90,110,90,100];
+  const sheet2Xml = xmlSheet('Resumo', s2rows, s2ColW);
+
+  const fullXml = xmlHeader + "\n" + sheet1Xml + "\n" + sheet2Xml + "\n</Workbook>";
+  downloadAsDataURI(fullXml, 'analise_prensa_cabo.xls', 'application/vnd.ms-excel');
+}
+
+function getExcelStyles(){
+  // Extracted from styledXlsContent so both sheets share same CSS
+  return `<style>
+    body { font-family: Calibri, Arial, sans-serif; font-size: 10pt; }
+    table { border-collapse: collapse; }
+    td, th { border: 1px solid #BFC5D0; padding: 4px 8px; white-space: nowrap; vertical-align: middle; }
+    .hdr-main   { background:#1F3864; color:#FFFFFF; font-weight:bold; font-size:11pt; text-align:center; }
+    .hdr-group  { background:#2E5FA3; color:#FFFFFF; font-weight:bold; text-align:center; font-size:9pt; }
+    .hdr-col    { background:#355E9E; color:#FFFFFF; font-weight:bold; font-size:9pt; }
+    .hdr-desde  { background:#1F4E79; color:#FFFFFF; font-weight:bold; font-size:9pt; }
+    .hdr-ate    { background:#3E2069; color:#FFFFFF; font-weight:bold; font-size:9pt; }
+    .hdr-status { background:#1F3864; color:#FFFFFF; font-weight:bold; font-size:9pt; }
+    .col-tag    { font-weight:bold; color:#1F3864; }
+    .col-diam   { text-align:center; font-weight:bold; color:#1F4E79; background:#EBF3FB; }
+    .col-pc     { color:#1E4620; font-weight:bold; background:#E2EFDA; }
+    .col-pc-na  { color:#C00000; font-weight:bold; }
+    .col-red    { color:#7F4500; background:#FFF2CC; }
+    .col-con    { color:#404040; }
+    .row-ok     { background:#FFFFFF; } .row-ok-alt { background:#F7FBF7; }
+    .row-al     { background:#FFFCE8; } .row-al-alt { background:#FFF8D6; }
+    .row-er     { background:#FFF0EE; } .row-er-alt { background:#FFE8E5; }
+    .st-ok      { background:#E2EFDA; color:#1E4620; font-weight:bold; text-align:center; }
+    .st-al      { background:#FFF2CC; color:#7F4500; font-weight:bold; text-align:center; }
+    .st-er      { background:#FCE4D6; color:#C00000; font-weight:bold; text-align:center; }
+    .alert-txt  { color:#C00000; font-size:8pt; }
+    .bom-title  { background:#1F3864; color:#FFFFFF; font-weight:bold; font-size:11pt; text-align:center; }
+    .bom-hdr    { background:#2E5FA3; color:#FFFFFF; font-weight:bold; text-align:center; }
+    .bom-pc     { color:#1E4620; font-weight:bold; background:#E2EFDA; }
+    .bom-pc10   { color:#1F4E79; font-weight:bold; background:#BDD7EE; text-align:center; }
+    .bom-red    { color:#7F4500; background:#FFF2CC; }
+    .bom-red10  { color:#7F3500; font-weight:bold; background:#FFE599; text-align:center; }
+    .num        { text-align:center; }
+    .summary-ok { background:#E2EFDA; color:#1E4620; font-weight:bold; }
+    .summary-al { background:#FFF2CC; color:#7F4500; font-weight:bold; }
+    .summary-er { background:#FCE4D6; color:#C00000; font-weight:bold; }
+    .summary-tot{ background:#BDD7EE; color:#1F3864; font-weight:bold; }
+  </style>`;
+}
+// dummy — kept so styledXlsContent refs don't break
+function styledXlsContent(body){ return `<html><head><meta charset="UTF-8">${getExcelStyles()}</head><body>${body}</body></html>`; }
+
+function _exportAnalise_end(){
+}
+
+function exportBOM(){
+  const {pc, red} = counts();
+  const now = new Date().toLocaleDateString('pt-BR');
+  const pcItems  = Object.entries(pc).sort((a,b)=>b[1]-a[1]);
+  const redItems = Object.entries(red).sort((a,b)=>b[1]-a[1]);
+  const total_pc  = pcItems.reduce((s,[,q])=>s+q, 0);
+  const total_red = redItems.reduce((s,[,q])=>s+q, 0);
+
+  let html = `
+  <!-- TITLE -->
+  <table style="margin-bottom:20px;width:100%">
+    <tr><td colspan="6" class="bom-title" style="font-size:14pt;padding:10px">
+      📦 BILL OF MATERIALS — Prensa Cabos & Redutores
+    </td></tr>
+    <tr>
+      <td class="hdr-group" style="background:#2C3E6B">Projeto</td>
+      <td colspan="2" style="font-weight:bold;padding:5px 10px">—</td>
+      <td class="hdr-group" style="background:#2C3E6B">Data</td>
+      <td colspan="2" style="padding:5px 10px">${now}</td>
+    </tr>
+    <tr><td colspan="6" style="padding:4px;font-size:9pt;color:#666">
+      * Qtd. com folga inclui margem de +10% para perdas e reposição
+    </td></tr>
+  </table>
+
+  <!-- PRENSA CABOS -->
+  <table style="margin-bottom:20px;min-width:400px">
+    <tr><td colspan="3" class="bom-title" style="font-size:12pt;padding:8px">🔩 Prensa Cabos</td></tr>
+    <tr>
+      <th class="bom-hdr" style="width:220px">Modelo</th>
+      <th class="bom-hdr" style="width:100px">Qtd. Pontos</th>
+      <th class="bom-hdr" style="width:120px">Qtd. c/ Folga +10%</th>
+    </tr>`;
+
+  pcItems.forEach(([m,q],i)=>{
+    const bg = i%2===0 ? '#E2EFDA' : '#F0F7ED';
+    html += `<tr>
+      <td class="bom-pc" style="background:${bg}">${esc(m)}</td>
+      <td class="num" style="background:${bg}">${q}</td>
+      <td class="bom-pc10" style="background:${i%2===0?'#BDD7EE':'#D0E8F5'}">${Math.ceil(q*1.1)}</td>
+    </tr>`;
+  });
+
+  html += `
+    <tr style="border-top:2px solid #1F3864">
+      <td style="font-weight:bold;background:#1F3864;color:white">TOTAL</td>
+      <td class="num" style="font-weight:bold;background:#1F3864;color:white">${total_pc}</td>
+      <td class="num" style="font-weight:bold;background:#1F3864;color:white">${Math.ceil(total_pc*1.1)}</td>
+    </tr>
+  </table>`;
+
+  if(redItems.length > 0){
+    html += `
+    <!-- REDUTORES -->
+    <table style="min-width:400px">
+      <tr><td colspan="3" class="bom-title" style="font-size:12pt;padding:8px;background:#5C3293">🔧 Redutores NPT</td></tr>
+      <tr>
+        <th class="bom-hdr" style="background:#3E2069;width:220px">Redutor</th>
+        <th class="bom-hdr" style="background:#3E2069;width:100px">Qtd. Pontos</th>
+        <th class="bom-hdr" style="background:#3E2069;width:120px">Qtd. c/ Folga +10%</th>
+      </tr>`;
+
+    redItems.forEach(([m,q],i)=>{
+      const bg = i%2===0 ? '#FFF2CC' : '#FFF8E0';
+      html += `<tr>
+        <td class="bom-red" style="background:${bg}">${esc(m)}</td>
+        <td class="num" style="background:${bg}">${q}</td>
+        <td class="bom-red10" style="background:${i%2===0?'#FFE599':'#FFEDB5'}">${Math.ceil(q*1.1)}</td>
+      </tr>`;
+    });
+
+    html += `
+      <tr style="border-top:2px solid #3E2069">
+        <td style="font-weight:bold;background:#3E2069;color:white">TOTAL</td>
+        <td class="num" style="font-weight:bold;background:#3E2069;color:white">${total_red}</td>
+        <td class="num" style="font-weight:bold;background:#3E2069;color:white">${Math.ceil(total_red*1.1)}</td>
+      </tr>
+    </table>`;
+  } else {
+    html += `<table><tr><td style="padding:12px;color:#1E4620;background:#E2EFDA;font-weight:bold">
+      ✅ Nenhum redutor necessário para este projeto
+    </td></tr></table>`;
+  }
+
+  downloadBlob(styledXlsContent(html), 'BOM_prensa_cabo.xls');
+}
+
+// ════════════════════════════════════════════════
+// MULTI-FABRICANTE + PERSISTÊNCIA (localStorage)
+// ════════════════════════════════════════════════
+
+// STORAGE KEY
+const STORAGE_KEY = 'prensa_cabo_banco_v1';
+
+// FABRICANTES: { [fabName]: { pc: [...], obs: '' } }
+// B.fm (formações) é global e compartilhado entre fabricantes
+
+let fabricantes = {}; // { "GEVELUX": { pc: [...] }, "Peppers": { pc: [...] } }
+let activeFab   = '__ALL__'; // '__ALL__' ou nome do fabricante
+
+// ── LOAD / SAVE ──────────────────────────────
+let _storageAvailable = null;
+function checkStorageAvailable(){
+  if(_storageAvailable !== null) return _storageAvailable;
+  try { localStorage.setItem('__test__','1'); localStorage.removeItem('__test__'); _storageAvailable=true; }
+  catch(e){ _storageAvailable=false; }
+  return _storageAvailable;
+}
+
+function saveToStorage(){
+  if(!checkStorageAvailable()){
+    // Storage blocked (e.g. iframe) — data lives in memory only
+    const ind = document.getElementById('storage-indicator');
+    if(ind){
+      ind.style.display='flex';
+      ind.innerHTML='<span style="width:6px;height:6px;border-radius:50%;background:var(--yellow);display:inline-block"></span> Apenas em memória (sem persistência neste contexto)';
+      ind.style.color='var(--yellow)';
+    }
+    return;
+  }
+  try {
+    const data = { fabricantes, fm: B.fm, red_extra: B.red_extra||[] };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    const ind = document.getElementById('storage-indicator');
+    if(ind){
+      ind.style.display='flex';
+      ind.style.color='var(--green)';
+      ind.innerHTML='<span class="storage-dot"></span> Salvo automaticamente';
+      clearTimeout(ind._t);
+      ind._t=setTimeout(()=>ind.style.display='none', 3000);
+    }
+  } catch(e){ console.warn('localStorage error:', e); }
+}
+
+function loadFromStorage(){
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(!raw) return false;
+    const data = JSON.parse(raw);
+    if(data.fabricantes) fabricantes = data.fabricantes;
+    if(data.fm) B.fm = data.fm;
+    if(data.red_extra) B.red_extra = data.red_extra;
+    return true;
+  } catch(e){ return false; }
+}
+
+// ── GET ACTIVE PC LIST (filtered by activeFab) ──
+function getActivePCs(){
+  if(activeFab === '__ALL__'){
+    const all = [];
+    const seen = new Set();
+    Object.values(fabricantes).forEach(fab=>{
+      (fab.pc||[]).forEach(p=>{ if(!seen.has(p.modelo)){ seen.add(p.modelo); all.push(p); } });
+    });
+    return all;
+  }
+  return (fabricantes[activeFab]||{}).pc || [];
+}
+
+// Build a flat list of {fab, idx, data} for the active view
+function buildPCRows(){
+  if(activeFab === '__ALL__'){
+    const rows = [];
+    Object.entries(fabricantes).forEach(([fabName, fab])=>{
+      (fab.pc||[]).forEach((pc, idx)=>{ rows.push({fab: fabName, idx, data: pc}); });
+    });
+    return rows;
+  }
+  return ((fabricantes[activeFab]||{}).pc||[]).map((pc, idx)=>({fab: activeFab, idx, data: pc}));
+}
+
+function delPC(fabName, idx){
+  if(fabricantes[fabName] && fabricantes[fabName].pc){
+    fabricantes[fabName].pc.splice(idx, 1);
+  }
+  renderBanco();
+  updateStats();
+  saveToStorage();
+}
+
+function setPCField(fabName, idx, field, val){
+  if(fabricantes[fabName] && fabricantes[fabName].pc && fabricantes[fabName].pc[idx]){
+    fabricantes[fabName].pc[idx][field] = val;
+    saveToStorage();
+  }
+}
+
+
+
+// ── FAB SELECTOR ──────────────────────────────
+function selectFab(name){
+  activeFab = name;
+  updateFabUI();
+  renderBanco();
+  updateStats();
+}
+
+function updateFabUI(){
+  document.querySelectorAll('.fab-item').forEach(el=>{
+    el.classList.toggle('active', el.dataset.fab === activeFab);
+  });
+  const allEl = document.getElementById('fab-all');
+  if(allEl) allEl.classList.toggle('active', activeFab === '__ALL__');
+  const delBtn = document.getElementById('btn-del-fab');
+  if(delBtn) delBtn.disabled = (activeFab === '__ALL__' || !fabricantes[activeFab]);
+  // Hide any pending confirm box
+  const conf = document.getElementById('fab-confirm-box');
+  if(conf) conf.style.display = 'none';
+}
+
+function renderFabList(){
+  const list = document.getElementById('fab-list');
+  const fabs = Object.keys(fabricantes);
+
+  if(!fabs.length){
+    list.innerHTML = '<div class="fab-empty">Nenhum catálogo carregado.<br>Vá ao Step 2 → Catálogo do Fornecedor.</div>';
+    const delBtn = document.getElementById('btn-del-fab');
+    if(delBtn) delBtn.disabled = true;
+    return;
+  }
+
+  list.innerHTML = fabs.map(name=>{
+    const count = (fabricantes[name].pc||[]).length;
+    const isAct = activeFab === name;
+    return `<div class="fab-item${isAct?' active':''}" data-fab="${esc(name)}">
+      <div class="fab-check"></div>
+      <div class="fab-info">
+        <div class="fab-name" title="${esc(name)}">${esc(name)}</div>
+        <div class="fab-count">${count} prensa cabo(s)</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  // Attach click listeners using dataset (safe — no inline eval of name)
+  list.querySelectorAll('.fab-item').forEach(el=>{
+    el.addEventListener('click', ()=>selectFab(el.dataset.fab));
+  });
+
+  updateFabUI();
+}
+
+function deleteSelectedFab(){
+  if(activeFab === '__ALL__' || !fabricantes[activeFab]) return;
+
+  // Show inline confirm box instead of confirm() — confirm() is blocked in iframes
+  let conf = document.getElementById('fab-confirm-box');
+  if(!conf){
+    conf = document.createElement('div');
+    conf.id = 'fab-confirm-box';
+    conf.style.cssText = 'margin-top:8px;padding:10px 12px;background:var(--red-dim);border:1px solid rgba(247,95,95,.4);border-radius:var(--r);font-size:12px;color:var(--red);';
+    document.getElementById('btn-del-fab').after(conf);
+  }
+  const name = activeFab;
+  conf.style.display = '';
+  conf.innerHTML = `<div style="margin-bottom:8px;font-weight:600">Apagar <span style="text-decoration:underline">${esc(name)}</span> e todos os seus ${(fabricantes[name].pc||[]).length} prensa cabo(s)?</div>
+    <div style="display:flex;gap:8px">
+      <button id="fab-confirm-yes" style="flex:1;padding:6px;background:var(--red);border:none;border-radius:5px;color:#fff;font-weight:700;cursor:pointer;font-size:12px">Sim, apagar</button>
+      <button id="fab-confirm-no"  style="flex:1;padding:6px;background:var(--surface3);border:1px solid var(--border2);border-radius:5px;color:var(--text2);cursor:pointer;font-size:12px">Cancelar</button>
+    </div>`;
+
+  document.getElementById('fab-confirm-yes').onclick = ()=>{
+    delete fabricantes[name];
+    activeFab = '__ALL__';
+    conf.style.display = 'none';
+    renderFabList();
+    renderBanco();
+    updateStats();
+    saveToStorage();
+  };
+  document.getElementById('fab-confirm-no').onclick = ()=>{
+    conf.style.display = 'none';
+  };
+}
+
+// ── OVERRIDE mergeIntoBanco to use fabricantes structure ──
+function mergeIntoBanco(fab, pcs, reds){
+  if(!fabricantes[fab]) fabricantes[fab] = { pc: [] };
+  const existing = new Map(fabricantes[fab].pc.map(p=>[p.modelo.toUpperCase(), p]));
+  pcs.forEach(p=>{
+    const npt = normNPT(p.conexao||p.npt||'');
+    if(!npt) return;
+    existing.set(p.modelo.toUpperCase(), {modelo:p.modelo, npt, min:+p.min_mm, max:+p.max_mm, fab, obs:p.obs||''});
+  });
+  fabricantes[fab].pc = Array.from(existing.values());
+
+  if(!B.red_extra) B.red_extra = [];
+  reds.forEach(r=>{
+    const de=normNPT(r.de), para=normNPT(r.para);
+    if(de&&para&&!B.red_extra.find(x=>x.de===de&&x.para===para)) B.red_extra.push({de,para,fab});
+  });
+
+  // Auto-select the newly added fabricante
+  activeFab = fab;
+  renderFabList();
+  renderBanco();
+  updateStats();
+  saveToStorage();
+}
+
+// ── OVERRIDE updateStats to use fabricantes ──
+function updateStats(){
+  const pcs = getActivePCs();
+  const totalAllPC = Object.values(fabricantes).reduce((s,f)=>s+(f.pc||[]).length, 0);
+
+  document.getElementById('stat-fm').textContent  = B.fm.length;
+  const pcTotalEl = document.getElementById('stat-pc-total');
+  if(pcTotalEl) pcTotalEl.textContent = totalAllPC + ' PC';
+
+  // sidebar pills
+  document.getElementById('pill-pc').textContent = pcs.length + (activeFab==='__ALL__' ? ' PC (todos)' : ' PC');
+  document.getElementById('pill-fm').textContent = B.fm.length + ' Formações';
+
+  // badge in step 2 tables
+  const bp = document.getElementById('badge-pc');
+  if(bp) bp.textContent = pcs.length;
+  const bf = document.getElementById('badge-fm');
+  if(bf) bf.textContent = B.fm.length;
+
+  const sorted = NPTS.map(n=>({n,r:NR[n]})).sort((a,b)=>b.r-a.r);
+  let red = 0;
+  for(let i=0;i<sorted.length;i++) for(let j=i+1;j<sorted.length;j++) red++;
+  red += (B.red_extra||[]).length;
+  const br = document.getElementById('badge-red');
+  if(br) br.textContent = red;
+}
+
+// ── OVERRIDE addPcRow for multi-fab ──
+function addPcRow(){
+  const target = activeFab === '__ALL__' ? null : activeFab;
+  if(!target){
+    alert('Selecione um fabricante específico na sidebar para adicionar um prensa cabo, ou crie um novo fabricante via catálogo.');
+    return;
+  }
+  if(!fabricantes[target]) fabricantes[target] = {pc:[]};
+  fabricantes[target].pc.push({modelo:'NOVO',npt:'1/2" NPT',min:4,max:12,fab:target,obs:''});
+  renderBanco();
+  saveToStorage();
+}
+
+// ── OVERRIDE renderBanco to save on every change ──
+const _origRenderBanco = renderBanco;
+// We'll redefine renderBanco below completely, just note we need auto-save in inputs
+
+// ── OVERRIDE exportBanco / importBancoFn ──
+function exportBanco(){
+  const data = { fabricantes, fm: B.fm, red_extra: B.red_extra||[] };
+  downloadAsDataURI(JSON.stringify(data,null,2), 'banco_prensa_cabo.json', 'application/json');
+}
+
+function importBancoFn(inp){
+  const f = inp.files[0]; if(!f) return;
+  const r = new FileReader();
+  r.onload = e => {
+    try {
+      const data = JSON.parse(e.target.result);
+      // Support both old format { pc, fm } and new { fabricantes, fm }
+      if(data.fabricantes){
+        fabricantes   = data.fabricantes;
+        B.fm          = data.fm || B.fm;
+        B.red_extra   = data.red_extra || [];
+      } else if(data.pc){
+        // Old format: create a generic fabricante
+        const fab = 'Importado';
+        fabricantes[fab] = { pc: data.pc };
+        B.fm = data.fm || B.fm;
+        B.red_extra = data.red_extra || [];
+      }
+      activeFab = '__ALL__';
+      renderFabList();
+      renderBanco();
+      updateStats();
+      saveToStorage();
+    } catch { alert('JSON inválido.'); }
+  };
+  r.readAsText(f); inp.value='';
+}
+
+// ═══════════════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════════════
+// Migrate old B.pc data into fabricantes if needed
+(function init(){
+  const loaded = loadFromStorage();
+  if(!loaded){
+    // First run: convert default B.pc into "Peppers" fabricante
+    const defaultPCs = [
+      // 1/2" NPT — cobertura completa de diâmetros
+      {modelo:"EXPA 2S017",npt:'1/2" NPT',min:4,   max:12, fab:"Peppers",obs:"UTP, cabos finos"},
+      {modelo:"EXPA 2M017",npt:'1/2" NPT',min:10.5, max:16, fab:"Peppers",obs:""},
+      {modelo:"EXPA 2L017",npt:'1/2" NPT',min:13,   max:21, fab:"Peppers",obs:""},
+      {modelo:"EXPA 3M017",npt:'1/2" NPT',min:17,   max:24, fab:"Peppers",obs:""},
+      // 3/4" NPT — cobertura completa de diâmetros
+      {modelo:"EXPA 2S027",npt:'3/4" NPT',min:4,   max:12, fab:"Peppers",obs:""},
+      {modelo:"EXPA 2M027",npt:'3/4" NPT',min:10.5, max:16, fab:"Peppers",obs:""},
+      {modelo:"EXPA 2L027",npt:'3/4" NPT',min:13,   max:21, fab:"Peppers",obs:""},
+      {modelo:"EXPA 3M027",npt:'3/4" NPT',min:17,   max:24, fab:"Peppers",obs:""},
+      {modelo:"EXPA 3L027",npt:'3/4" NPT',min:21,   max:30, fab:"Peppers",obs:""},
+      // 1" NPT
+      {modelo:"EXPA 2L037",npt:'1" NPT',  min:13,   max:21, fab:"Peppers",obs:""},
+      {modelo:"EXPA 3M037",npt:'1" NPT',  min:17,   max:24, fab:"Peppers",obs:"Multicondutores"},
+      {modelo:"EXPA 3L037",npt:'1" NPT',  min:21,   max:30, fab:"Peppers",obs:""},
+      {modelo:"EXPA 4M037",npt:'1" NPT',  min:23,   max:32, fab:"Peppers",obs:""},
+      // 1-1/4" NPT
+      {modelo:"EXPA 4M031",npt:'1-1/4" NPT',min:23, max:32, fab:"Peppers",obs:""},
+      {modelo:"EXPA 5M031",npt:'1-1/4" NPT',min:26, max:37, fab:"Peppers",obs:""},
+      // 1-1/2" NPT
+      {modelo:"EXPA 3L057",npt:'1-1/2" NPT',min:21, max:30, fab:"Peppers",obs:""},
+      {modelo:"EXPA 4M057",npt:'1-1/2" NPT',min:25, max:38, fab:"Peppers",obs:"Cabos grandes"},
+      {modelo:"EXPA 5M057",npt:'1-1/2" NPT',min:26, max:37, fab:"Peppers",obs:""},
+      // 2" NPT
+      {modelo:"EXPA 4M087",npt:'2" NPT',  min:25,   max:38, fab:"Peppers",obs:""},
+      {modelo:"EXPA 6S087",npt:'2" NPT',  min:35,   max:47, fab:"Peppers",obs:"Cabos muito grandes"},
+    ];
+    fabricantes['Peppers'] = { pc: defaultPCs };
+  }
+  renderFabList();
+  renderBanco();
+  updateStats();
+})();
+</script>
+</body>
+</html>
