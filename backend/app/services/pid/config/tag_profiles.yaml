@@ -13,6 +13,10 @@ profiles:
       - "122-LSHH-0105"
     # Equipment tag pattern for this project
     equipment_pattern: '(?P<equip_id>\d{3,6})-(?P<equip_type>[A-Z]{1,4})\d{2}[A-Z]{0,2}'
+    # Equipment detection regex patterns (searched in extracted words)
+    equipment_patterns:
+      - '\b(\d{3}-[A-Z]{2}\d{2}[A-Z]{0,2})\b'
+      - '\b([A-Z]{1,3}-\d{3}[A-Z]?)\b'
 
   technip:
     name: "Technip / Internacional"
@@ -27,16 +31,46 @@ profiles:
       - "FICW503AC-1"
       - "XVW503AC-FW1"
     equipment_pattern: '(?P<equip_id>W\d{3}[A-Z]*\d*)'
+    # Equipment detection regex patterns (searched in extracted words)
+    equipment_patterns:
+      - '\b(W\d{3}[A-Z]*\d*(?:-\d+)?)\b'
 
 # Default profile to use
 default_profile: "promon"
 
 # Word merge settings for reconstructing fragmented tags
+# All pixel values are BASE values calibrated for A3 landscape (841x595 pts).
+# They are automatically scaled for larger/smaller documents via DocumentScale.
 word_merge:
-  max_horizontal_gap: 5.0  # pixels - merge words closer than this
-  max_vertical_gap: 3.0    # pixels - words on same line tolerance
+  max_horizontal_gap: 5.0  # base pixels - scaled by DocumentScale.px()
+  max_vertical_gap: 3.0    # base pixels - scaled by DocumentScale.px()
 
-# Spatial engine settings
+# Spatial engine settings (base values at A3 reference scale)
 spatial:
-  tag_equipment_max_distance: 200.0  # max distance to associate tag with equipment
-  zone_divisions: 4  # divide page into NxN zones
+  tag_equipment_max_distance: 200.0  # base pixels - instrument to equipment max distance
+  zone_divisions: 4                  # divide page into NxN zones
+  equipment_search_radius: 100.0     # base pixels - search radius for equipment descriptions
+  hierarchy_max_distance: 150.0      # base pixels - max distance for parent-child linking
+
+# Symbol detector settings (base values at A3 reference scale)
+# These control DCS square and Control Room h-line detection.
+symbols:
+  min_size: 25.0    # base pixels: DCS square minimum dimension (width and height)
+  max_size: 50.0    # base pixels: DCS square maximum dimension (width and height)
+  hline_min: 28.0   # base pixels: balloon crossing h-line minimum length
+  hline_max: 45.0   # base pixels: balloon crossing h-line maximum length
+
+# ISA types that represent SIS/SIL elements drawn in diamond shapes (not regular process instruments).
+# Instruments with these types are penalized to confidence=0.10 and excluded from PDF annotations.
+# Add project-specific types here if needed (e.g. "FE" for ISA-84 Final Element).
+sil_isa_types: ["IE"]
+
+# Balloon detector settings
+# Vertical stacking uses font-relative multipliers (× text height) — scale-independent.
+# Horizontal stacking still uses base pixels scaled by DocumentScale.
+balloon:
+  v_alignment_multiplier: 1.5   # horizontal alignment tolerance = 1.5× text height
+  v_range_multiplier: 6.0       # vertical search window = 6× text height below ISA type
+  chain_distance_multiplier: 3.0 # max gap between consecutive balloon parts = 3× text height
+  h_tolerance_x: 55.0   # base pixels: horizontal tolerance for horizontal balloon stacking
+  h_tolerance_y: 18.0   # base pixels: vertical tolerance for horizontal balloon stacking

@@ -4,6 +4,7 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, List
 
+import fitz  # PyMuPDF
 import pdfplumber
 
 from app.services.pid.core.ingestion import discover_pdfs, load_pdf
@@ -26,7 +27,6 @@ from app.services.pid.models.instrument import ExtractionResult
 
 logger = logging.getLogger(__name__)
 
-# Path to the bundled config
 CONFIG_PATH = str(Path(__file__).parent / "pid" / "config" / "tag_profiles.yaml")
 
 
@@ -49,7 +49,7 @@ class PidExtractService:
         if result.instruments:
             reconcile_cross_sheets(result)
             result.loops = build_loops(result.instruments)
-            build_hierarchy(result.instruments)
+            build_hierarchy(result.instruments, page_scales=result.page_scales)
             validate(result)
 
             if use_llm:
@@ -91,7 +91,6 @@ class PidExtractService:
     ) -> str:
         """Extract instruments and save annotated vector PDF.
 
-        Uses PyMuPDF vector annotations to preserve original PDF quality.
         Color coding: yellow=field, red=DCS, blue=furnished, orange=low confidence.
         """
         result = self.extract(pdf_path, profile_name, max_distance, use_llm=use_llm)
@@ -111,14 +110,20 @@ class PidExtractService:
             return
 
         merge_settings = profile.get("word_merge", {})
-        merge_gap_x = merge_settings.get("max_horizontal_gap", 5.0)
-        merge_gap_y = merge_settings.get("max_vertical_gap", 3.0)
 
         for page_info in doc.pages:
             if not page_info.has_text:
                 continue
 
             page_idx = page_info.index
+
+            # Scale context derived from actual page dimensions
+            scale = page_info.document_scale
+            result.page_scales[(str(pdf_path), page_idx)] = scale
+
+            # Scale-adjusted merge tolerances
+            merge_gap_x = scale.px(merge_settings.get("max_horizontal_gap", 5.0))
+            merge_gap_y = scale.px(merge_settings.get("max_vertical_gap", 3.0))
 
             words = extract_words(
                 pdf_path,
@@ -130,14 +135,16 @@ class PidExtractService:
             if not words:
                 continue
 
-            metadata = parse_title_block(words, page_info.width, page_info.height, page_idx)
+            metadata = parse_title_block(
+                words, page_info.width, page_info.height, page_idx, scale=scale
+            )
             metadata.sheet_number = str(page_idx + 1)
             result.metadata.append(metadata)
 
-            notes = parse_notes(words, page_info.width, page_info.height)
+            notes = parse_notes(words, page_info.width, page_info.height, scale=scale)
             result.notes.extend(notes)
 
-            instruments, line_numbers = detect_tags(words, profile)
+            instruments, line_numbers = detect_tags(words, profile, scale=scale)
             result.line_numbers.extend(line_numbers)
 
             for inst in instruments:
@@ -149,13 +156,52 @@ class PidExtractService:
                         if not note.affected_types or inst.isa_type in note.affected_types:
                             inst.notes.append(f"Note {note.number}: {note.text[:100]}")
 
-            equipment = detect_equipment(words, instruments)
-            associate_instruments_to_equipment(instruments, equipment, max_distance)
+            equipment = detect_equipment(words, instruments, scale=scale, profile=profile)
 
-            # Classify symbology (Physical vs DCS)
+            spatial_cfg = profile.get("spatial", {})
+            effective_max_distance = scale.px(
+                spatial_cfg.get("tag_equipment_max_distance", max_distance)
+            )
+            associate_instruments_to_equipment(instruments, equipment, effective_max_distance)
+
+            # Extract rectangular vector paths via fitz. CAD tools often draw DCS squares
+            # as stroked 're'/'qu' path commands that pdfplumber misses entirely.
+            fitz_rects: list = []
+            try:
+                fdoc = fitz.open(pdf_path)
+                fpage = fdoc[page_idx]
+                for drawing in fpage.get_drawings():
+                    items = drawing.get("items", [])
+                    if not items:
+                        continue
+                    if not any(item[0] in ("re", "qu") for item in items):
+                        continue
+                    r = drawing["rect"]
+                    w = r.x1 - r.x0
+                    h = r.y1 - r.y0
+                    if w > 0.5 and h > 0.5 and 0.6 < w / h < 1.7:
+                        fitz_rects.append({"x0": r.x0, "top": r.y0,
+                                           "x1": r.x1, "bottom": r.y1})
+                fdoc.close()
+            except Exception as fe:
+                logger.debug(f"fitz rect extraction skipped: {fe}")
+
             with pdfplumber.open(pdf_path) as pdf_sym:
                 sym_page = pdf_sym.pages[page_idx]
-                classify_instruments(instruments, sym_page.edges or [])
+                page_rects = (sym_page.rects or []) + fitz_rects
+                page_lines = sym_page.lines or []
+
+                # Refine scale from actual DCS symbol geometry on this page
+                scale.auto_calibrate(page_rects)
+
+                classify_instruments(
+                    instruments,
+                    sym_page.edges or [],
+                    page_rects=page_rects,
+                    page_lines=page_lines,
+                    scale=scale,
+                    profile=profile,
+                )
 
             result.instruments.extend(instruments)
             result.equipment.extend(equipment)

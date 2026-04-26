@@ -12,7 +12,6 @@ from app.services.pid.models.instrument import ExtractionResult
 
 logger = logging.getLogger(__name__)
 
-# Style definitions
 HEADER_FONT = Font(name="Calibri", bold=True, size=11, color="FFFFFF")
 HEADER_FILL = PatternFill(start_color="2F5496", end_color="2F5496", fill_type="solid")
 HEADER_ALIGNMENT = Alignment(horizontal="center", vertical="center", wrap_text=True)
@@ -39,6 +38,13 @@ def export_to_excel(result: ExtractionResult, output_path: str) -> str:
     2. Loops - Loop summary
     3. Validation - Warnings and errors
     4. Drawing Info - Title block metadata
+
+    Args:
+        result: Extraction result to export.
+        output_path: Path for the output .xlsx file.
+
+    Returns:
+        Absolute path to the created file.
     """
     wb = Workbook()
 
@@ -121,11 +127,9 @@ def _create_instrument_sheet(wb: Workbook, result: ExtractionResult) -> None:
             cell.alignment = DATA_ALIGNMENT
             cell.border = THIN_BORDER
 
-            # Highlight low confidence
-            if col == 18 and inst.confidence < 0.5:
+            if col == 17 and inst.confidence < 0.5:
                 cell.fill = WARNING_FILL
 
-            # Color Physical vs DCS
             if col == 6:
                 if inst.is_physical:
                     cell.fill = PatternFill(start_color="E2EFDA", end_color="E2EFDA", fill_type="solid")

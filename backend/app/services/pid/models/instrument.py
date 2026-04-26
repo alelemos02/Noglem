@@ -216,6 +216,7 @@ ISA_TYPE_DESCRIPTIONS = {
     # Misc
     "PW": "Pump (non-ISA, project-specific)",
     "MW": "Motor (non-ISA, project-specific)",
+    "FC": "Flow Controller",
 }
 
 # --- DYNAMIC RULES FOR 'Z' (SAFETY/SYSTEM) MODIFIERS ---
@@ -368,3 +369,4 @@ class ExtractionResult:
     notes: list = field(default_factory=list)
     warnings: list = field(default_factory=list)
     errors: list = field(default_factory=list)
+    page_scales: dict = field(default_factory=dict)      # {(pdf_path, page_idx): DocumentScale}

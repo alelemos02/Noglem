@@ -16,8 +16,6 @@ def export_highlighted_pdf(
 ) -> str:
     """Generate a vector copy of the PDF with highlighted instruments and equipment.
 
-    This retains the original vector quality and adds vector rectangles.
-
     Args:
         input_pdf_path: Original PDF.
         output_pdf_path: Path to save marked PDF.
@@ -36,7 +34,6 @@ def export_highlighted_pdf(
         logger.error(f"Failed to open {input_pdf_path} for highlighting: {e}")
         return ""
 
-    # Group instruments by page
     instruments_by_page = {}
     for inst in result.instruments:
         if inst.position is None:
@@ -46,7 +43,6 @@ def export_highlighted_pdf(
             instruments_by_page[page_idx] = []
         instruments_by_page[page_idx].append(inst)
 
-    # Group equipment by page
     equipment_by_page = {}
     for eq in result.equipment:
         if eq.position is None:
@@ -56,11 +52,9 @@ def export_highlighted_pdf(
             equipment_by_page[page_idx] = []
         equipment_by_page[page_idx].append(eq)
 
-    # Draw annotations
     for page_idx in range(len(doc)):
         page = doc[page_idx]
 
-        # Equipments (Blue)
         for eq in equipment_by_page.get(page_idx, []):
             margin = 5
             rect = fitz.Rect(
@@ -72,15 +66,16 @@ def export_highlighted_pdf(
             if page.rotation != 0:
                 rect = rect * page.derotation_matrix
 
-            # Add subtle blue vector box
             annot = page.add_rect_annot(rect)
             annot.set_colors(stroke=(0.0, 0.0, 1.0), fill=None)
             annot.set_border(width=1.5, dashes=[3, 3])
             annot.update()
 
-        # Instruments (Yellow for Field, Red for DCS/Control Room, Orange for low confidence)
         for inst in instruments_by_page.get(page_idx, []):
-            margin = 3
+            if inst.confidence < 0.15:
+                continue
+            inst_h = max(inst.position.bottom - inst.position.top, 2.0)
+            margin = max(min(inst_h * 1.2, 12.0), 4.0)
             rect = fitz.Rect(
                 inst.position.x0 - margin,
                 inst.position.top - margin,
@@ -90,21 +85,16 @@ def export_highlighted_pdf(
             if page.rotation != 0:
                 rect = rect * page.derotation_matrix
 
-            # Determine colors based on symbology
             if getattr(inst, "furnished_by_package", False):
-                # Furnished by package (Blue)
                 stroke_color = (0.0, 0.0, 1.0)
                 fill_color = (0.6, 0.8, 1.0)
             elif inst.is_physical:
-                # Field physical (Yellow stroke, light yellow fill)
                 stroke_color = (1.0, 0.85, 0.0)
                 fill_color = (1.0, 1.0, 0.0)
             else:
-                # DCS / Room (Red stroke, light red fill)
                 stroke_color = (1.0, 0.0, 0.0)
                 fill_color = (1.0, 0.6, 0.6)
 
-            # Low confidence Override
             if inst.confidence < 0.5:
                 stroke_color = (1.0, 0.5, 0.0)
                 fill_color = (1.0, 0.8, 0.5)

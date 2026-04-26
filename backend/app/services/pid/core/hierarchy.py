@@ -1,7 +1,7 @@
 """Build parent-child hierarchy between instruments."""
 
 import logging
-from typing import Dict, List, Set
+from typing import Dict, List, Optional, Set
 
 from app.services.pid.models.instrument import Instrument
 
@@ -30,7 +30,10 @@ HIERARCHY_RULES = {
 MAX_HIERARCHY_DISTANCE = 150.0
 
 
-def build_hierarchy(instruments: List[Instrument]) -> None:
+def build_hierarchy(
+    instruments: List[Instrument],
+    page_scales: Optional[dict] = None,
+) -> None:
     """Establish parent-child relationships between instruments.
 
     Uses two strategies:
@@ -41,7 +44,18 @@ def build_hierarchy(instruments: List[Instrument]) -> None:
 
     Args:
         instruments: All detected instruments.
+        page_scales: Dict of {(pdf_path, page_idx): DocumentScale} from
+                     ExtractionResult.page_scales. Used to scale the maximum
+                     hierarchy distance for the actual document format.
     """
+    if page_scales:
+        scale_values = [s.scale_factor for s in page_scales.values()]
+        avg_scale = sum(scale_values) / len(scale_values)
+    else:
+        avg_scale = 1.0
+
+    effective_max_distance = MAX_HIERARCHY_DISTANCE * avg_scale
+
     # Index instruments by ISA type for quick lookup
     by_type: Dict[str, List[Instrument]] = {}
     for inst in instruments:
@@ -64,7 +78,7 @@ def build_hierarchy(instruments: List[Instrument]) -> None:
 
             for parent in parents:
                 for child in children:
-                    if _should_link(parent, child):
+                    if _should_link(parent, child, effective_max_distance):
                         child.parent_tag = parent.tag
                         if child.tag not in parent.children_tags:
                             parent.children_tags.append(child.tag)

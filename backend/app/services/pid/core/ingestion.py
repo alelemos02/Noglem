@@ -7,6 +7,8 @@ from typing import List
 
 import pdfplumber
 
+from app.services.pid.core.document_scale import DocumentScale
+
 logger = logging.getLogger(__name__)
 
 
@@ -19,6 +21,7 @@ class PageInfo:
     is_landscape: bool
     has_text: bool  # True if vectorial text found (no OCR needed)
     word_count: int
+    document_scale: object = None  # DocumentScale instance for this page
 
 
 @dataclass
@@ -67,6 +70,7 @@ def load_pdf(pdf_path: str) -> PDFDocument:
                 is_landscape=page.width > page.height,
                 has_text=has_text,
                 word_count=word_count,
+                document_scale=DocumentScale.from_page(float(page.width), float(page.height)),
             )
             pages.append(page_info)
             logger.debug(

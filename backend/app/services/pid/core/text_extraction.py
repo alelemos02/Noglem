@@ -40,12 +40,52 @@ def extract_words(
             page = pdf.pages[page_idx]
             raw_words = page.extract_words(
                 keep_blank_chars=False,
-                x_tolerance=2,
-                y_tolerance=2,
+                x_tolerance=2.0,
+                y_tolerance=2.0,
             )
 
-            page_words = []
+            # Surgical Merge Pass: Heal ONLY exploded single characters from CAD.
+            # Some CAD exports write each letter as a separate text object ('T','I' -> 'TI').
+            # We ONLY merge words where BOTH the previous and current are very short (<=2 chars)
+            # and they sit on the exact same line with a tiny gap. This prevents merging
+            # multi-character words like 'PDI', 'NOTA', or line tags.
+            raw_words.sort(key=lambda w: (round(float(w["top"]) / 3.0) * 3.0, float(w["x0"])))
+
+            healed_words = []
             for w in raw_words:
+                text = w.get("text", "").strip()
+                if not text:
+                    continue
+
+                if not healed_words:
+                    healed_words.append(dict(w))
+                    continue
+
+                prev = healed_words[-1]
+                prev_text = prev.get("text", "").strip()
+
+                # ONLY merge if CURRENT word is a single character (the exploded piece)
+                if len(text) <= 2:
+                    top1, bot1 = float(prev["top"]), float(prev["bottom"])
+                    top2, bot2 = float(w["top"]), float(w["bottom"])
+
+                    # Y overlap check (same baseline)
+                    overlap = min(bot1, bot2) - max(top1, top2)
+
+                    if overlap > 0:
+                        gap = float(w["x0"]) - float(prev["x1"])
+                        # Very tight gap only (max 3px) to avoid cross-column merges
+                        if -2.0 <= gap <= 3.0:
+                            prev["text"] = prev_text + text
+                            prev["x1"] = max(float(prev["x1"]), float(w["x1"]))
+                            prev["top"] = min(top1, top2)
+                            prev["bottom"] = max(bot1, bot2)
+                            continue
+
+                healed_words.append(dict(w))
+
+            page_words = []
+            for w in healed_words:
                 text = w.get("text", "").strip()
                 if not text:
                     continue
@@ -80,10 +120,25 @@ def _merge_adjacent_words(
     max_gap_x: float,
     max_gap_y: float,
 ) -> List[ExtractedWord]:
-    """Merge words that are horizontally adjacent (likely fragments of one tag)."""
+    """Merge words that are horizontally adjacent (likely fragments of one tag).
+
+    Words are merged only if:
+    - They are on the same line (vertical overlap within tolerance)
+    - Horizontal gap is less than max_gap_x
+    - The combined text looks like it could be a tag (contains alphanumeric + dashes)
+
+    Args:
+        words: Words to process.
+        max_gap_x: Maximum horizontal gap to merge.
+        max_gap_y: Maximum vertical difference for same line.
+
+    Returns:
+        List with adjacent words merged where appropriate.
+    """
     if not words:
         return []
 
+    # Sort by vertical position (top), then horizontal (x0)
     sorted_words = sorted(words, key=lambda w: (w.position.top, w.position.x0))
 
     result = []
@@ -96,19 +151,23 @@ def _merge_adjacent_words(
         merged_bottom = current.position.bottom
         was_merged = False
 
+        # Look ahead for adjacent words on same line
         j = i + 1
         while j < len(sorted_words):
             next_word = sorted_words[j]
 
+            # Check if on same line (vertical overlap)
             vertical_diff = abs(next_word.position.top - current.position.top)
             if vertical_diff > max_gap_y:
-                break
+                break  # Past this line, stop looking
 
+            # Check horizontal gap
             gap = next_word.position.x0 - merged_x1
             if gap < 0 or gap > max_gap_x:
                 j += 1
                 continue
 
+            # Merge
             merged_text += next_word.text
             merged_x1 = next_word.position.x1
             merged_bottom = max(merged_bottom, next_word.position.bottom)
@@ -145,7 +204,19 @@ def extract_words_by_zone(
     merge_gap_x: float = 5.0,
     merge_gap_y: float = 3.0,
 ) -> dict:
-    """Extract words organized by spatial zones (quadrants)."""
+    """Extract words organized by spatial zones (quadrants).
+
+    Divides the page into zones x zones grid and returns words per zone.
+    Useful for reducing false associations in spatial analysis.
+
+    Args:
+        pdf_path: Path to PDF file.
+        page_index: Page to process.
+        zones: Number of divisions per axis (4 = 4x4 = 16 zones).
+
+    Returns:
+        Dict mapping (row, col) zone tuple to list of ExtractedWord.
+    """
     words = extract_words(
         pdf_path,
         page_indices=[page_index],
@@ -156,6 +227,7 @@ def extract_words_by_zone(
     if not words:
         return {}
 
+    # Get page dimensions
     with pdfplumber.open(pdf_path) as pdf:
         page = pdf.pages[page_index]
         page_width = float(page.width)

@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 def validate_with_llm(
     result: ExtractionResult,
     api_key: Optional[str] = None,
-    model: str = "claude-sonnet-4-20250514",
+    model: str = "claude-sonnet-4-6",
 ) -> None:
     """Use Claude API to validate and disambiguate detected instruments.
 
@@ -22,6 +22,11 @@ def validate_with_llm(
     3. Validates ISA type assignments semantically
 
     Requires the ANTHROPIC_API_KEY environment variable or api_key parameter.
+
+    Args:
+        result: Extraction result to validate.
+        api_key: Optional API key (falls back to env var).
+        model: Claude model to use.
     """
     try:
         import anthropic
@@ -43,7 +48,6 @@ def validate_with_llm(
 
     client = anthropic.Anthropic(api_key=key)
 
-    # Collect instruments needing review
     to_review = [
         inst for inst in result.instruments
         if inst.confidence < 0.7
@@ -55,7 +59,6 @@ def validate_with_llm(
 
     logger.info(f"LLM validation: reviewing {len(to_review)} low-confidence tags")
 
-    # Process in batches of 20
     batch_size = 20
     for i in range(0, len(to_review), batch_size):
         batch = to_review[i:i + batch_size]
@@ -105,7 +108,6 @@ Only respond with the JSON array, no other text."""
 
         response_text = response.content[0].text.strip()
 
-        # Handle potential markdown code block wrapping
         if response_text.startswith("```"):
             lines = response_text.split("\n")
             response_text = "\n".join(lines[1:-1])
