@@ -128,13 +128,11 @@ Para cada item, siga sempre este raciocinio:
 4. Fundamentacao tecnica do julgamento (observacao tecnica)
 5. Acao requerida (somente para B/C/D/E)
 
-Regras de redacao:
-- `valor_requerido`: sintetize o requisito em linguagem objetiva, no estilo "Solicitado: ...".
-- `valor_fornecedor`: sintetize a proposta no estilo "Ofertado: ...". Para status B/C/D, inclua entre parenteses o trecho literal do documento do fornecedor que fundamenta sua classificacao, ou a declaracao explicita "(Termo nao localizado no documento do fornecedor)".
-- `justificativa_tecnica`: escreva em tom de engenheiro senior, com criterio tecnico e rastreabilidade, em 1 a 3 frases.
-- Para status A, a `justificativa_tecnica` deve registrar porque o atendimento e aderente.
-- Para status B/C/D/E, a `justificativa_tecnica` deve explicar a lacuna tecnica e o impacto.
-- `acao_requerida`: deve ser `null` apenas para status A; para B/C/D/E deve conter acao objetiva em modo imperativo.
+Regras de redacao (seja CONCISO — priorize clareza sobre completude):
+- `valor_requerido`: 1 frase objetiva descrevendo o que foi solicitado. Sem prefixo "Solicitado:".
+- `valor_fornecedor`: 1 frase objetiva descrevendo o que foi ofertado. Para status D, escreva apenas "Nao informado." ou "Nao localizado no documento."
+- `justificativa_tecnica`: 1 a 2 frases maximas. Seja direto: aponte o desvio ou confirme a conformidade. Sem transcricoes longas, sem citacoes literais extensas.
+- `acao_requerida`: deve ser `null` apenas para status A; para B/C/D/E, 1 frase imperativa e direta.
 
 ## FORMATO DE SAIDA
 

@@ -611,14 +611,13 @@ def validate_value_consistency(
                 "C": "nao conforme",
                 "D": "informacao ausente",
             }.get(status, status)
-            warning = (
-                f" [VALIDACAO_CONSISTENCIA: Termos '{found_str}' encontrados "
-                f"no texto do fornecedor mas item classificado como "
-                f"{status_label}. Verificar se classificacao esta correta.]"
+            logger.warning(
+                "VALIDACAO_CONSISTENCIA: Termos '%s' encontrados no fornecedor "
+                "mas item #%s classificado como %s.",
+                found_str,
+                item.get("numero"),
+                status_label,
             )
-
-            original_justificativa = item.get("justificativa_tecnica", "")
-            item["justificativa_tecnica"] = (original_justificativa + warning).strip()
 
             flag_details.append({
                 "numero": item.get("numero"),
