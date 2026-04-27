@@ -31,7 +31,7 @@ class Settings(BaseSettings):
 
     # Gemini API
     GEMINI_API_KEY: str = ""
-    GEMINI_MODEL: str = "gemini-2.0-flash"
+    GEMINI_MODEL: str = "gemini-2.5-flash"
     GEMINI_MAX_RETRIES: int = 4
     GEMINI_RETRY_BASE_SECONDS: float = 2.0
     GEMINI_RETRY_MAX_SECONDS: float = 20.0
