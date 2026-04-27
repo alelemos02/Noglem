@@ -90,7 +90,11 @@ def build_hierarchy(
     logger.info(f"Built {total_links} parent-child links")
 
 
-def _should_link(parent: Instrument, child: Instrument) -> bool:
+def _should_link(
+    parent: Instrument,
+    child: Instrument,
+    max_distance: float = MAX_HIERARCHY_DISTANCE,
+) -> bool:
     """Determine if a child should be linked to a parent.
 
     Criteria:
@@ -122,7 +126,7 @@ def _should_link(parent: Instrument, child: Instrument) -> bool:
     # Strategy 3: spatial proximity (fallback)
     if parent.position and child.position:
         dist = parent.position.distance_to(child.position)
-        if dist <= MAX_HIERARCHY_DISTANCE:
+        if dist <= max_distance:
             # Additional check: child ISA type should be a valid child of parent
             return True
 

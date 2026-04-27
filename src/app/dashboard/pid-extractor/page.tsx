@@ -111,8 +111,6 @@ function ClassificationBadge({ classification, isPhysical }: { classification: s
 
 export default function PidExtractorPage() {
   const [file, setFile] = useState<File | null>(null);
-  const [profile, setProfile] = useState<"promon" | "technip">("promon");
-  const [useLlm, setUseLlm] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
@@ -144,8 +142,8 @@ export default function PidExtractorPage() {
   const buildFormData = () => {
     const formData = new FormData();
     formData.append("file", file!);
-    formData.append("profile", profile);
-    formData.append("use_llm", useLlm ? "true" : "false");
+    formData.append("profile", "promon");
+    formData.append("use_llm", "false");
     return formData;
   };
 
@@ -283,33 +281,6 @@ export default function PidExtractorPage() {
             )}
           </div>
 
-          {/* Options row */}
-          <div className="flex flex-wrap items-center gap-4">
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-medium">Perfil de tags:</span>
-              <div className="flex gap-2">
-                <Button variant={profile === "promon" ? "default" : "outline"} size="sm" onClick={() => setProfile("promon")}>
-                  Promon / Nacional
-                </Button>
-                <Button variant={profile === "technip" ? "default" : "outline"} size="sm" onClick={() => setProfile("technip")}>
-                  Technip / Internacional
-                </Button>
-              </div>
-            </div>
-
-            <div className="h-6 w-px bg-border" />
-
-            <label className="flex cursor-pointer items-center gap-2">
-              <input
-                type="checkbox"
-                checked={useLlm}
-                onChange={(e) => setUseLlm(e.target.checked)}
-                className="h-4 w-4 rounded border-border"
-              />
-              <span className="text-sm font-medium">Validação IA (Claude)</span>
-              <span className="text-xs text-muted-foreground">Revisa tags de baixa confiança</span>
-            </label>
-          </div>
         </CardContent>
       </Card>
 
