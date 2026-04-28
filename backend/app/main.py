@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.routers import translate, pdf, pid, auth, admin_notes
+from app.routers import translate, pdf, pid, auth, admin_notes, civil
 from app.database import engine, Base
 # Importar modelos para garantir que o SQLAlchemy os conheça antes de criar tabelas
 import app.models.auth_models
@@ -55,6 +55,7 @@ app.include_router(pdf.router, prefix="/api/pdf", tags=["PDF"])
 app.include_router(pid.router, prefix="/api/pid", tags=["PID"])
 app.include_router(auth.router, prefix="/api/auth", tags=["Auth"])
 app.include_router(admin_notes.router, prefix="/api/admin-notes", tags=["Admin Notes"])
+app.include_router(civil.router, prefix="/api/civil", tags=["Civil"])
 
 if __name__ == "__main__":
     import uvicorn

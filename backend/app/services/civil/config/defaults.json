@@ -1,0 +1,9 @@
+{
+  "folga_escavacao": 0.10,
+  "esp_magro": 0.10,
+  "folga_magro": 0.05,
+  "esp_laje_poco": 0.15,
+  "esp_parede_poco": 0.15,
+  "tolerancia_validacao": 0.01,
+  "threshold_texto_pdf": 200
+}

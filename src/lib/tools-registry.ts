@@ -14,12 +14,13 @@ import {
   FileSpreadsheet,
   Mail,
   Package,
+  HardHat,
   type LucideIcon,
 } from "lucide-react";
 
 // ── Category definitions ──────────────────────────────────────────────
 
-export type CategoryId = "documentacao" | "conhecimento" | "analise" | "instrumentacao";
+export type CategoryId = "documentacao" | "conhecimento" | "analise" | "instrumentacao" | "civil";
 
 export interface Category {
   id: CategoryId;
@@ -34,6 +35,7 @@ export const categories: Category[] = [
   { id: "conhecimento", label: "Conhecimento", icon: BookOpen, color: "bg-accent-muted text-accent", borderColor: "border-accent" },
   { id: "analise", label: "Análise", icon: BarChart3, color: "bg-success-muted text-success", borderColor: "border-success" },
   { id: "instrumentacao", label: "Instrumentação", icon: Gauge, color: "bg-warning-muted text-warning", borderColor: "border-warning" },
+  { id: "civil", label: "Civil", icon: HardHat, color: "bg-surface text-text-secondary", borderColor: "border-border" },
 ];
 
 // ── Tool definitions ──────────────────────────────────────────────────
@@ -166,6 +168,15 @@ export const tools: Tool[] = [
     icon: Package,
     href: "/dashboard/prensa-cabo",
     category: "instrumentacao",
+    status: "beta",
+  },
+  {
+    id: "levantamento-quantitativos",
+    title: "Levantamento de Quantitativos",
+    description: "Extraia geometrias de desenhos de fundação PDF e gere planilha de quantitativos de concreto, formas, estacas e escavação",
+    icon: HardHat,
+    href: "/dashboard/levantamento-quantitativos",
+    category: "civil",
     status: "beta",
   },
 ];
