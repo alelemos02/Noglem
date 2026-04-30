@@ -37,7 +37,7 @@ export default function VerifyInvitePage() {
       } else {
         setError(data.detail || "Código de convite inválido ou já utilizado.");
       }
-    } catch (err) {
+    } catch {
       setError("Erro ao conectar com o servidor. Tente novamente mais tarde.");
     } finally {
       setLoading(false);

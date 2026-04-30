@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "./status-badge";
 import { PriorityBadge } from "./priority-badge";
-import { useWorkspace, STATUS_LABELS } from "./workspace-context";
+import { useWorkspace } from "./workspace-context";
 
 const CLASSIFICATION_BUTTONS = [
   {

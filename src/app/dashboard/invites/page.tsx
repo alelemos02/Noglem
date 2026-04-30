@@ -44,8 +44,8 @@ export default function AdminInvitesPage() {
         }
       });
       if (response.ok) {
-        const data = await response.json();
-        setInvites(data.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
+        const data = (await response.json()) as InvitationCode[];
+        setInvites(data.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
       }
     } catch (error) {
       console.error("Failed to fetch invites", error);

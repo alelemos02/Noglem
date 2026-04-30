@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { API_URL, buildBackendAuthHeaders } from "@/lib/backend";
+import { buildBackendAuthHeaders } from "@/lib/backend";
 
 // Catch-all route handler for RAG API
 // Maps /api/rag/* to Backend /api/rag/*

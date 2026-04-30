@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, Folder, Trash2, Search, ArrowRight, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
   Sheet,
@@ -22,7 +22,7 @@ interface Collection {
   id: string;
   name: string;
   created_at: string;
-  documents: any[]; // We might load documents count
+  documents: unknown[];
 }
 
 export default function RagDashboard() {

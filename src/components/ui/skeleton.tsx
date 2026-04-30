@@ -1,7 +1,7 @@
 import * as React from "react"
 import { cn } from "@/lib/utils"
 
-export interface SkeletonProps extends React.ComponentProps<"div"> {}
+export type SkeletonProps = React.ComponentProps<"div">
 
 function Skeleton({ className, ...props }: SkeletonProps) {
   return (
