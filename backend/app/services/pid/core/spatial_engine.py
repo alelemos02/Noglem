@@ -11,11 +11,15 @@ logger = logging.getLogger(__name__)
 
 # Fallback equipment tag patterns (used when profile has no equipment_patterns)
 EQUIPMENT_PATTERNS = [
+    # Technip: W503AC, W504AC1, W521B, W524-1
     re.compile(r'\b(W\d{3}[A-Z]*\d*(?:-\d+)?)\b'),
+    # PROMON: 122-VE01AB, 222-TQ01, 122-BA01
     re.compile(r'\b(\d{3}-[A-Z]{2}\d{2}[A-Z]{0,2})\b'),
+    # Generic equipment: TK-101, V-201, P-301A
     re.compile(r'\b([A-Z]{1,3}-\d{3}[A-Z]?)\b'),
 ]
 
+# Words that indicate equipment (not instruments)
 EQUIPMENT_KEYWORDS = [
     "TANK", "TANQUE", "VESSEL", "VASO", "PUMP", "BOMBA",
     "COMPRESSOR", "HEAT", "EXCHANGER", "TROCADOR", "REACTOR",
@@ -31,21 +35,38 @@ def detect_equipment(
     scale: Optional[DocumentScale] = None,
     profile: Optional[dict] = None,
 ) -> List[Equipment]:
-    """Detect equipment tags in extracted words."""
+    """Detect equipment tags in extracted words.
+
+    Equipment tags are identified by:
+    1. Matching known equipment patterns (from profile or built-in fallbacks)
+    2. Not being instrument tags (already detected)
+    3. Being near equipment keywords
+
+    Args:
+        words: All extracted words.
+        instruments: Already detected instruments (to exclude).
+        scale: DocumentScale for adaptive search radius.
+        profile: Active tag profile (reads equipment_patterns and spatial settings).
+
+    Returns:
+        List of Equipment objects.
+    """
     instrument_tags = {inst.tag for inst in instruments}
     equipment_map: Dict[str, Equipment] = {}
 
+    # Build pattern list: prefer profile-level patterns, fall back to built-ins
     profile_patterns_raw = (profile or {}).get("equipment_patterns", [])
     if profile_patterns_raw:
         patterns = [re.compile(p) for p in profile_patterns_raw]
     else:
         patterns = EQUIPMENT_PATTERNS
 
+    # Scaled search radius for equipment description lookup
     spatial_cfg = (profile or {}).get("spatial", {})
     search_radius = _s(scale, spatial_cfg.get("equipment_search_radius", 100.0))
 
     for word in words:
-        if not word.position:
+        if not word.position:  # Null-guard: skip words without position
             continue
         text = word.text.strip()
         if not text or text in instrument_tags:
@@ -56,6 +77,7 @@ def detect_equipment(
             if match:
                 equip_tag = match.group(1)
 
+                # Skip if it looks like an instrument tag
                 if _looks_like_instrument(equip_tag):
                     continue
 
@@ -66,7 +88,10 @@ def detect_equipment(
                         page_index=word.page_index,
                     )
 
-                    desc = _find_equipment_description(word, words, search_radius=search_radius)
+                    # Look for description nearby
+                    desc = _find_equipment_description(
+                        word, words, search_radius=search_radius
+                    )
                     if desc:
                         equipment_map[equip_tag].description = desc
 
@@ -96,9 +121,12 @@ def associate_instruments_to_equipment(
     for inst in instruments:
         if not inst.position:
             continue
+
+        # Skip if equipment already set (e.g., from tag parsing)
         if inst.equipment_ref:
             continue
 
+        # Find nearest equipment on same page
         nearest = None
         nearest_dist = float("inf")
 
@@ -116,17 +144,27 @@ def associate_instruments_to_equipment(
         if nearest and nearest_dist <= max_distance:
             inst.equipment_ref = nearest.tag
             nearest.associated_instruments.append(inst.tag)
-            logger.debug(f"Associated {inst.tag} -> {nearest.tag} (distance={nearest_dist:.1f})")
+            logger.debug(
+                f"Associated {inst.tag} -> {nearest.tag} "
+                f"(distance={nearest_dist:.1f})"
+            )
         else:
-            logger.debug(f"No equipment found for {inst.tag} within {max_distance} units")
+            logger.debug(
+                f"No equipment found for {inst.tag} "
+                f"within {max_distance} units"
+            )
 
+    # Report associations
     associated = sum(1 for i in instruments if i.equipment_ref)
-    logger.info(f"Associated {associated}/{len(instruments)} instruments to equipment")
+    logger.info(
+        f"Associated {associated}/{len(instruments)} instruments to equipment"
+    )
 
 
 def _looks_like_instrument(tag: str) -> bool:
     """Check if a tag looks like an instrument rather than equipment."""
     from app.services.pid.models.instrument import ISA_TYPE_DESCRIPTIONS
+
     for isa_type in ISA_TYPE_DESCRIPTIONS:
         if tag.startswith(isa_type) and len(tag) > len(isa_type):
             return True
@@ -138,13 +176,23 @@ def _find_equipment_description(
     all_words: List[ExtractedWord],
     search_radius: float = 100.0,
 ) -> str:
-    """Find a description near an equipment tag."""
+    """Find a description near an equipment tag.
+
+    Looks for equipment keywords near the tag position.
+
+    Args:
+        equip_word: The word containing the equipment tag.
+        all_words: All words on the page.
+        search_radius: Search radius in PDF points (should be pre-scaled by caller).
+    """
     if not equip_word.position:
         return ""
 
     nearby_words = []
     for w in all_words:
-        if w.page_index != equip_word.page_index or w is equip_word:
+        if w.page_index != equip_word.page_index:
+            continue
+        if w is equip_word:
             continue
         if not w.position:
             continue

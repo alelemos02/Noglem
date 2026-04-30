@@ -1,7 +1,7 @@
 """PDF ingestion: load PDFs and detect basic properties."""
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List
 

@@ -48,6 +48,7 @@ def build_hierarchy(
                      ExtractionResult.page_scales. Used to scale the maximum
                      hierarchy distance for the actual document format.
     """
+    # Derive representative scale from the page_scales registry
     if page_scales:
         scale_values = [s.scale_factor for s in page_scales.values()]
         avg_scale = sum(scale_values) / len(scale_values)
@@ -101,6 +102,12 @@ def _should_link(
     1. Same page
     2. Shared equipment reference OR similar tag pattern
     3. Within spatial proximity
+
+    Args:
+        parent: Candidate parent instrument.
+        child: Candidate child instrument.
+        max_distance: Maximum pixel distance for spatial proximity check.
+                      Already scaled by the caller based on document format.
     """
     # Must be on the same page
     if parent.page_index != child.page_index:

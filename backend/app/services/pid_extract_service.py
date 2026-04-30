@@ -2,12 +2,12 @@
 
 import logging
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 import fitz  # PyMuPDF
 import pdfplumber
 
-from app.services.pid.core.ingestion import discover_pdfs, load_pdf
+from app.services.pid.core.ingestion import load_pdf
 from app.services.pid.core.text_extraction import extract_words
 from app.services.pid.core.tag_detector import detect_tags, load_profile
 from app.services.pid.core.title_block import parse_title_block
@@ -103,52 +103,52 @@ class PidExtractService:
         max_distance: float,
         result: ExtractionResult,
     ) -> None:
-        doc = load_pdf(pdf_path)
+        pdf_file = Path(pdf_path)
+        doc = load_pdf(str(pdf_file))
 
-        if not doc.is_vectorial:
-            logger.warning(f"{doc.filename}: Contains scanned pages, skipping non-text pages.")
+        if not any(page.has_text for page in doc.pages):
+            logger.warning("%s: PDF sem texto vetorial. OCR ainda não está habilitado.", doc.filename)
             return
 
         merge_settings = profile.get("word_merge", {})
+        source_pdf = str(pdf_file.resolve())
 
         for page_info in doc.pages:
             if not page_info.has_text:
+                logger.warning("%s página %s sem texto vetorial; ignorada", doc.filename, page_info.index + 1)
                 continue
 
             page_idx = page_info.index
 
             # Scale context derived from actual page dimensions
             scale = page_info.document_scale
-            result.page_scales[(str(pdf_path), page_idx)] = scale
-
-            # Scale-adjusted merge tolerances
-            merge_gap_x = scale.px(merge_settings.get("max_horizontal_gap", 5.0))
-            merge_gap_y = scale.px(merge_settings.get("max_vertical_gap", 3.0))
+            result.page_scales[(source_pdf, page_idx)] = scale
 
             words = extract_words(
-                pdf_path,
+                str(pdf_file),
                 page_indices=[page_idx],
-                merge_gap_x=merge_gap_x,
-                merge_gap_y=merge_gap_y,
+                merge_gap_x=scale.px(merge_settings.get("max_horizontal_gap", 5.0)),
+                merge_gap_y=scale.px(merge_settings.get("max_vertical_gap", 3.0)),
             )
 
             if not words:
                 continue
 
-            metadata = parse_title_block(
-                words, page_info.width, page_info.height, page_idx, scale=scale
-            )
-            metadata.sheet_number = str(page_idx + 1)
+            metadata = parse_title_block(words, page_info.width, page_info.height, page_idx, scale=scale)
+            metadata.sheet_number = metadata.sheet_number or str(page_idx + 1)
             result.metadata.append(metadata)
 
             notes = parse_notes(words, page_info.width, page_info.height, scale=scale)
             result.notes.extend(notes)
 
             instruments, line_numbers = detect_tags(words, profile, scale=scale)
-            result.line_numbers.extend(line_numbers)
 
             for inst in instruments:
-                inst.sheet_name = metadata.document_number or f"Page {page_idx + 1}"
+                inst.sheet_name = metadata.document_number or f"{pdf_file.stem} p.{page_idx + 1}"
+                inst.source_pdf = source_pdf
+
+            for line in line_numbers:
+                result.line_numbers.append(line)
 
             for note in notes:
                 if note.affects_instruments:
@@ -157,48 +157,23 @@ class PidExtractService:
                             inst.notes.append(f"Note {note.number}: {note.text[:100]}")
 
             equipment = detect_equipment(words, instruments, scale=scale, profile=profile)
+            for eq in equipment:
+                eq.source_pdf = source_pdf
 
             spatial_cfg = profile.get("spatial", {})
-            effective_max_distance = scale.px(
-                spatial_cfg.get("tag_equipment_max_distance", max_distance)
-            )
+            effective_max_distance = scale.px(spatial_cfg.get("tag_equipment_max_distance", max_distance))
             associate_instruments_to_equipment(instruments, equipment, effective_max_distance)
 
-            # Extract rectangular vector paths via fitz. CAD tools often draw DCS squares
-            # as stroked 're'/'qu' path commands that pdfplumber misses entirely.
-            fitz_rects: list = []
-            try:
-                fdoc = fitz.open(pdf_path)
-                fpage = fdoc[page_idx]
-                for drawing in fpage.get_drawings():
-                    items = drawing.get("items", [])
-                    if not items:
-                        continue
-                    if not any(item[0] in ("re", "qu") for item in items):
-                        continue
-                    r = drawing["rect"]
-                    w = r.x1 - r.x0
-                    h = r.y1 - r.y0
-                    if w > 0.5 and h > 0.5 and 0.6 < w / h < 1.7:
-                        fitz_rects.append({"x0": r.x0, "top": r.y0,
-                                           "x1": r.x1, "bottom": r.y1})
-                fdoc.close()
-            except Exception as fe:
-                logger.debug(f"fitz rect extraction skipped: {fe}")
-
-            with pdfplumber.open(pdf_path) as pdf_sym:
+            fitz_rects = self._extract_rectangles_with_fitz(pdf_file, page_idx)
+            with pdfplumber.open(str(pdf_file)) as pdf_sym:
                 sym_page = pdf_sym.pages[page_idx]
                 page_rects = (sym_page.rects or []) + fitz_rects
-                page_lines = sym_page.lines or []
-
-                # Refine scale from actual DCS symbol geometry on this page
                 scale.auto_calibrate(page_rects)
-
                 classify_instruments(
                     instruments,
                     sym_page.edges or [],
                     page_rects=page_rects,
-                    page_lines=page_lines,
+                    page_lines=sym_page.lines or [],
                     scale=scale,
                     profile=profile,
                 )
@@ -210,6 +185,26 @@ class PidExtractService:
                 f"Page {page_idx + 1}: {len(instruments)} instruments, "
                 f"{len(equipment)} equipment, {len(line_numbers)} lines"
             )
+
+    @staticmethod
+    def _extract_rectangles_with_fitz(pdf_path: Path, page_idx: int) -> list[dict]:
+        rects: list[dict] = []
+        try:
+            doc = fitz.open(str(pdf_path))
+            page = doc[page_idx]
+            for drawing in page.get_drawings():
+                items = drawing.get("items", [])
+                if not items or not any(item[0] in ("re", "qu") for item in items):
+                    continue
+                rect = drawing["rect"]
+                width = rect.x1 - rect.x0
+                height = rect.y1 - rect.y0
+                if width > 0.5 and height > 0.5 and 0.6 < width / height < 1.7:
+                    rects.append({"x0": rect.x0, "top": rect.y0, "x1": rect.x1, "bottom": rect.y1})
+            doc.close()
+        except Exception as exc:
+            logger.debug("fitz rectangle extraction skipped: %s", exc)
+        return rects
 
     @staticmethod
     def _result_to_dict(result: ExtractionResult) -> Dict[str, Any]:

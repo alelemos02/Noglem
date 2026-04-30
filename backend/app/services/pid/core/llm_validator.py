@@ -48,6 +48,7 @@ def validate_with_llm(
 
     client = anthropic.Anthropic(api_key=key)
 
+    # Collect instruments needing review
     to_review = [
         inst for inst in result.instruments
         if inst.confidence < 0.7
@@ -59,6 +60,7 @@ def validate_with_llm(
 
     logger.info(f"LLM validation: reviewing {len(to_review)} low-confidence tags")
 
+    # Process in batches of 20
     batch_size = 20
     for i in range(0, len(to_review), batch_size):
         batch = to_review[i:i + batch_size]
@@ -108,6 +110,8 @@ Only respond with the JSON array, no other text."""
 
         response_text = response.content[0].text.strip()
 
+        # Parse response
+        # Handle potential markdown code block wrapping
         if response_text.startswith("```"):
             lines = response_text.split("\n")
             response_text = "\n".join(lines[1:-1])

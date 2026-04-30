@@ -45,8 +45,17 @@ def _prefilter_edges(edges: list) -> Tuple[list, list]:
 
 def _instrument_in_square(cx: float, cy: float, inst_h: float,
                            h_edges: list, v_edges: list) -> bool:
-    """Return True if (cx, cy) is enclosed in a square formed by edge segments."""
-    min_d = max(inst_h * 0.6, 4.0)
+    """Return True if (cx, cy) is enclosed in a square formed by edge segments.
+
+    Uses font-relative distances so this works at any document scale.
+    min_d = 0.6×text_height: excludes the internal dividing line inside DCS
+    balloons (which sits at ~0.5×text_height from center).
+    max_d = 2.5×text_height: limits search to the immediate balloon boundary.
+    Coverage check: each detected side must be spanned by at least 50% of the
+    detected square's dimension, filtering out short pipe stubs that
+    accidentally align in four positions around a field instrument.
+    """
+    min_d = max(inst_h * 0.6, 4.0)  # 0.6 excludes internal balloon divider
     max_d = max(inst_h * 2.5, 20.0)
 
     near_h = [(ex0, ey, ex1) for ex0, ey, ex1 in h_edges
@@ -62,10 +71,10 @@ def _instrument_in_square(cx: float, cy: float, inst_h: float,
     if not (h_above and h_below and v_left and v_right):
         return False
 
-    top_y   = max(h_above)
-    bot_y   = min(h_below)
-    left_x  = max(v_left)
-    right_x = min(v_right)
+    top_y   = max(h_above)   # closest horizontal line above center
+    bot_y   = min(h_below)   # closest horizontal line below center
+    left_x  = max(v_left)    # closest vertical line left of center
+    right_x = min(v_right)   # closest vertical line right of center
 
     height = bot_y - top_y
     width  = right_x - left_x
@@ -73,6 +82,9 @@ def _instrument_in_square(cx: float, cy: float, inst_h: float,
         return False
     aspect = width / height
 
+    # Find the edge segments that form each side and compute their total span.
+    # A real DCS balloon square has continuous edges along each side; random
+    # process elements leave large gaps (span << side length).
     top_segs   = [(ex0, ey, ex1) for ex0, ey, ex1 in near_h if abs(ey - top_y) < 1.0]
     bot_segs   = [(ex0, ey, ex1) for ex0, ey, ex1 in near_h if abs(ey - bot_y) < 1.0]
     left_segs  = [(ex, ey0, ey1) for ex, ey0, ey1 in near_v if abs(ex - left_x) < 1.0]
@@ -96,6 +108,16 @@ def _classify_by_isa_type(isa_type: str) -> Optional[str]:
     """Classify instrument using ISA 5.1 last-letter convention.
 
     Returns 'FIELD', 'DCS', or None (ambiguous → fall through to geometry).
+
+    Last-letter rules (ISA 5.1):
+      T = Transmitter    → always FIELD (physical sensing device)
+      E = Element/Sensor → always FIELD
+      V = Valve          → always FIELD (final element in the process)
+      W = Well           → always FIELD (thermowell, etc.)
+      G = Glass/Gauge    → always FIELD
+      O = Orifice        → always FIELD
+      C = Controller     → always DCS (computed/display function)
+    All others (I, S, A, R, H, …) are ambiguous → geometry decides.
     """
     if not isa_type:
         return None
@@ -124,14 +146,25 @@ def classify_instruments(
     detection but with much tighter constraints.
 
     Modifies instruments in place by setting symbol, is_physical and classification.
+
+    Args:
+        instruments: List of detected instruments.
+        edges: Raw edge list from pdfplumber (fallback only).
+        page_rects: Rectangle objects from pdfplumber (page.rects).
+        page_lines: Line objects from pdfplumber (page.lines).
+        scale: DocumentScale for adaptive thresholds. None = use base values.
+        profile: Active tag profile dict (reads symbols: section for overrides).
     """
     if not instruments:
         return
 
+    # If we have the proper pdfplumber rects/lines, use the robust method
+    # Always pass raw edges as fallback for DCS square detection from line segments
     if page_rects is not None and page_lines is not None:
         _classify_with_rects_and_lines(instruments, page_rects, page_lines, scale, profile,
                                        fallback_edges=edges)
     else:
+        # Fallback: edge-based detection with strict constraints
         _classify_with_edges_strict(instruments, edges, scale, profile)
 
 
@@ -143,11 +176,27 @@ def _classify_with_rects_and_lines(
     profile: Optional[dict] = None,
     fallback_edges: list = None,
 ) -> None:
-    """Classify using actual rectangle and line objects from pdfplumber."""
+    """Classify using actual rectangle and line objects from pdfplumber.
+
+    Primary method:
+    1. Actual RECT objects (~30-50px square) → DCS square
+    2. Actual horizontal LINES of ~28-45px length → Control Room h-line
+
+    If no proper rects are found (common in CAD-exported PDFs where DCS squares
+    are drawn as four individual line segments rather than PDF rectangles),
+    falls back to reconstructing squares from short horizontal+vertical edge
+    segments using font-relative distance thresholds.
+    """
+    # Read symbol size configuration (hline thresholds only; square size is
+    # determined per-instrument proportionally to text height, not globally).
     sym_cfg   = (profile or {}).get("symbols", {})
     hline_min = _s(scale, sym_cfg.get("hline_min", 28.0))
     hline_max = _s(scale, sym_cfg.get("hline_max", 45.0))
 
+    # 1. Collect DCS square candidates: all roughly-square rects regardless of
+    # absolute size.  The per-instrument check in _is_inside_square filters by
+    # proportional size (2×–8× text height), so we don't need a fixed-pixel
+    # gate here.  This makes detection work identically on A4, A3, A1, A0.
     dcs_squares = []
     for r in rects:
         try:
@@ -162,6 +211,7 @@ def _classify_with_rects_and_lines(
         if w > 0.5 and h > 0.5 and 0.7 < w / h < 1.4:
             dcs_squares.append((x0, top, x1, bot))
 
+    # Fallback: if rects gave no DCS squares, reconstruct from edge segments
     use_edge_squares = len(dcs_squares) == 0 and fallback_edges
     h_edges_pre: list = []
     v_edges_pre: list = []
@@ -169,6 +219,7 @@ def _classify_with_rects_and_lines(
         h_edges_pre, v_edges_pre = _prefilter_edges(fallback_edges)
         logger.debug(f"DCS square fallback: {len(h_edges_pre)} h-edges, {len(v_edges_pre)} v-edges")
 
+    # 2. Find balloon horizontal lines: specific length range
     balloon_hlines = []
     for l in lines:
         try:
@@ -178,8 +229,10 @@ def _classify_with_rects_and_lines(
             y1 = float(l.get("bottom", 0))
         except (TypeError, ValueError):
             continue
+        # Must be horizontal (same Y within 2px at base scale)
         if abs(y0 - y1) < _s(scale, 2.0):
             length = abs(x1 - x0)
+            # Typical balloon crossing line
             if hline_min < length < hline_max:
                 cx = (x0 + x1) / 2
                 balloon_hlines.append((cx, y0, length))
@@ -191,6 +244,7 @@ def _classify_with_rects_and_lines(
         if not inst.position:
             continue
 
+        # ISA type fast-path: T/E/V/W/G/O → always FIELD; C → always DCS
         isa_class = _classify_by_isa_type(inst.isa_type)
         if isa_class == 'FIELD':
             inst.symbol = "circle"
@@ -208,6 +262,7 @@ def _classify_with_rects_and_lines(
         cy = inst.position.center_y
         inst_h = max(inst.position.bottom - inst.position.top, 4.0)
 
+        # Check if inside a DCS square (proportional size check via inst_h)
         if dcs_squares:
             in_square = _is_inside_square(cx, cy, dcs_squares, scale, inst_h=inst_h)
         elif use_edge_squares:
@@ -215,6 +270,7 @@ def _classify_with_rects_and_lines(
         else:
             in_square = False
 
+        # Check if has horizontal line through center
         has_hline = _has_horizontal_line(cx, cy, balloon_hlines, scale, inst_h=inst_h)
 
         if in_square:
@@ -232,6 +288,8 @@ def _classify_with_rects_and_lines(
             inst.classification = "Instrumento de Campo"
             inst.is_physical = True
 
+    # Penalise SIS/SIL element types (e.g. IE) that are not process instruments.
+    # Types are configured via sil_isa_types in the profile.
     _penalize_diamond_instruments(instruments, fallback_edges or [], profile=profile)
 
     logger.info(
@@ -247,8 +305,19 @@ def _is_inside_square(
     scale: Optional[DocumentScale] = None,
     inst_h: float = 0.0,
 ) -> bool:
-    """Check if instrument center is inside a DCS square."""
+    """Check if instrument center is inside a DCS square.
+
+    Uses proportional size thresholds (relative to instrument text height) when
+    inst_h > 0, so detection works at any document scale without fixed-pixel
+    limits.  A DCS square is always proportionally larger than the text it
+    contains; the 2×–8× range covers all known P&ID styles from compact A4 to
+    large A0 drawings.
+    """
     if inst_h > 0:
+        # inst_h is the full balloon height (ISA type + number words combined).
+        # The DCS square is drawn around the balloon circle which is roughly the
+        # same height as the full tag text block, so min = 0.8×inst_h catches
+        # compact layouts and max = 10×inst_h handles generous square sizing.
         min_side = inst_h * 0.8
         max_side = inst_h * 10.0
         margin   = inst_h * 0.5
@@ -276,7 +345,17 @@ def _has_horizontal_line(
     scale: Optional[DocumentScale] = None,
     inst_h: float = 0.0,
 ) -> bool:
-    """Check if a horizontal line passes through the center of the balloon."""
+    """Check if a horizontal line passes through the center of the balloon.
+
+    Span check: the line must geometrically cover the instrument center
+    (|lx - cx| < length/2), rejecting pipe lines that terminate before
+    reaching the balloon even if they are vertically close.
+
+    tolerance_y is the larger of a font-relative value and a scaled base,
+    so it works in both dense A3 drawings and large A0 sheets.
+    """
+    # Base tolerance: line centre within half the line's own length of cx.
+    # This ensures the line physically spans the balloon.
     tolerance_y = max(inst_h * 1.5, _s(scale, 8.0)) if inst_h > 0 else _s(scale, 20.0)
     for lx, ly, length in hlines:
         if abs(lx - cx) < length / 2 and abs(ly - cy) < tolerance_y:
@@ -289,7 +368,23 @@ def _penalize_diamond_instruments(
     edges: list,
     profile: Optional[dict] = None,
 ) -> None:
-    """Set confidence to 0.1 for instruments whose ISA type is listed as a SIS/SIL element."""
+    """Set confidence to 0.1 for instruments whose ISA type is listed as a SIS/SIL element.
+
+    In P&IDs that follow ISA-84 (SIS notation), certain element types are drawn
+    inside diamond-shaped symbols and are NOT process instruments to be listed in
+    the Instrument Index.  These types are declared in the profile under
+    ``sil_isa_types`` (e.g. ``["IE"]`` for Initiating Elements).
+
+    Geometry-based diamond detection was removed because CAD packages frequently
+    draw instrument-balloon circles as 4-sided polygons (squares rotated 45°),
+    making geometric detection indistinguishable from SIS diamonds.  ISA-type
+    classification is more reliable and fully configurable per project.
+
+    Args:
+        instruments: Instrument list to check (modified in place).
+        edges: Raw edge list (kept for API compatibility, not used).
+        profile: Active profile dict; reads ``sil_isa_types`` key.
+    """
     sil_types = set(t.upper() for t in (profile or {}).get("sil_isa_types", []))
     if not sil_types:
         return
@@ -310,18 +405,23 @@ def _classify_with_edges_strict(
     scale: Optional[DocumentScale] = None,
     profile: Optional[dict] = None,
 ) -> None:
-    """Fallback: classify using raw edges but with VERY strict constraints."""
+    """Fallback: classify using raw edges but with VERY strict constraints.
+
+    This method is less reliable and should only be used when page.rects
+    and page.lines are not available.
+    """
+    # Read symbol size configuration
     sym_cfg = (profile or {}).get("symbols", {})
     sym_min  = _s(scale, sym_cfg.get("min_size",  25.0))
     sym_max  = _s(scale, sym_cfg.get("max_size",  50.0))
     hline_min = _s(scale, sym_cfg.get("hline_min", 28.0))
     hline_max = _s(scale, sym_cfg.get("hline_max", 45.0))
 
-    edge_radius   = _s(scale, 35.0)
-    hline_y_tol   = _s(scale, 12.0)
-    square_near   = _s(scale, 10.0)
-    square_far    = _s(scale, 30.0)
-    square_margin = _s(scale, 10.0)
+    edge_radius   = _s(scale, 35.0)  # Search radius for nearby edges
+    hline_y_tol   = _s(scale, 12.0)  # Y tolerance for h-line intersection
+    square_near   = _s(scale, 10.0)  # Offset from balloon center to square edge
+    square_far    = _s(scale, 30.0)  # Max distance from center to square edge
+    square_margin = _s(scale, 10.0)  # Margin for edge position checks
 
     classified_dcs = 0
     classified_room = 0
@@ -330,6 +430,7 @@ def _classify_with_edges_strict(
         if not inst.position:
             continue
 
+        # ISA type fast-path: T/E/V/W/G/O → always FIELD; C → always DCS
         isa_class = _classify_by_isa_type(inst.isa_type)
         if isa_class == 'FIELD':
             inst.symbol = "circle"
@@ -346,6 +447,7 @@ def _classify_with_edges_strict(
         cx = inst.position.center_x
         cy = inst.position.center_y
 
+        # Filter edges near this instrument (tight radius)
         nearby_edges = []
         for e in edges:
             try:
@@ -359,6 +461,7 @@ def _classify_with_edges_strict(
                (top - edge_radius) < cy < (bot + edge_radius):
                 nearby_edges.append(e)
 
+        # Check for Horizontal line intersecting center
         has_hline = False
         for e in nearby_edges:
             try:
@@ -369,11 +472,14 @@ def _classify_with_edges_strict(
                 x1 = float(e.get("x1", 0))
             except (TypeError, ValueError):
                 continue
+            # Must be horizontal AND the right length for a balloon line
             if h < _s(scale, 2.0) and hline_min < w < hline_max:
                 if abs(y0 - cy) < hline_y_tol and x0 < cx < x1:
                     has_hline = True
                     break
 
+        # For square detection via edges, require VERY strict conditions:
+        # All 4 sides must be within a tight size range AND form a proper square
         has_top = has_bot = has_left = has_right = False
 
         for e in nearby_edges:
@@ -387,12 +493,14 @@ def _classify_with_edges_strict(
             except (TypeError, ValueError):
                 continue
 
+            # Horizontal strokes (must be right length for a balloon square)
             if h < _s(scale, 2.0) and sym_min < w < sym_max:
                 if square_near < (cy - y0) < square_far and (x0 - square_margin) < cx < (x1 + square_margin):
                     has_top = True
                 elif square_near < (y0 - cy) < square_far and (x0 - square_margin) < cx < (x1 + square_margin):
                     has_bot = True
 
+            # Vertical strokes (must be right length for a balloon square)
             if w < _s(scale, 2.0) and sym_min < h < sym_max:
                 if square_near < (cx - x0) < square_far and (y0 - square_margin) < cy < (y1 + square_margin):
                     has_left = True

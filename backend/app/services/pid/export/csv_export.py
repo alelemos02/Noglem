@@ -34,6 +34,7 @@ def export_to_csv(result: ExtractionResult, output_path: str) -> str:
         "Qualifier",
         "Loop ID",
         "Sheet",
+        "Source PDF",
         "Confidence",
         "Notes",
     ]
@@ -60,6 +61,7 @@ def export_to_csv(result: ExtractionResult, output_path: str) -> str:
                 inst.qualifier,
                 inst.loop_id,
                 inst.sheet_name or str(inst.page_index + 1),
+                Path(getattr(inst, "source_pdf", "")).name if getattr(inst, "source_pdf", "") else "",
                 f"{inst.confidence:.0%}",
                 "; ".join(inst.notes) if inst.notes else "",
             ])

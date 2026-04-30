@@ -2,8 +2,6 @@
 
 import logging
 from pathlib import Path
-from typing import List
-
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
@@ -12,6 +10,7 @@ from app.services.pid.models.instrument import ExtractionResult
 
 logger = logging.getLogger(__name__)
 
+# Style definitions
 HEADER_FONT = Font(name="Calibri", bold=True, size=11, color="FFFFFF")
 HEADER_FILL = PatternFill(start_color="2F5496", end_color="2F5496", fill_type="solid")
 HEADER_ALIGNMENT = Alignment(horizontal="center", vertical="center", wrap_text=True)
@@ -33,11 +32,10 @@ THIN_BORDER = Border(
 def export_to_excel(result: ExtractionResult, output_path: str) -> str:
     """Export extraction results to a formatted Excel file.
 
-    Creates four sheets:
+    Creates three sheets:
     1. Instrument Index - Main tag list
     2. Loops - Loop summary
     3. Validation - Warnings and errors
-    4. Drawing Info - Title block metadata
 
     Args:
         result: Extraction result to export.
@@ -48,11 +46,19 @@ def export_to_excel(result: ExtractionResult, output_path: str) -> str:
     """
     wb = Workbook()
 
+    # Sheet 1: Instrument Index
     _create_instrument_sheet(wb, result)
+
+    # Sheet 2: Loops
     _create_loops_sheet(wb, result)
+
+    # Sheet 3: Validation
     _create_validation_sheet(wb, result)
+
+    # Sheet 4: Drawing Info
     _create_metadata_sheet(wb, result)
 
+    # Save
     path = Path(output_path)
     wb.save(str(path))
     logger.info(f"Excel exported to {path.absolute()}")
@@ -64,6 +70,7 @@ def _create_instrument_sheet(wb: Workbook, result: ExtractionResult) -> None:
     ws = wb.active
     ws.title = "Instrument Index"
 
+    # Headers
     headers = [
         "Tag Number",
         "ISA Type",
@@ -82,6 +89,7 @@ def _create_instrument_sheet(wb: Workbook, result: ExtractionResult) -> None:
         "Parent Tag",
         "Children",
         "Sheet",
+        "Source PDF",
         "Confidence",
         "Notes",
     ]
@@ -93,6 +101,8 @@ def _create_instrument_sheet(wb: Workbook, result: ExtractionResult) -> None:
         cell.alignment = HEADER_ALIGNMENT
         cell.border = THIN_BORDER
 
+    # Data rows
+    # Sort instruments: by area, then by ISA type, then by tag number
     sorted_instruments = sorted(
         result.instruments,
         key=lambda i: (i.area or "", i.isa_type, i.tag_number or "", i.qualifier),
@@ -117,6 +127,7 @@ def _create_instrument_sheet(wb: Workbook, result: ExtractionResult) -> None:
             inst.parent_tag,
             ", ".join(inst.children_tags) if inst.children_tags else "",
             inst.sheet_name or str(inst.page_index + 1),
+            Path(getattr(inst, "source_pdf", "")).name if getattr(inst, "source_pdf", "") else "",
             f"{inst.confidence:.0%}",
             "; ".join(inst.notes) if inst.notes else "",
         ]
@@ -127,20 +138,26 @@ def _create_instrument_sheet(wb: Workbook, result: ExtractionResult) -> None:
             cell.alignment = DATA_ALIGNMENT
             cell.border = THIN_BORDER
 
-            if col == 17 and inst.confidence < 0.5:
+            # Highlight low confidence
+            if col == 19 and inst.confidence < 0.5:
                 cell.fill = WARNING_FILL
 
+            # Color Physical vs DCS
             if col == 6:
                 if inst.is_physical:
-                    cell.fill = PatternFill(start_color="E2EFDA", end_color="E2EFDA", fill_type="solid")
+                    cell.fill = PatternFill(start_color="E2EFDA", end_color="E2EFDA", fill_type="solid") # Greenish
                 else:
-                    cell.fill = PatternFill(start_color="FCE4EC", end_color="FCE4EC", fill_type="solid")
+                    cell.fill = PatternFill(start_color="FCE4EC", end_color="FCE4EC", fill_type="solid") # Reddish
 
-    col_widths = [22, 10, 35, 12, 22, 10, 8, 12, 8, 15, 12, 30, 20, 22, 30, 8, 10, 40]
+    # Column widths
+    col_widths = [22, 10, 35, 12, 22, 10, 18, 12, 18, 10, 15, 12, 18, 14, 20, 22, 30, 18, 12, 40]
     for col, width in enumerate(col_widths, 1):
         ws.column_dimensions[get_column_letter(col)].width = width
 
+    # Auto-filter
     ws.auto_filter.ref = f"A1:{get_column_letter(len(headers))}{len(sorted_instruments) + 1}"
+
+    # Freeze header row
     ws.freeze_panes = "A2"
 
 
@@ -199,6 +216,7 @@ def _create_validation_sheet(wb: Workbook, result: ExtractionResult) -> None:
 
     row = 2
 
+    # Summary row
     ws.cell(row=row, column=1, value="SUMMARY").font = Font(bold=True)
     ws.cell(
         row=row, column=2,
@@ -209,6 +227,7 @@ def _create_validation_sheet(wb: Workbook, result: ExtractionResult) -> None:
     ).font = Font(bold=True)
     row += 1
 
+    # Errors first
     for error in result.errors:
         cell_type = ws.cell(row=row, column=1, value="ERROR")
         cell_type.fill = ERROR_FILL
@@ -218,6 +237,7 @@ def _create_validation_sheet(wb: Workbook, result: ExtractionResult) -> None:
         cell_msg.border = THIN_BORDER
         row += 1
 
+    # Then warnings
     for warning in result.warnings:
         cell_type = ws.cell(row=row, column=1, value="WARNING")
         cell_type.fill = WARNING_FILL

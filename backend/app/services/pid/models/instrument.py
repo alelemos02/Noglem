@@ -203,6 +203,7 @@ ISA_TYPE_DESCRIPTIONS = {
     "WE": "Weight Element",
     "WIT": "Weight Indicating Transmitter",
     "WI": "Weight Indicator",
+    "WIT": "Weight Indicating Transmitter",
     "WT": "Weight Transmitter",
     # Vibration
     "VI": "Vibration Indicator",
@@ -220,9 +221,13 @@ ISA_TYPE_DESCRIPTIONS = {
 }
 
 # --- DYNAMIC RULES FOR 'Z' (SAFETY/SYSTEM) MODIFIERS ---
+# Instruments often have a 'Z' in their second letter (e.g., PT -> PZT, TE -> TZE)
+# indicating a Safety Instrumented System (SIS), emergency function, or unclassified position.
+# This loop automatically generates all 'Z' variations for registered base ISA types.
 _z_variants = {}
 for base_isa, desc in ISA_TYPE_DESCRIPTIONS.items():
     if len(base_isa) >= 2 and base_isa[1] != 'Z':
+        # Insert 'Z' as the second character
         z_isa = base_isa[0] + 'Z' + base_isa[1:]
         if z_isa not in ISA_TYPE_DESCRIPTIONS:
             _z_variants[z_isa] = f"{desc} (Safety/SIS)"
@@ -262,52 +267,54 @@ class ExtractedWord:
     text: str
     position: Position
     page_index: int
-    merged: bool = False
+    merged: bool = False  # True if this word was created by merging adjacent words
 
 
 @dataclass
 class Instrument:
     """An instrument detected in a P&ID."""
-    tag: str
-    isa_type: str
-    isa_description: str
+    tag: str                                # Full tag (e.g., "122-PIT-0115A")
+    isa_type: str                           # ISA type code (e.g., "PIT")
+    isa_description: str                    # ISA description (e.g., "Pressure Indicating Transmitter")
     position: Optional[Position] = None
     page_index: int = 0
     sheet_name: str = ""
+    source_pdf: str = ""                    # PDF file this detection came from
 
-    # Parsed components
-    area: str = ""
-    tag_number: str = ""
-    qualifier: str = ""
+    # Parsed components (depend on profile)
+    area: str = ""                          # Area prefix (e.g., "122")
+    tag_number: str = ""                    # Numeric part (e.g., "0115")
+    qualifier: str = ""                     # Suffix (e.g., "A")
 
     # Associations
-    equipment_ref: str = ""
-    loop_id: str = ""
-    furnished_by_package: bool = False
-    line_number: str = ""
-    service: str = ""
+    equipment_ref: str = ""                 # Associated equipment tag
+    loop_id: str = ""                       # Loop identifier
+    furnished_by_package: bool = False      # Given when finding "F" or "(F)" near the balloon
+    line_number: str = ""                   # Associated line number
+    service: str = ""                       # Process service description
 
     # Hierarchy
-    parent_tag: str = ""
+    parent_tag: str = ""                    # Parent instrument tag
     children_tags: list = field(default_factory=list)
 
     # Symbology Classification
-    symbol: str = "circle"
-    is_physical: bool = True
-    classification: str = "Instrumento de Campo"
+    symbol: str = "circle"                  # "circle", "square", "hline"
+    is_physical: bool = True                # True if circle, False if DCS/Control Room
+    classification: str = "Instrumento de Campo" # Description of the symbol
 
     # Metadata
-    confidence: float = 1.0
-    notes: list = field(default_factory=list)
-    source: str = "primary"
+    confidence: float = 1.0                 # Detection confidence (0.0-1.0)
+    notes: list = field(default_factory=list)  # Applicable drawing notes
+    source: str = "primary"                 # "primary" or "cross-reference"
 
 
 @dataclass
 class Equipment:
     """An equipment item detected in a P&ID."""
-    tag: str
+    tag: str                                # Equipment tag (e.g., "W503AC", "122-VE01AB")
     position: Optional[Position] = None
     page_index: int = 0
+    source_pdf: str = ""                    # PDF file this equipment came from
     description: str = ""
     associated_instruments: list = field(default_factory=list)
 
@@ -315,20 +322,20 @@ class Equipment:
 @dataclass
 class Loop:
     """An instrument loop grouping related instruments."""
-    loop_id: str
-    instruments: list = field(default_factory=list)
-    is_complete: bool = False
-    missing: list = field(default_factory=list)
+    loop_id: str                            # Loop identifier (e.g., "0115", "W504AC-1")
+    instruments: list = field(default_factory=list)  # List of Instrument tags
+    is_complete: bool = False               # Whether the loop has all expected instruments
+    missing: list = field(default_factory=list)  # Missing instrument types
 
 
 @dataclass
 class LineNumber:
     """A process line number extracted from a P&ID."""
-    full_tag: str
-    diameter: str = ""
-    spec_class: str = ""
-    line_id: str = ""
-    service_code: str = ""
+    full_tag: str                           # Full line number (e.g., '6"-S6AAFPN-L00205-DHT')
+    diameter: str = ""                      # Pipe diameter (e.g., '6"')
+    spec_class: str = ""                    # Piping spec class (e.g., "S6AAFPN")
+    line_id: str = ""                       # Line identifier (e.g., "L00205")
+    service_code: str = ""                  # Service code (e.g., "DHT")
     position: Optional[Position] = None
     page_index: int = 0
 
@@ -336,10 +343,10 @@ class LineNumber:
 @dataclass
 class DrawingNote:
     """A note extracted from the P&ID drawing."""
-    number: int
-    text: str
-    affects_instruments: bool = False
-    affected_types: list = field(default_factory=list)
+    number: int                             # Note number
+    text: str                               # Note content
+    affects_instruments: bool = False       # Whether this note applies to instruments
+    affected_types: list = field(default_factory=list)  # ISA types affected
 
 
 @dataclass
@@ -361,12 +368,12 @@ class DrawingMetadata:
 @dataclass
 class ExtractionResult:
     """Complete result of processing one or more P&ID sheets."""
-    metadata: list = field(default_factory=list)
-    instruments: list = field(default_factory=list)
-    equipment: list = field(default_factory=list)
-    loops: list = field(default_factory=list)
-    line_numbers: list = field(default_factory=list)
-    notes: list = field(default_factory=list)
-    warnings: list = field(default_factory=list)
-    errors: list = field(default_factory=list)
+    metadata: list = field(default_factory=list)        # List of DrawingMetadata
+    instruments: list = field(default_factory=list)      # List of Instrument
+    equipment: list = field(default_factory=list)        # List of Equipment
+    loops: list = field(default_factory=list)            # List of Loop
+    line_numbers: list = field(default_factory=list)     # List of LineNumber
+    notes: list = field(default_factory=list)            # List of DrawingNote
+    warnings: list = field(default_factory=list)         # List of validation warning strings
+    errors: list = field(default_factory=list)           # List of validation error strings
     page_scales: dict = field(default_factory=dict)      # {(pdf_path, page_idx): DocumentScale}
