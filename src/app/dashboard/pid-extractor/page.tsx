@@ -296,6 +296,13 @@ export default function PidExtractorPage() {
             )}
           </div>
 
+          <div className="flex items-start gap-2 rounded-lg bg-warning-muted px-3 py-2.5 text-sm text-warning">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>
+              <strong>Limite de 4 MB por envio.</strong> P&IDs com muitas páginas podem exceder esse limite — divida o arquivo em lotes menores antes de fazer o upload.
+            </span>
+          </div>
+
         </CardContent>
       </Card>
 
