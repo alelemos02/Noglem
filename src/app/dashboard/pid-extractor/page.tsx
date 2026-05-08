@@ -149,6 +149,12 @@ export default function PidExtractorPage() {
 
   const handleExtract = async () => {
     if (!file) return;
+    if (file.size > 4 * 1024 * 1024) {
+      setError(
+        `Arquivo muito grande (${(file.size / 1024 / 1024).toFixed(1)} MB). O limite atual é 4 MB por envio — tente dividir o PDF em lotes menores de páginas.`
+      );
+      return;
+    }
     setIsProcessing(true);
     setError("");
     try {
@@ -156,9 +162,18 @@ export default function PidExtractorPage() {
         method: "POST",
         body: buildFormData(),
       });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Erro na extração");
-      setResult(data);
+      const text = await response.text();
+      let data: Record<string, unknown>;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        if (response.status === 413) {
+          throw new Error("Arquivo muito grande para o servidor. Tente dividir o PDF em lotes menores.");
+        }
+        throw new Error(`Resposta inesperada do servidor (${response.status}): ${text.slice(0, 120)}`);
+      }
+      if (!response.ok) throw new Error((data.error as string) || "Erro na extração");
+      setResult(data as unknown as ExtractResult);
       setActiveTab("instruments");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro desconhecido");
