@@ -184,6 +184,29 @@ export default function PidExtractorPage() {
     return formData;
   };
 
+  const extractOne = async (file: File, attempt = 0): Promise<ExtractResult> => {
+    const response = await fetch("/api/pid/extract", {
+      method: "POST",
+      body: buildFormData(file),
+    });
+    const text = await response.text();
+    let data: Record<string, unknown>;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      if (response.status === 413) {
+        throw new Error(`"${file.name}" é muito grande para o servidor. Reduza para menos de 4 MB.`);
+      }
+      throw new Error(`Resposta inesperada (${response.status}) ao processar "${file.name}": ${text.slice(0, 120)}`);
+    }
+    if (response.status === 429 && attempt < 3) {
+      await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
+      return extractOne(file, attempt + 1);
+    }
+    if (!response.ok) throw new Error((data.error as string) || `Erro ao processar "${file.name}"`);
+    return data as unknown as ExtractResult;
+  };
+
   const handleExtract = async () => {
     if (!canExtract) return;
     setIsProcessing(true);
@@ -192,23 +215,8 @@ export default function PidExtractorPage() {
     try {
       for (let i = 0; i < files.length; i++) {
         setProcessingIndex(i);
-        const file = files[i];
-        const response = await fetch("/api/pid/extract", {
-          method: "POST",
-          body: buildFormData(file),
-        });
-        const text = await response.text();
-        let data: Record<string, unknown>;
-        try {
-          data = JSON.parse(text);
-        } catch {
-          if (response.status === 413) {
-            throw new Error(`"${file.name}" é muito grande para o servidor. Reduza para menos de 4 MB.`);
-          }
-          throw new Error(`Resposta inesperada (${response.status}) ao processar "${file.name}": ${text.slice(0, 120)}`);
-        }
-        if (!response.ok) throw new Error((data.error as string) || `Erro ao processar "${file.name}"`);
-        allResults.push(data as unknown as ExtractResult);
+        if (i > 0) await new Promise((r) => setTimeout(r, 400));
+        allResults.push(await extractOne(files[i]));
       }
       setResult(mergeResults(allResults));
       setActiveTab("instruments");
