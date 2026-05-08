@@ -13,6 +13,7 @@ import {
   CheckCircle2,
   XCircle,
   Info,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -87,7 +88,28 @@ interface ExtractResult {
 
 type ResultTab = "instruments" | "loops" | "validation" | "info";
 
+const SIZE_LIMIT = 4 * 1024 * 1024; // 4 MB — Vercel hard limit per request
+
 /* ─── Helpers ─── */
+
+function mergeResults(results: ExtractResult[]): ExtractResult {
+  return {
+    filename: results.map((r) => r.filename).join(", "),
+    total_instruments: results.reduce((s, r) => s + r.total_instruments, 0),
+    total_equipment: results.reduce((s, r) => s + r.total_equipment, 0),
+    total_loops: results.reduce((s, r) => s + r.total_loops, 0),
+    total_line_numbers: results.reduce((s, r) => s + (r.total_line_numbers ?? 0), 0),
+    total_warnings: results.reduce((s, r) => s + r.total_warnings, 0),
+    total_errors: results.reduce((s, r) => s + r.total_errors, 0),
+    instruments: results.flatMap((r) => r.instruments),
+    loops: results.flatMap((r) => r.loops),
+    line_numbers: results.flatMap((r) => r.line_numbers),
+    notes: results.flatMap((r) => r.notes),
+    metadata: results.flatMap((r) => r.metadata),
+    warnings: results.flatMap((r) => r.warnings),
+    errors: results.flatMap((r) => r.errors),
+  };
+}
 
 function SymbolIcon({ symbol }: { symbol: string }) {
   switch (symbol) {
@@ -110,8 +132,9 @@ function ClassificationBadge({ classification, isPhysical }: { classification: s
 /* ─── Component ─── */
 
 export default function PidExtractorPage() {
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [processingIndex, setProcessingIndex] = useState(-1);
   const [isDownloading, setIsDownloading] = useState(false);
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
   const [result, setResult] = useState<ExtractResult | null>(null);
@@ -119,87 +142,104 @@ export default function PidExtractorPage() {
   const [error, setError] = useState("");
   const [activeTab, setActiveTab] = useState<ResultTab>("instruments");
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-    const droppedFile = e.dataTransfer.files[0];
-    if (droppedFile?.type === "application/pdf") {
-      setFile(droppedFile);
-      setResult(null);
-      setError("");
-    }
+  const totalSize = files.reduce((sum, f) => sum + f.size, 0);
+  const oversizedFiles = new Set(files.filter((f) => f.size > SIZE_LIMIT).map((f) => f.name));
+  const canExtract = files.length > 0 && oversizedFiles.size === 0;
+
+  const addFiles = useCallback((incoming: FileList | File[]) => {
+    const pdfs = Array.from(incoming).filter((f) => f.type === "application/pdf");
+    setFiles((prev) => {
+      const existing = new Set(prev.map((f) => f.name));
+      return [...prev, ...pdfs.filter((f) => !existing.has(f.name))];
+    });
+    setResult(null);
+    setError("");
   }, []);
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = e.target.files?.[0];
-    if (selectedFile) {
-      setFile(selectedFile);
-      setResult(null);
-      setError("");
-    }
+  const removeFile = (index: number) => {
+    setFiles((prev) => prev.filter((_, i) => i !== index));
+    setResult(null);
+    setError("");
   };
 
-  const buildFormData = () => {
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      setIsDragging(false);
+      addFiles(e.dataTransfer.files);
+    },
+    [addFiles]
+  );
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) addFiles(e.target.files);
+    e.target.value = "";
+  };
+
+  const buildFormData = (file: File) => {
     const formData = new FormData();
-    formData.append("file", file!);
+    formData.append("file", file);
     formData.append("profile", "promon");
     formData.append("use_llm", "false");
     return formData;
   };
 
   const handleExtract = async () => {
-    if (!file) return;
-    if (file.size > 4 * 1024 * 1024) {
-      setError(
-        `Arquivo muito grande (${(file.size / 1024 / 1024).toFixed(1)} MB). O limite atual é 4 MB por envio — tente dividir o PDF em lotes menores de páginas.`
-      );
-      return;
-    }
+    if (!canExtract) return;
     setIsProcessing(true);
     setError("");
+    const allResults: ExtractResult[] = [];
     try {
-      const response = await fetch("/api/pid/extract", {
-        method: "POST",
-        body: buildFormData(),
-      });
-      const text = await response.text();
-      let data: Record<string, unknown>;
-      try {
-        data = JSON.parse(text);
-      } catch {
-        if (response.status === 413) {
-          throw new Error("Arquivo muito grande para o servidor. Tente dividir o PDF em lotes menores.");
+      for (let i = 0; i < files.length; i++) {
+        setProcessingIndex(i);
+        const file = files[i];
+        const response = await fetch("/api/pid/extract", {
+          method: "POST",
+          body: buildFormData(file),
+        });
+        const text = await response.text();
+        let data: Record<string, unknown>;
+        try {
+          data = JSON.parse(text);
+        } catch {
+          if (response.status === 413) {
+            throw new Error(`"${file.name}" é muito grande para o servidor. Reduza para menos de 4 MB.`);
+          }
+          throw new Error(`Resposta inesperada (${response.status}) ao processar "${file.name}": ${text.slice(0, 120)}`);
         }
-        throw new Error(`Resposta inesperada do servidor (${response.status}): ${text.slice(0, 120)}`);
+        if (!response.ok) throw new Error((data.error as string) || `Erro ao processar "${file.name}"`);
+        allResults.push(data as unknown as ExtractResult);
       }
-      if (!response.ok) throw new Error((data.error as string) || "Erro na extração");
-      setResult(data as unknown as ExtractResult);
+      setResult(mergeResults(allResults));
       setActiveTab("instruments");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro desconhecido");
     } finally {
       setIsProcessing(false);
+      setProcessingIndex(-1);
     }
   };
 
   const handleDownload = async () => {
-    if (!file) return;
+    if (!files.length) return;
     setIsDownloading(true);
     try {
-      const response = await fetch("/api/pid/extract/download", {
-        method: "POST",
-        body: buildFormData(),
-      });
-      if (!response.ok) throw new Error("Erro ao gerar Excel");
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${file.name.replace(".pdf", "")}_instrument_index.xlsx`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      for (const file of files) {
+        const response = await fetch("/api/pid/extract/download", {
+          method: "POST",
+          body: buildFormData(file),
+        });
+        if (!response.ok) throw new Error(`Erro ao gerar Excel para "${file.name}"`);
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `${file.name.replace(".pdf", "")}_instrument_index.xlsx`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro desconhecido");
     } finally {
@@ -208,23 +248,25 @@ export default function PidExtractorPage() {
   };
 
   const handleDownloadPdf = async () => {
-    if (!file) return;
+    if (!files.length) return;
     setIsDownloadingPdf(true);
     try {
-      const response = await fetch("/api/pid/extract/preview", {
-        method: "POST",
-        body: buildFormData(),
-      });
-      if (!response.ok) throw new Error("Erro ao gerar PDF anotado");
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${file.name.replace(".pdf", "")}_anotado.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      for (const file of files) {
+        const response = await fetch("/api/pid/extract/preview", {
+          method: "POST",
+          body: buildFormData(file),
+        });
+        if (!response.ok) throw new Error(`Erro ao gerar PDF anotado para "${file.name}"`);
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `${file.name.replace(".pdf", "")}_anotado.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro desconhecido");
     } finally {
@@ -265,67 +307,118 @@ export default function PidExtractorPage() {
             onDrop={handleDrop}
             onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
             onDragLeave={() => setIsDragging(false)}
-            className={`flex min-h-[200px] cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed transition-colors ${
+            className={`rounded-lg border-2 border-dashed transition-colors ${
               isDragging
                 ? "border-primary bg-primary/5"
                 : "border-muted-foreground/25 hover:border-primary/50"
             }`}
           >
-            {file ? (
-              <div className="flex flex-col items-center gap-2">
-                <FileText className="h-12 w-12 text-warning" />
-                <p className="font-medium">{file.name}</p>
-                <p className="text-sm text-muted-foreground">
-                  {(file.size / 1024 / 1024).toFixed(2)} MB
-                </p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => { setFile(null); setResult(null); setError(""); }}
-                >
-                  Remover
-                </Button>
+            {files.length > 0 ? (
+              <div className="space-y-1 p-3">
+                {files.map((f, i) => {
+                  const isOversized = oversizedFiles.has(f.name);
+                  const isActive = processingIndex === i;
+                  return (
+                    <div
+                      key={f.name}
+                      className={`flex items-center gap-2 rounded border px-3 py-2 text-sm ${
+                        isOversized
+                          ? "border-error/40 bg-error-muted"
+                          : isActive
+                            ? "border-primary/40 bg-primary/5"
+                            : "border-border bg-surface"
+                      }`}
+                    >
+                      <FileText className={`h-4 w-4 shrink-0 ${isOversized ? "text-error" : "text-warning"}`} />
+                      <span className="flex-1 truncate font-medium">{f.name}</span>
+                      {isActive && (
+                        <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                      )}
+                      <span className={`font-mono tabular-nums text-xs shrink-0 ${isOversized ? "text-error font-semibold" : "text-text-secondary"}`}>
+                        {(f.size / 1024 / 1024).toFixed(2)} MB
+                        {isOversized && " — acima do limite"}
+                      </span>
+                      {!isProcessing && (
+                        <button
+                          onClick={() => removeFile(i)}
+                          className="ml-1 shrink-0 rounded p-0.5 text-text-tertiary hover:text-text-primary"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+
+                {/* Totals row */}
+                <div className={`flex items-center justify-between rounded px-3 py-1.5 text-xs font-medium ${
+                  totalSize > SIZE_LIMIT ? "bg-error-muted text-error" : "bg-surface text-text-secondary"
+                }`}>
+                  <span>{files.length} arquivo{files.length > 1 ? "s" : ""}</span>
+                  <span className="font-mono tabular-nums">
+                    Total: {(totalSize / 1024 / 1024).toFixed(2)} MB / 4,00 MB
+                    {totalSize > SIZE_LIMIT && " ⚠"}
+                  </span>
+                </div>
+
+                {/* Add more */}
+                {!isProcessing && (
+                  <label className="flex cursor-pointer items-center gap-1.5 px-1 pt-1 text-xs text-text-secondary hover:text-text-primary">
+                    <Upload className="h-3.5 w-3.5" />
+                    Adicionar mais arquivos
+                    <input type="file" accept=".pdf" multiple onChange={handleFileSelect} className="hidden" />
+                  </label>
+                )}
               </div>
             ) : (
-              <label className="flex cursor-pointer flex-col items-center gap-2">
+              <label className="flex min-h-[180px] cursor-pointer flex-col items-center justify-center gap-2 p-6">
                 <Upload className="h-12 w-12 text-muted-foreground" />
-                <p className="font-medium">Arraste um PDF de P&ID ou clique para selecionar</p>
-                <p className="text-sm text-muted-foreground">Apenas P&IDs vetoriais (não escaneados)</p>
-                <input type="file" accept=".pdf" onChange={handleFileSelect} className="hidden" />
+                <p className="font-medium">Arraste PDFs de P&ID ou clique para selecionar</p>
+                <p className="text-sm text-muted-foreground">Múltiplos arquivos suportados · Apenas P&IDs vetoriais</p>
+                <input type="file" accept=".pdf" multiple onChange={handleFileSelect} className="hidden" />
               </label>
             )}
           </div>
 
-          <div className="flex items-start gap-2 rounded-lg bg-warning-muted px-3 py-2.5 text-sm text-warning">
+          {/* Size limit notice */}
+          <div className={`flex items-start gap-2 rounded-lg px-3 py-2.5 text-sm ${
+            totalSize > SIZE_LIMIT && files.length > 0
+              ? "bg-error-muted text-error"
+              : "bg-warning-muted text-warning"
+          }`}>
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
             <span>
-              <strong>Limite de 4 MB por envio.</strong> P&IDs com muitas páginas podem exceder esse limite — divida o arquivo em lotes menores antes de fazer o upload.
+              <strong>Limite de 4 MB por arquivo.</strong>{" "}
+              {totalSize > SIZE_LIMIT && files.length > 0
+                ? "Um ou mais arquivos excedem o limite — remova-os ou substitua por versões menores antes de extrair."
+                : "Cada arquivo é enviado individualmente. P&IDs com muitas páginas podem exceder esse limite — divida antes de fazer o upload."}
             </span>
           </div>
-
         </CardContent>
       </Card>
 
       {/* Error */}
       {error && (
-        <div className="rounded-lg border border-error/50 bg-error-muted p-4 text-center text-sm text-error-text">
+        <div className="rounded-lg border border-error/50 bg-error-muted p-4 text-center text-sm text-error">
           {error}
         </div>
       )}
 
       {/* Extract Button */}
-      {file && !result && (
+      {files.length > 0 && !result && (
         <div className="flex justify-center">
-          <Button size="lg" onClick={handleExtract} disabled={isProcessing} className="gap-2">
+          <Button size="lg" onClick={handleExtract} disabled={isProcessing || !canExtract} className="gap-2">
             {isProcessing ? (
               <>
                 <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                Extraindo instrumentos...
+                {files.length > 1
+                  ? `Processando ${processingIndex + 1} de ${files.length}...`
+                  : "Extraindo instrumentos..."}
               </>
             ) : (
               <>
                 <Gauge className="h-4 w-4" />
-                Extrair Instrumentos
+                {files.length > 1 ? `Extrair ${files.length} arquivos` : "Extrair Instrumentos"}
               </>
             )}
           </Button>
@@ -350,7 +443,7 @@ export default function PidExtractorPage() {
               <div key={item.label} className="flex items-center gap-4">
                 {i > 0 && <div className="h-8 w-px bg-border" />}
                 <div className="text-center">
-                  <p className={`text-2xl font-bold ${item.className ?? ""}`}>{item.value}</p>
+                  <p className={`text-2xl font-bold font-mono tabular-nums ${item.className ?? ""}`}>{item.value}</p>
                   <p className="text-xs text-muted-foreground">{item.label}</p>
                 </div>
               </div>
@@ -366,7 +459,7 @@ export default function PidExtractorPage() {
                 ) : (
                   <>
                     <Download className="h-4 w-4" />
-                    Baixar Excel
+                    {files.length > 1 ? `Baixar ${files.length} Excels` : "Baixar Excel"}
                   </>
                 )}
               </Button>
@@ -379,11 +472,14 @@ export default function PidExtractorPage() {
                 ) : (
                   <>
                     <FileText className="h-4 w-4" />
-                    Baixar PDF Anotado
+                    {files.length > 1 ? `Baixar ${files.length} PDFs Anotados` : "Baixar PDF Anotado"}
                   </>
                 )}
               </Button>
-              <Button variant="outline" onClick={() => { setResult(null); setFile(null); setError(""); }}>
+              <Button
+                variant="outline"
+                onClick={() => { setResult(null); setFiles([]); setError(""); }}
+              >
                 Nova extração
               </Button>
             </div>
@@ -620,7 +716,6 @@ export default function PidExtractorPage() {
                   </p>
                 )}
 
-                {/* Notes section */}
                 {result.notes && result.notes.length > 0 && (
                   <div className="mt-6">
                     <h3 className="mb-3 flex items-center gap-2 text-sm font-medium">
