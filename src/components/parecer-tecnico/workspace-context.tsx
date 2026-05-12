@@ -69,22 +69,28 @@ export const ANALYSIS_PROFILE_OPTIONS: Array<{
   description: string;
 }> = [
   {
-    value: "triagem_tecnica",
-    label: "Triagem Tecnica",
+    value: "simples",
+    label: "Simples — 10 itens",
     description:
-      "Avaliacao objetiva dos requisitos tecnicos mais criticos e de maior impacto.",
+      "Foco nos desvios criticos: seguranca, rejeicoes e bloqueios tecnicos. Ideal para triagem rapida.",
   },
   {
-    value: "conformidade_tecnica",
-    label: "Conformidade Tecnica",
+    value: "padrao",
+    label: "Padrao — 15 itens",
     description:
-      "Cobertura equilibrada dos requisitos tecnicos com nivel de detalhe intermediario.",
+      "Cobertura equilibrada dos requisitos criticos e relevantes. Indicado para a maioria das avaliacoes.",
   },
   {
-    value: "auditoria_tecnica_completa",
-    label: "Auditoria Tecnica Completa",
+    value: "completa",
+    label: "Completa — 20 itens",
     description:
-      "Analise aprofundada de todos os requisitos relevantes de engenharia.",
+      "Analise abrangente cobrindo todos os requisitos de impacto tecnico, incluindo documentacao e prazos.",
+  },
+  {
+    value: "personalizado",
+    label: "Personalizado",
+    description:
+      "Defina o numero exato de itens que deseja analisar.",
   },
 ];
 
@@ -127,6 +133,7 @@ interface WorkspaceContextValue {
   analysisPercent: number;
   analysisError: string;
   analysisProfile: PerfilAnalise;
+  customItemCount: number;
   hasResults: boolean;
   hasEngDocs: boolean;
   hasFornDocs: boolean;
@@ -141,6 +148,7 @@ interface WorkspaceContextValue {
   setFilters: (filters: Partial<Filters>) => void;
   startAnalysis: () => Promise<void>;
   setAnalysisProfile: (profile: PerfilAnalise) => void;
+  setCustomItemCount: (n: number) => void;
   deleteParecer: () => Promise<void>;
 }
 
@@ -195,7 +203,8 @@ export function ParecerWorkspaceProvider({ parecerId, children }: ProviderProps)
   const [analysisPercent, setAnalysisPercent] = useState(0);
   const [analysisError, setAnalysisError] = useState("");
   const [analysisProfile, setAnalysisProfile] =
-    useState<PerfilAnalise>("conformidade_tecnica");
+    useState<PerfilAnalise>("padrao");
+  const [customItemCount, setCustomItemCount] = useState(25);
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
 
   // --- Data loading ---
@@ -408,15 +417,19 @@ export function ParecerWorkspaceProvider({ parecerId, children }: ProviderProps)
   const startAnalysis = useCallback(async () => {
     if (!parecer) return;
     setAnalysisError("");
+    const resolvedProfile: PerfilAnalise =
+      analysisProfile === "personalizado"
+        ? `custom_${Math.max(1, Math.min(customItemCount, 100))}`
+        : analysisProfile;
     try {
-      await patecApi.analise.iniciar(parecer.id, analysisProfile);
-      startPolling(analysisProfile);
+      await patecApi.analise.iniciar(parecer.id, resolvedProfile);
+      startPolling(resolvedProfile);
     } catch (err) {
       setAnalysisError(
         err instanceof Error ? err.message : "Erro ao iniciar analise"
       );
     }
-  }, [parecer, analysisProfile, startPolling]);
+  }, [parecer, analysisProfile, customItemCount, startPolling]);
 
   const deleteParecer = useCallback(async () => {
     if (!parecer) return;
@@ -444,6 +457,7 @@ export function ParecerWorkspaceProvider({ parecerId, children }: ProviderProps)
       analysisPercent,
       analysisError,
       analysisProfile,
+      customItemCount,
       hasResults,
       hasEngDocs,
       hasFornDocs,
@@ -458,6 +472,7 @@ export function ParecerWorkspaceProvider({ parecerId, children }: ProviderProps)
       setFilters,
       startAnalysis,
       setAnalysisProfile,
+      setCustomItemCount,
       deleteParecer,
     }),
     [
@@ -477,6 +492,7 @@ export function ParecerWorkspaceProvider({ parecerId, children }: ProviderProps)
       analysisPercent,
       analysisError,
       analysisProfile,
+      customItemCount,
       hasResults,
       hasEngDocs,
       hasFornDocs,
@@ -491,6 +507,7 @@ export function ParecerWorkspaceProvider({ parecerId, children }: ProviderProps)
       setFilters,
       startAnalysis,
       setAnalysisProfile,
+      setCustomItemCount,
       deleteParecer,
     ]
   );

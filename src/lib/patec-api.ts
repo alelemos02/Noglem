@@ -73,10 +73,7 @@ export interface ParecerCreate {
 }
 
 export type ExportFormat = "pdf" | "xlsx" | "docx";
-export type PerfilAnalise =
-  | "triagem_tecnica"
-  | "conformidade_tecnica"
-  | "auditoria_tecnica_completa";
+export type PerfilAnalise = "simples" | "padrao" | "completa" | string;
 
 export interface DocumentoResponse {
   id: string;
@@ -262,7 +259,7 @@ export const patecApi = {
     },
   },
   analise: {
-    iniciar(parecerId: string, perfilAnalise: PerfilAnalise = "conformidade_tecnica") {
+    iniciar(parecerId: string, perfilAnalise: PerfilAnalise = "padrao") {
       return request<AnaliseResponse>(`/v1/pareceres/${parecerId}/analisar`, {
         method: "POST",
         body: JSON.stringify({ perfil_analise: perfilAnalise }),

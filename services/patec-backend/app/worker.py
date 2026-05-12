@@ -3,7 +3,6 @@ import logging
 from celery import Celery
 
 from app.core.config import settings
-from app.api.v1.endpoints.analise import ANALYSIS_PROFILE_LABELS
 
 # Initialize Celery app
 celery_app = Celery(

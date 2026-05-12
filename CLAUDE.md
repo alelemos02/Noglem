@@ -80,6 +80,23 @@ Para verificar logs de producao: acesse o painel do Railway ou Vercel.
 
 ---
 
+## Versionamento do site
+
+A versao do site e exibida no sidebar em `src/components/layout/sidebar.tsx`.
+**REGRA OBRIGATORIA:** A versao DEVE ser atualizada a cada deploy.
+
+Formato: `VX.Y.Z`
+
+| Segmento | Quando incrementar |
+|----------|-------------------|
+| **X** (ex: v**2**.0.3) | Impacto muito grande: redesign de layout, mudancas brutas de arquitetura |
+| **Y** (ex: v2.**0**.3) | Inclusao de nova ferramenta no dashboard |
+| **Z** (ex: v2.0.**3**) | Atualizacoes menores: melhorias em ferramentas existentes, correcoes, ajustes |
+
+Versao atual: **v2.0.3**
+
+---
+
 ## Atualizacao deste arquivo
 
 `CLAUDE.md` e `AGENTS.md` **nao sao atualizados automaticamente**.

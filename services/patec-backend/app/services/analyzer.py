@@ -12,6 +12,7 @@ from app.services.llm_prompt import (
     USER_PROMPT_TEMPLATE,
     CHUNK_USER_PROMPT_TEMPLATE,
     REDUCE_PROMPT,
+    PROFILE_ITEM_LIMIT_TEMPLATE,
 )
 
 logger = logging.getLogger(__name__)
@@ -19,41 +20,20 @@ logger = logging.getLogger(__name__)
 # Approximate token limit for a single API call (leaving room for system prompt + response)
 MAX_INPUT_CHARS = 80_000  # ~20k tokens, ensures response fits within output token limits
 
-DEFAULT_ANALYSIS_PROFILE = "conformidade_tecnica"
-ANALYSIS_PROFILE_INSTRUCTIONS: dict[str, str] = {
-    "triagem_tecnica": (
-        "## PERFIL DE PROFUNDIDADE — TRIAGEM TECNICA\n\n"
-        "### RESTRICAO DE VOLUME (OBRIGATORIO)\n"
-        "O array 'itens' no JSON de saida DEVE conter NO MAXIMO 15 itens.\n"
-        "Se voce identificar mais de 15 pontos, DEVE:\n"
-        "1. Selecionar APENAS os de maior impacto tecnico (seguranca, rejeicoes, bloqueios)\n"
-        "2. Agrupar requisitos correlatos em um unico item\n"
-        "3. DESCARTAR itens aprovados (status A) — na triagem, apenas desvios importam\n\n"
-        "### FOCO DA TRIAGEM\n"
-        "- Apenas itens que BLOQUEIAM ou CONDICIONAM a aprovacao tecnica\n"
-        "- Seguranca, conformidade normativa critica, desempenho de processo\n"
-        "- Escopo principal de fornecimento e lacunas criticas de documentacao\n"
-        "- NAO inclua: itens conformes, detalhes editoriais, requisitos obvios"
-    ),
-    "conformidade_tecnica": (
-        "## PERFIL DE PROFUNDIDADE\n"
-        "- Modo: CONFORMIDADE TECNICA (PADRAO)\n"
-        "- Objetivo: cobertura dos requisitos tecnicamente relevantes, tipicamente 10-30 itens.\n"
-        "- Avalie: funcionalidade, materiais, interfaces, comunicacao, documentacao critica "
-        "e conformidade normativa.\n"
-        "- Use julgamento de engenheiro senior: inclua apenas itens que afetam a decisao tecnica.\n"
-        "- Agrupe requisitos correlatos de um mesmo subsistema quando apropriado."
-    ),
-    "auditoria_tecnica_completa": (
-        "## PERFIL DE PROFUNDIDADE\n"
-        "- Modo: AUDITORIA TECNICA COMPLETA\n"
-        "- Objetivo: analise abrangente, tipicamente 20-50 itens.\n"
-        "- Cubra todos os requisitos de impacto tecnico, incluindo documentacao, "
-        "embalagem, sobressalentes e prazos.\n"
-        "- Ainda assim, use julgamento: nao inclua itens triviais ou redundantes.\n"
-        "- Registre divergencias com rastreabilidade e acao requerida precisa."
-    ),
+DEFAULT_ANALYSIS_PROFILE = "padrao"
+
+# Named profiles: (internal_key, display_label, max_itens)
+_NAMED_PROFILES: dict[str, tuple[str, int]] = {
+    "simples":  ("Simples",  10),
+    "padrao":   ("Padrao",   15),
+    "completa": ("Completa", 20),
+    # backward-compat aliases for cached results / old API calls
+    "triagem_tecnica":          ("Simples",  10),
+    "conformidade_tecnica":     ("Padrao",   15),
+    "auditoria_tecnica_completa": ("Completa", 20),
 }
+
+_CUSTOM_PROFILE_RE = re.compile(r"^custom_(\d+)$")
 DEFAULT_OBSERVATION_BY_STATUS = {
     "A": "Item aderente aos requisitos tecnicos da engenharia, sem desvios identificados.",
     "B": "Item parcialmente conforme; requer ajustes para atendimento completo.",
@@ -194,14 +174,34 @@ def _extract_json(text: str) -> dict:
 
 
 def normalize_analysis_profile(profile: str | None) -> str:
-    if profile in ANALYSIS_PROFILE_INSTRUCTIONS:
+    if profile and (profile in _NAMED_PROFILES or _CUSTOM_PROFILE_RE.match(profile or "")):
         return profile
     return DEFAULT_ANALYSIS_PROFILE
 
 
+def get_profile_label(profile: str) -> str:
+    if profile in _NAMED_PROFILES:
+        return _NAMED_PROFILES[profile][0]
+    m = _CUSTOM_PROFILE_RE.match(profile)
+    if m:
+        return f"Personalizado ({m.group(1)} itens)"
+    return _NAMED_PROFILES[DEFAULT_ANALYSIS_PROFILE][0]
+
+
+def get_profile_max_itens(profile: str) -> int:
+    if profile in _NAMED_PROFILES:
+        return _NAMED_PROFILES[profile][1]
+    m = _CUSTOM_PROFILE_RE.match(profile)
+    if m:
+        return max(1, min(int(m.group(1)), 100))
+    return _NAMED_PROFILES[DEFAULT_ANALYSIS_PROFILE][1]
+
+
 def _profile_instruction(profile: str | None) -> str:
     normalized = normalize_analysis_profile(profile)
-    return f"\n\n{ANALYSIS_PROFILE_INSTRUCTIONS[normalized]}\n"
+    label = get_profile_label(normalized)
+    max_itens = get_profile_max_itens(normalized)
+    return f"\n\n{PROFILE_ITEM_LIMIT_TEMPLATE.format(label=label, max_itens=max_itens)}\n"
 
 
 def _split_text_into_chunks(text: str, max_chars: int) -> list[str]:
@@ -248,9 +248,26 @@ def _call_gemini(system: str, user_content: str) -> str:
     max_attempts = max(1, settings.GEMINI_MAX_RETRIES)
     response = None
 
-    with httpx.Client(timeout=180.0) as client:
+    with httpx.Client(timeout=httpx.Timeout(600.0, connect=30.0)) as client:
         for attempt in range(1, max_attempts + 1):
-            response = client.post(url, params={"key": api_key}, json=payload)
+            try:
+                response = client.post(url, params={"key": api_key}, json=payload)
+            except (httpx.ReadTimeout, httpx.ConnectTimeout, httpx.PoolTimeout) as exc:
+                if attempt < max_attempts:
+                    wait_seconds = min(
+                        settings.GEMINI_RETRY_BASE_SECONDS * (2 ** (attempt - 1)),
+                        settings.GEMINI_RETRY_MAX_SECONDS,
+                    )
+                    logger.warning(
+                        "Gemini API timeout (tentativa %d/%d). Nova tentativa em %.1fs. Erro: %s",
+                        attempt,
+                        max_attempts,
+                        wait_seconds,
+                        exc,
+                    )
+                    time.sleep(wait_seconds)
+                    continue
+                raise RuntimeError(f"Gemini API timeout apos {max_attempts} tentativas: {exc}") from exc
 
             if response.status_code < 400:
                 break
@@ -844,10 +861,22 @@ def analyze_chunked(
     if on_progress:
         on_progress("Consolidando resultados...")
 
-    analises_text = "\n\n---\n\n".join(
-        f"### Analise Parcial {i + 1}\n{json.dumps(r, ensure_ascii=False, indent=2)}"
-        for i, r in enumerate(partial_results)
-    )
+    # Cap each partial JSON to avoid an oversized reduce payload.
+    # 200k chars total across all partials keeps the reduce call within safe limits.
+    MAX_REDUCE_CHARS = 200_000
+    per_chunk_limit = MAX_REDUCE_CHARS // max(total_chunks, 1)
+    analises_parts = []
+    for i, r in enumerate(partial_results):
+        serialized = json.dumps(r, ensure_ascii=False, indent=2)
+        if len(serialized) > per_chunk_limit:
+            logger.warning(
+                "Parcial %d truncado de %d para %d chars para o reduce",
+                i + 1, len(serialized), per_chunk_limit,
+            )
+            serialized = serialized[:per_chunk_limit] + "\n  ... (truncado)"
+        analises_parts.append(f"### Analise Parcial {i + 1}\n{serialized}")
+
+    analises_text = "\n\n---\n\n".join(analises_parts)
 
     reduce_content = REDUCE_PROMPT.format(
         total_chunks=total_chunks,

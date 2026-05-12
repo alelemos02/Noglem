@@ -1,8 +1,8 @@
+import re
 import uuid
-from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,16 +14,16 @@ from app.models.usuario import Usuario
 from app.models.parecer import Parecer
 from app.models.documento import Documento
 from app.services.audit import registrar_auditoria
+from app.services.analyzer import (
+    DEFAULT_ANALYSIS_PROFILE,
+    get_profile_label,
+    normalize_analysis_profile,
+)
 from app.services.tasks import start_analysis_in_background
 
 router = APIRouter(prefix="/pareceres/{parecer_id}", tags=["analise"])
 
-ANALYSIS_PROFILE_LABELS = {
-    "triagem_tecnica": "Triagem Tecnica",
-    "conformidade_tecnica": "Conformidade Tecnica",
-    "auditoria_tecnica_completa": "Auditoria Tecnica Completa",
-}
-DEFAULT_ANALYSIS_PROFILE = "conformidade_tecnica"
+_VALID_PROFILE_RE = re.compile(r"^(simples|padrao|completa|triagem_tecnica|conformidade_tecnica|auditoria_tecnica_completa|custom_\d+)$")
 
 
 class AnaliseResponse(BaseModel):
@@ -42,11 +42,16 @@ class StatusResponse(BaseModel):
 
 
 class AnaliseRequest(BaseModel):
-    perfil_analise: Literal[
-        "triagem_tecnica",
-        "conformidade_tecnica",
-        "auditoria_tecnica_completa",
-    ] = DEFAULT_ANALYSIS_PROFILE
+    perfil_analise: str = DEFAULT_ANALYSIS_PROFILE
+
+    @field_validator("perfil_analise")
+    @classmethod
+    def validate_perfil(cls, v: str) -> str:
+        if not _VALID_PROFILE_RE.match(v):
+            raise ValueError(
+                "perfil_analise invalido. Use: simples, padrao, completa ou custom_N (ex: custom_30)"
+            )
+        return v
 
 
 @router.post("/analisar", response_model=AnaliseResponse, status_code=status.HTTP_202_ACCEPTED)
@@ -99,10 +104,8 @@ async def iniciar_analise(
     parecer.comentario_geral = None
     await db.commit()
 
-    perfil_analise = payload.perfil_analise if payload else DEFAULT_ANALYSIS_PROFILE
-    perfil_label = ANALYSIS_PROFILE_LABELS.get(
-        perfil_analise, ANALYSIS_PROFILE_LABELS[DEFAULT_ANALYSIS_PROFILE]
-    )
+    perfil_analise = normalize_analysis_profile(payload.perfil_analise if payload else DEFAULT_ANALYSIS_PROFILE)
+    perfil_label = get_profile_label(perfil_analise)
 
     set_progress(
         str(parecer_id),

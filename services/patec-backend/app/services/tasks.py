@@ -17,6 +17,7 @@ from app.models.recomendacao import Recomendacao
 from app.services.analyzer import (
     DEFAULT_ANALYSIS_PROFILE,
     analyze_documents,
+    get_profile_label,
     llm_self_review,
     normalize_analysis_profile,
     validate_reference_grounding,
@@ -26,11 +27,6 @@ from app.services.analyzer import (
 logger = logging.getLogger(__name__)
 
 _sync_engine = None
-ANALYSIS_PROFILE_LABELS = {
-    "triagem_tecnica": "Triagem Tecnica",
-    "conformidade_tecnica": "Conformidade Tecnica",
-    "auditoria_tecnica_completa": "Auditoria Tecnica Completa",
-}
 
 
 def _get_sync_engine():
@@ -42,7 +38,7 @@ def _get_sync_engine():
 
 # Bump this version whenever SYSTEM_PROMPT or profile instructions change
 # to automatically invalidate cached results from previous prompt versions.
-PROMPT_VERSION = "3"
+PROMPT_VERSION = "4"
 
 
 def _compute_docs_hash(eng_text: str, forn_text: str, analysis_profile: str) -> str:
@@ -56,9 +52,7 @@ def run_analysis_sync(
 ):
     """Run analysis in-process (no Celery), suitable for background threading."""
     analysis_profile = normalize_analysis_profile(analysis_profile)
-    profile_label = ANALYSIS_PROFILE_LABELS.get(
-        analysis_profile, ANALYSIS_PROFILE_LABELS[DEFAULT_ANALYSIS_PROFILE]
-    )
+    profile_label = get_profile_label(analysis_profile)
     engine = _get_sync_engine()
     set_progress(parecer_id, 5, f"Iniciando processamento ({profile_label})...", "starting")
 

@@ -22,6 +22,8 @@ export function AnalysisSetup() {
     analysisError,
     analysisProfile,
     setAnalysisProfile,
+    customItemCount,
+    setCustomItemCount,
     startAnalysis,
     canAnalyze,
     hasEngDocs,
@@ -109,10 +111,10 @@ export function AnalysisSetup() {
             {canAnalyze && (
               <div className="rounded-lg border border-border bg-surface p-6">
                 <p className="text-sm font-semibold text-text-primary">
-                  Profundidade da Analise Tecnica
+                  Quantidade de Itens a Analisar
                 </p>
                 <p className="mb-3 text-xs text-text-secondary">
-                  Escolha o nivel de rigor da avaliacao.
+                  Mais itens = analise mais detalhada e tempo maior de processamento.
                 </p>
                 <select
                   value={analysisProfile}
@@ -127,6 +129,25 @@ export function AnalysisSetup() {
                     </option>
                   ))}
                 </select>
+                {analysisProfile === "personalizado" && (
+                  <div className="mt-3 flex items-center gap-3">
+                    <label className="text-xs text-text-secondary whitespace-nowrap">
+                      Numero de itens:
+                    </label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={100}
+                      value={customItemCount}
+                      onChange={(e) => {
+                        const v = parseInt(e.target.value, 10);
+                        if (!isNaN(v)) setCustomItemCount(Math.max(1, Math.min(v, 100)));
+                      }}
+                      className="w-24 rounded-md border border-border bg-bg-primary px-3 py-1.5 text-sm text-text-primary outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+                    />
+                    <span className="text-xs text-text-tertiary">(max 100)</span>
+                  </div>
+                )}
                 <p className="mt-2 text-xs text-text-secondary">
                   {selectedProfile.description}
                 </p>
