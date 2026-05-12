@@ -1,8 +1,42 @@
-# CLAUDE.md — JulIA (Claude Code)
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 Leia **AGENTS.md** para todas as convencoes do projeto: arquitetura, design system, como alterar/adicionar ferramentas, stack e variaveis de ambiente.
 
 O que esta abaixo e especifico do Claude Code e nao se aplica a outros agentes.
+
+---
+
+## Comandos de desenvolvimento
+
+### Frontend (Next.js)
+```bash
+npm run dev          # Dev server em localhost:3000
+npm run build        # Build de producao
+npm run lint         # ESLint
+npx tsc --noEmit     # Type-check sem emitir arquivos
+```
+
+### Backend Central (FastAPI, porta 8000)
+```bash
+cd backend
+uvicorn app.main:app --reload --port 8000
+```
+
+### PATEC Microservice (FastAPI, porta 8001)
+```bash
+cd services/patec-backend
+python run.py
+# Migrations: alembic upgrade head
+# Nova migration: alembic revision --autogenerate -m "descricao"
+```
+
+### RAG / Conhecimento Microservice (FastAPI, porta 8002)
+```bash
+cd services/rag-backend
+uvicorn app.main:app --reload --port 8002
+```
 
 ---
 
@@ -39,7 +73,32 @@ Para verificar logs de producao: acesse o painel do Railway ou Vercel.
 
 ---
 
+## gstack
+
+- Use the `/browse` skill from gstack for **all web browsing** — never use `mcp__claude-in-chrome__*` tools directly.
+- Available gstack skills: `/office-hours`, `/plan-ceo-review`, `/plan-eng-review`, `/plan-design-review`, `/design-consultation`, `/review`, `/ship`, `/land-and-deploy`, `/canary`, `/benchmark`, `/browse`, `/qa`, `/qa-only`, `/design-review`, `/setup-browser-cookies`, `/setup-deploy`, `/retro`, `/investigate`, `/document-release`, `/codex`, `/cso`, `/autoplan`, `/careful`, `/freeze`, `/guard`, `/unfreeze`, `/gstack-upgrade`.
+
+---
+
 ## Atualizacao deste arquivo
 
 `CLAUDE.md` e `AGENTS.md` **nao sao atualizados automaticamente**.
 Peca explicitamente quando quiser atualizar: *"atualiza o CLAUDE.md / AGENTS.md com isso"*.
+
+## Skill routing
+
+When the user's request matches an available skill, invoke it via the Skill tool. When in doubt, invoke the skill.
+
+Key routing rules:
+- Product ideas/brainstorming → invoke /office-hours
+- Strategy/scope → invoke /plan-ceo-review
+- Architecture → invoke /plan-eng-review
+- Design system/plan review → invoke /design-consultation or /plan-design-review
+- Full review pipeline → invoke /autoplan
+- Bugs/errors → invoke /investigate
+- QA/testing site behavior → invoke /qa or /qa-only
+- Code review/diff check → invoke /review
+- Visual polish → invoke /design-review
+- Ship/deploy/PR → invoke /ship or /land-and-deploy
+- Save progress → invoke /context-save
+- Resume context → invoke /context-restore
