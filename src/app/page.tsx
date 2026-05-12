@@ -88,12 +88,16 @@ export default async function HomePage() {
 
       {/* Hero */}
       <section className="flex flex-1 flex-col items-center justify-center px-4 py-20 text-center">
+        <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-accent/30 bg-accent-muted px-4 py-1.5">
+          <span className="h-1.5 w-1.5 rounded-full bg-accent" />
+          <span className="font-mono text-xs font-medium text-accent tracking-wide">Agentes Especializados de IA</span>
+        </div>
         <h1 className="max-w-3xl text-4xl font-bold tracking-tight sm:text-5xl md:text-6xl">
-          Ferramentas de Engenharia em um só lugar
+          Agentes de IA para Engenharia em um só lugar
         </h1>
         <p className="mt-6 max-w-2xl text-lg text-muted-foreground">
-          Jul/IA é sua plataforma centralizada para ferramentas de engenharia.
-          Traduza documentos e extraia dados de PDFs com IA.
+          Jul/IA é sua plataforma centralizada de agentes de engenharia.
+          Cada agente é treinado para uma tarefa específica — tradução, extração, análise e muito mais.
         </p>
         <div className="mt-10 flex gap-4">
           <Link href="/sign-up">
@@ -114,7 +118,7 @@ export default async function HomePage() {
       <section className="border-t border-border bg-muted/30 py-20">
         <div className="container mx-auto px-4">
           <h2 className="mb-12 text-center text-3xl font-bold">
-            Nossas Ferramentas
+            Nossos Agentes
           </h2>
           <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
             {features.map((feature) => (

@@ -17,14 +17,14 @@ export default function DashboardPage() {
       <div>
         <div className="flex items-baseline justify-between">
           <h1 className="text-2xl font-heading font-bold tracking-tight">
-            Ferramentas
+            Agentes
           </h1>
           <span className="text-sm text-text-secondary font-mono tabular-nums">
-            {tools.length} ferramentas
+            {tools.length} agentes
           </span>
         </div>
         <p className="mt-1 text-sm text-text-tertiary">
-          Ferramentas de engenharia com inteligência artificial
+          Agentes de engenharia com inteligência artificial
         </p>
       </div>
 

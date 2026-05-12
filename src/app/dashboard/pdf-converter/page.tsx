@@ -135,7 +135,7 @@ export default function PdfConverterPage() {
           {mode === "convert" ? <FileText className="h-6 w-6" /> : <FileType className="h-6 w-6" />}
         </div>
         <div>
-          <h1 className="text-2xl font-bold">Ferramentas de Documento</h1>
+          <h1 className="text-2xl font-bold">Agente de Documento</h1>
           <p className="text-muted-foreground">
             {mode === "convert" ? "Converta PDFs para documentos Word editáveis" : "Formate e limpe documentos Word (.docx)"}
           </p>

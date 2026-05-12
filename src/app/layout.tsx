@@ -7,8 +7,8 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Jul/IA - Engineering Intelligence",
-  description: "Plataforma centralizada de ferramentas de engenharia - Tradução AI, Extração de PDFs e Conversão de documentos",
-  keywords: ["engenharia", "ferramentas", "pdf", "tradução", "IA", "documentos"],
+  description: "Plataforma centralizada de agentes de IA para engenharia - Tradução AI, Extração de PDFs, Análise e Conversão de documentos",
+  keywords: ["engenharia", "agentes", "agentes de ia", "ferramentas", "pdf", "tradução", "IA", "documentos"],
 };
 
 const isClerkConfigured =
