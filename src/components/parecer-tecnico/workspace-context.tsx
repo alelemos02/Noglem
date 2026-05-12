@@ -102,6 +102,7 @@ export const STAGE_LABELS: Record<string, string> = {
   cache_hit: "Cache encontrado",
   llm_analysis: "Analisando com IA",
   reference_validation: "Validando referencias",
+  optimizing_fields: "Otimizando campos",
   saving_results: "Salvando resultados",
   completed: "Concluido",
   error: "Erro",

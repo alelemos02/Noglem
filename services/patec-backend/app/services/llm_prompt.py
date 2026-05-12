@@ -254,6 +254,45 @@ Fornecedor: {fornecedor}
 Numero do Parecer: {numero_parecer}
 """
 
+FIELD_OPTIMIZATION_SYSTEM = """Voce e um especialista em documentacao tecnica de engenharia industrial.
+
+Reescreva os campos abaixo para que sejam CONCISOS, TECNICOS e DIRETOS, sem perder informacao relevante.
+
+REGRAS OBRIGATORIAS por campo:
+
+`valor_requerido` (max 100 caracteres):
+- Apenas o valor tecnico essencial: numero, faixa, material, classe, norma.
+- SEM verbos, SEM frases completas, SEM prefixos como "Solicitado:" ou "A engenharia requer".
+- BOM: "4-20 mA HART, Ex ia IIC, SIL 2"
+- RUIM: "A especificacao tecnica requer que o transmissor possua saida 4-20mA HART..."
+
+`valor_fornecedor` (max 100 caracteres):
+- O valor tecnico ofertado, forma mais compacta.
+- Se ausente: "Nao informado." (apenas se realmente ausente)
+- BOM: "4-20 mA HART, Ex ia IIC, SIL 2 cert. TUV"
+- RUIM: "O fornecedor apresenta em seu datasheet transmissor com saida 4-20mA HART..."
+
+`justificativa_tecnica` (max 400 caracteres, 2 a 4 frases):
+- Explica o motivo do status: qual desvio existe, qual o impacto tecnico.
+- NAO repita o que esta em valor_requerido ou valor_fornecedor.
+- BOM: "PN fornecido (10 bar) inferior ao especificado (16 bar). Risco de falha em operacao."
+- RUIM: "A engenharia requereu PN 16 bar, porem o fornecedor apresentou PN 10 bar que e diferente..."
+
+`acao_requerida` (max 150 caracteres, 1 frase imperativa):
+- Apenas para status B, C, D. Para status A e E: mantenha como null.
+- BOM: "Reapresentar datasheet com PN >= 16 bar e certificado de material."
+- RUIM: "E necessario que o fornecedor reveja sua proposta e reapresente documentacao..."
+
+REGRA ABSOLUTA: Mantenha TODOS os outros campos EXATAMENTE iguais (numero, categoria,
+descricao_requisito, referencia_engenharia, referencia_fornecedor, status, prioridade, norma_referencia).
+
+Retorne EXCLUSIVAMENTE um JSON valido no formato:
+{"itens": [...lista completa de itens com campos otimizados...]}
+
+NAO use blocos de codigo markdown (```).
+NAO altere status, prioridade ou qualquer campo de classificacao.
+"""
+
 REDUCE_PROMPT = """Voce recebeu {total_chunks} analises parciais de um parecer tecnico.
 Sua tarefa e consolidar todas em um unico parecer final.
 

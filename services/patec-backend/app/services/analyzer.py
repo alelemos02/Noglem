@@ -13,6 +13,7 @@ from app.services.llm_prompt import (
     CHUNK_USER_PROMPT_TEMPLATE,
     REDUCE_PROMPT,
     PROFILE_ITEM_LIMIT_TEMPLATE,
+    FIELD_OPTIMIZATION_SYSTEM,
 )
 
 logger = logging.getLogger(__name__)
@@ -775,6 +776,76 @@ def llm_self_review(
     }
 
     return validated, summary
+
+
+# ---------------------------------------------------------------------------
+# Field Optimization (Post-processing)
+# ---------------------------------------------------------------------------
+
+_FIELD_LIMITS = {
+    "valor_requerido": 100,
+    "valor_fornecedor": 100,
+    "justificativa_tecnica": 400,
+    "acao_requerida": 150,
+}
+
+
+def _needs_optimization(itens: list[dict]) -> bool:
+    for item in itens:
+        for field, limit in _FIELD_LIMITS.items():
+            value = item.get(field)
+            if value and len(str(value)) > limit:
+                return True
+    return False
+
+
+def optimize_item_fields(data: dict) -> dict:
+    """
+    Post-processing: compact verbose fields via a focused LLM call.
+    Skipped entirely if all fields are already within their character limits.
+    On failure, returns the original data unchanged.
+    """
+    pt = data.get("parecer_tecnico", data)
+    itens = pt.get("itens", [])
+
+    if not itens or not _needs_optimization(itens):
+        logger.info("Field optimization: all fields within limits, skipping")
+        return data
+
+    exceeded_count = sum(
+        1
+        for item in itens
+        for field, limit in _FIELD_LIMITS.items()
+        if item.get(field) and len(str(item.get(field, ""))) > limit
+    )
+    logger.info("Field optimization: %d field(s) exceed limits, calling LLM", exceeded_count)
+
+    items_json = json.dumps(itens, ensure_ascii=False, indent=2)
+    user_content = (
+        f"Otimize os campos dos {len(itens)} itens abaixo conforme as regras de comprimento.\n\n"
+        f"{items_json}"
+    )
+
+    try:
+        response_text = _call_gemini(FIELD_OPTIMIZATION_SYSTEM, user_content)
+        opt_data = _extract_json(response_text)
+
+        optimized_itens = opt_data.get("itens", [])
+        if len(optimized_itens) != len(itens):
+            logger.warning(
+                "Field optimization: item count mismatch (%d -> %d), skipping optimization",
+                len(itens),
+                len(optimized_itens),
+            )
+            return data
+
+        pt["itens"] = optimized_itens
+        result = {"parecer_tecnico": pt}
+        return _validate_parecer_json(result)
+
+    except Exception as e:
+        logger.warning("Field optimization failed: %s — using original result", e)
+        return data
 
 
 def analyze_single(

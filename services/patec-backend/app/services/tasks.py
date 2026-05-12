@@ -20,6 +20,7 @@ from app.services.analyzer import (
     get_profile_label,
     llm_self_review,
     normalize_analysis_profile,
+    optimize_item_fields,
     validate_reference_grounding,
     validate_value_consistency,
 )
@@ -209,6 +210,15 @@ def run_analysis_sync(
                         if parecer.comentario_geral
                         else review_warning
                     )
+
+            # Field optimization: compact verbose fields via LLM before saving
+            set_progress(
+                parecer_id,
+                88,
+                "Otimizando campos da analise...",
+                "optimizing_fields",
+            )
+            result = optimize_item_fields(result)
 
             set_progress(parecer_id, 90, "Salvando resultados no banco...", "saving_results")
             db.execute(
