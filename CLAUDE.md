@@ -102,6 +102,12 @@ Versao atual: **v2.0.3**
 `CLAUDE.md` e `AGENTS.md` **nao sao atualizados automaticamente**.
 Peca explicitamente quando quiser atualizar: *"atualiza o CLAUDE.md / AGENTS.md com isso"*.
 
+## Contexto por ferramenta (.claude/apps/)
+
+Cada ferramenta do dashboard tem um arquivo de contexto em `.claude/apps/{tool-id}.md`.
+
+**REGRA OBRIGATORIA:** Sempre que finalizar uma alteracao em qualquer ferramenta (frontend, API Route ou backend), atualize o arquivo `.claude/apps/` correspondente para refletir a mudanca — arquitetura, endpoints, quirks, dependencias. Faca isso antes do commit.
+
 ## Skill routing
 
 When the user's request matches an available skill, invoke it via the Skill tool. When in doubt, invoke the skill.
