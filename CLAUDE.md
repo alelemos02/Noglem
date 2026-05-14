@@ -48,6 +48,15 @@ uvicorn app.main:app --reload --port 8002
 - Nao crie arquivos `.md` de documentacao sem instrucao explicita
 - Se o escopo do pedido for ambiguo, pergunte antes de codar
 
+## Regra obrigatoria: portar aplicacao existente
+
+Quando o pedido for subir/portar uma aplicacao de outro diretorio para o noglem:
+1. Liste TODOS os arquivos da aplicacao de origem (`find <dir> -type f`)
+2. Leia TODOS os arquivos antes de escrever qualquer codigo
+3. So entao implemente o porte completo de uma vez
+
+Nunca porte arquivo por arquivo de forma incremental sem ter lido a aplicacao inteira primeiro.
+
 ## Ferramentas do Claude Code
 
 - Use `TodoWrite` para tarefas com mais de 3 passos
