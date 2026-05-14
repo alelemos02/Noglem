@@ -103,7 +103,17 @@ export default function PdfCommentsPage() {
       for (const f of files) formData.append("files", f);
 
       const res = await fetch("/api/pdf-comments", { method: "POST", body: formData });
-      const data = await res.json();
+
+      if (res.status === 413) {
+        throw new Error("Arquivo muito grande para o upload via browser (limite ~4 MB). Reduza o arquivo e tente novamente.");
+      }
+
+      let data: ProcessResponse & { error?: string };
+      try {
+        data = await res.json();
+      } catch {
+        throw new Error(`Resposta inesperada do servidor (HTTP ${res.status}). Tente novamente.`);
+      }
 
       if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
       setResponse(data);
@@ -187,7 +197,7 @@ export default function PdfCommentsPage() {
                 <span className="text-accent underline">clique para selecionar</span>
               </p>
               <p className="text-xs text-text-tertiary">
-                Múltiplos arquivos · Máx. 100 MB por arquivo
+                Múltiplos arquivos · Recomendado até 4 MB por arquivo
               </p>
               <input
                 type="file"
@@ -211,13 +221,20 @@ export default function PdfCommentsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {files.map((f, idx) => (
+                  {files.map((f, idx) => {
+                    const isOversized = f.size > 4 * 1024 * 1024;
+                    return (
                     <tr key={idx} className="border-b border-border last:border-0">
                       <td className="flex items-center gap-2 px-4 py-2">
                         <FileText className="h-4 w-4 shrink-0 text-text-tertiary" />
                         <span className="truncate text-text-primary">{f.name}</span>
+                        {isOversized && (
+                          <span className="ml-1 shrink-0 rounded bg-warning-muted px-1.5 py-0.5 text-xs text-warning">
+                            &gt;4 MB — pode falhar
+                          </span>
+                        )}
                       </td>
-                      <td className="px-4 py-2 text-right font-mono tabular-nums text-text-secondary">
+                      <td className={`px-4 py-2 text-right font-mono tabular-nums ${isOversized ? "text-warning" : "text-text-secondary"}`}>
                         {formatBytes(f.size)}
                       </td>
                       <td className="px-2 py-2 text-center">
@@ -230,7 +247,7 @@ export default function PdfCommentsPage() {
                         </button>
                       </td>
                     </tr>
-                  ))}
+                  )})}
                 </tbody>
               </table>
             </div>
