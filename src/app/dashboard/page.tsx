@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { getToolsByCategory, tools } from "@/lib/tools-registry";
 import { ToolCard } from "@/components/dashboard/tool-card";
 import { cn } from "@/lib/utils";
