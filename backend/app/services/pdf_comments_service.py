@@ -1,7 +1,9 @@
 import io
+import os
 import re
 import tempfile
 from collections import Counter
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -127,6 +129,87 @@ def extract_from_pdf(path: Path) -> ExtractionResult:
         annotations=[asdict(a) for a in annotations],
         page_count=page_count,
     )
+
+
+# ── AI analysis ──────────────────────────────────────────────────────────────
+
+_gemini_model = None
+_gemini_available: Optional[bool] = None
+
+_SYSTEM_PROMPT = (
+    "Você é um engenheiro sênior de processos industriais especializado em revisão de documentos técnicos: "
+    "P&IDs, isométricos, diagramas de instrumentação, folhas de dados de equipamentos e documentos HAZOP. "
+    "Analise o comentário de revisão abaixo e responda com 1 a 2 frases em português explicando o que o "
+    "revisor está solicitando e qual é o contexto ou impacto técnico típico dessa solicitação. "
+    "Seja técnico e conciso. Não repita o comentário textualmente. "
+    "Se o comentário estiver em outro idioma, entenda-o e responda sempre em português."
+)
+
+
+def _get_gemini_model():
+    global _gemini_model, _gemini_available
+    if _gemini_available is False:
+        return None
+    if _gemini_model is not None:
+        return _gemini_model
+
+    api_key = os.environ.get("GOOGLE_API_KEY") or os.environ.get("GEMINI_API_KEY")
+    if not api_key:
+        _gemini_available = False
+        return None
+
+    try:
+        import google.generativeai as genai
+        genai.configure(api_key=api_key)
+        _gemini_model = genai.GenerativeModel("gemini-2.0-flash")
+        _gemini_available = True
+        return _gemini_model
+    except Exception:
+        _gemini_available = False
+        return None
+
+
+def _analyze_one(document_number: str, annot_type: str, comment: str, marked_text: str) -> str:
+    model = _get_gemini_model()
+    if model is None:
+        return ""
+
+    parts = [f"Documento: {document_number}", f"Tipo de anotação: {annot_type}"]
+    if marked_text:
+        parts.append(f'Texto marcado no documento: "{marked_text}"')
+    if comment:
+        parts.append(f'Comentário do revisor: "{comment}"')
+
+    try:
+        response = model.generate_content(
+            f"{_SYSTEM_PROMPT}\n\n" + "\n".join(parts),
+            generation_config={"temperature": 0.3, "max_output_tokens": 150},
+        )
+        return (response.text or "").strip()
+    except Exception:
+        return ""
+
+
+def analyze_batch(annotations: list[dict]) -> None:
+    """Analisa anotações em paralelo e preenche 'ai_analysis' in-place."""
+    if not annotations or _get_gemini_model() is None:
+        return
+
+    def _task(idx_annot):
+        idx, annot = idx_annot
+        result = _analyze_one(
+            document_number=annot.get("document_number", ""),
+            annot_type=annot.get("annotation_type", ""),
+            comment=annot.get("comment", ""),
+            marked_text=annot.get("marked_text", ""),
+        )
+        return idx, result
+
+    with ThreadPoolExecutor(max_workers=5) as executor:
+        futures = {executor.submit(_task, (i, a)): i for i, a in enumerate(annotations)}
+        for future in as_completed(futures):
+            idx, result = future.result()
+            annotations[idx]["ai_analysis"] = result
 
 
 # ── Excel export ─────────────────────────────────────────────────────────────

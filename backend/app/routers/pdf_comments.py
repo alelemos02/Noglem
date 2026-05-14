@@ -7,7 +7,7 @@ from fastapi.responses import StreamingResponse
 
 from app.dependencies.security import require_internal_api_key
 from app.dependencies.rate_limit import enforce_pdf_rate_limit
-from app.services.pdf_comments_service import extract_from_pdf, generate_excel
+from app.services.pdf_comments_service import analyze_batch, extract_from_pdf, generate_excel
 
 router = APIRouter(dependencies=[Depends(require_internal_api_key)])
 
@@ -60,6 +60,10 @@ async def process_pdfs(
             tmp_dir.rmdir()
         except OSError:
             pass
+
+    # Collect all annotations across files and run AI analysis in parallel
+    all_annotations = [a for r in results if not r.get("error") for a in r.get("annotations", [])]
+    analyze_batch(all_annotations)
 
     total_annotations = sum(
         len(r.get("annotations", [])) for r in results if not r.get("error")
