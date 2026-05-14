@@ -1,5 +1,8 @@
 import os
-from fastapi import FastAPI
+import time
+import json
+import logging
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
@@ -16,6 +19,9 @@ Base.metadata.create_all(bind=engine)
 os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
 os.makedirs(settings.OUTPUT_DIR, exist_ok=True)
 
+logging.basicConfig(level=logging.INFO, format="%(message)s")
+logger = logging.getLogger("julia")
+
 # Criar aplicação FastAPI
 app = FastAPI(
     title=settings.API_TITLE,
@@ -31,6 +37,26 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    start = time.monotonic()
+    response = await call_next(request)
+    duration_ms = round((time.monotonic() - start) * 1000)
+
+    # Ignora health checks para não poluir os logs
+    if request.url.path not in ("/", "/health"):
+        logger.info(json.dumps({
+            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "method": request.method,
+            "path": request.url.path,
+            "user_id": request.headers.get("X-User-Id", "anonymous"),
+            "status": response.status_code,
+            "duration_ms": duration_ms,
+        }))
+
+    return response
 
 
 # Health check
