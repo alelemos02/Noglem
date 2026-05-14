@@ -1,4 +1,4 @@
-export const dynamic = "force-dynamic";
+"use client";
 
 import { getToolsByCategory, tools } from "@/lib/tools-registry";
 import { ToolCard } from "@/components/dashboard/tool-card";
