@@ -1,0 +1,867 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Parecer Técnico — JulIA by Noglem</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@300;400;500;700&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet">
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #020810;
+      --surface:  #0a1628;
+      --orange:   #f97316;
+      --cyan:     #22d3ee;
+      --green:    #22c55e;
+      --yellow:   #eab308;
+      --red:      #ef4444;
+      --gray:     #94a3b8;
+      --text:     #e2e8f0;
+      --dim:      #475569;
+      --border:   rgba(241,245,249,.07);
+    }
+
+    html, body {
+      width: 100%; height: 100%;
+      overflow: hidden;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'DM Sans', sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── Blueprint grid ────────────────────────────── */
+    body::before {
+      content: '';
+      position: fixed; inset: 0; z-index: 0; pointer-events: none;
+      background-image:
+        linear-gradient(rgba(34,211,238,.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(34,211,238,.04) 1px, transparent 1px);
+      background-size: 48px 48px;
+    }
+
+    /* ── Scan line ────────────────────────────────── */
+    body::after {
+      content: '';
+      position: fixed; inset: 0; z-index: 0; pointer-events: none;
+      background: repeating-linear-gradient(
+        to bottom,
+        transparent,
+        transparent 3px,
+        rgba(0,0,0,.08) 3px,
+        rgba(0,0,0,.08) 4px
+      );
+    }
+
+    /* ── Deck ─────────────────────────────────────── */
+    #deck {
+      position: fixed; inset: 0; z-index: 1;
+      display: flex;
+    }
+
+    .slide {
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column;
+      justify-content: center; align-items: center;
+      padding: 5vw 8vw;
+      opacity: 0;
+      transform: translateX(60px);
+      transition: opacity .5s cubic-bezier(.4,0,.2,1), transform .5s cubic-bezier(.4,0,.2,1);
+      pointer-events: none;
+    }
+    .slide.active {
+      opacity: 1; transform: translateX(0); pointer-events: auto;
+    }
+    .slide.exit {
+      opacity: 0; transform: translateX(-60px);
+    }
+
+    /* ── Orange accent line (bottom) ──────────────── */
+    .slide::after {
+      content: '';
+      position: absolute; bottom: 0; left: 0; right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, transparent, var(--orange) 30%, var(--orange) 70%, transparent);
+      opacity: .6;
+    }
+
+    /* ── Slide number (background) ─────────────────── */
+    .slide-bg-num {
+      position: absolute;
+      right: 6vw; bottom: 10vh;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: clamp(8rem, 20vw, 18rem);
+      font-weight: 700;
+      color: rgba(249,115,22,.04);
+      line-height: 1;
+      user-select: none;
+      pointer-events: none;
+    }
+
+    /* ── Corner tag ────────────────────────────────── */
+    .corner-tag {
+      position: absolute; top: 2.5rem; left: 3rem;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: .65rem;
+      letter-spacing: .12em;
+      color: var(--dim);
+      text-transform: uppercase;
+    }
+    .corner-tag span { color: var(--orange); }
+
+    /* ── Typography ────────────────────────────────── */
+    .kicker {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: clamp(.6rem, 1.1vw, .8rem);
+      letter-spacing: .22em;
+      color: var(--orange);
+      text-transform: uppercase;
+      margin-bottom: 1.2rem;
+    }
+
+    h1 {
+      font-family: 'Syne', sans-serif;
+      font-size: clamp(3rem, 7vw, 6rem);
+      font-weight: 800;
+      line-height: 1.0;
+      letter-spacing: -.02em;
+      color: var(--text);
+    }
+    h1 em { font-style: normal; color: var(--orange); }
+
+    h2 {
+      font-family: 'Syne', sans-serif;
+      font-size: clamp(2rem, 4.5vw, 3.8rem);
+      font-weight: 700;
+      line-height: 1.1;
+      color: var(--text);
+    }
+    h2 em { font-style: normal; color: var(--orange); }
+
+    .lead {
+      font-size: clamp(.95rem, 1.5vw, 1.2rem);
+      color: var(--gray);
+      line-height: 1.7;
+      max-width: 52ch;
+    }
+
+    .mono {
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* ── Divider line ─────────────────────────────── */
+    .rule {
+      width: 60px; height: 2px;
+      background: var(--orange);
+      margin: 1.6rem 0;
+    }
+
+    /* ── Status badges ───────────────────────────── */
+    .status-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 1rem;
+      width: 100%;
+      max-width: 900px;
+      margin-top: 2.5rem;
+    }
+
+    .status-card {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.4rem 1rem;
+      text-align: center;
+      background: rgba(10,22,40,.6);
+      backdrop-filter: blur(8px);
+      position: relative;
+      overflow: hidden;
+      transition: transform .2s;
+    }
+    .status-card:hover { transform: translateY(-3px); }
+    .status-card::before {
+      content: '';
+      position: absolute; top: 0; left: 0; right: 0;
+      height: 3px;
+    }
+
+    .status-card.a::before { background: var(--green); }
+    .status-card.b::before { background: var(--yellow); }
+    .status-card.c::before { background: var(--red); }
+    .status-card.d::before { background: var(--gray); }
+    .status-card.e::before { background: var(--cyan); }
+
+    .status-letter {
+      font-family: 'Syne', sans-serif;
+      font-size: 2.2rem;
+      font-weight: 800;
+      line-height: 1;
+      margin-bottom: .5rem;
+    }
+    .status-card.a .status-letter { color: var(--green); }
+    .status-card.b .status-letter { color: var(--yellow); }
+    .status-card.c .status-letter { color: var(--red); }
+    .status-card.d .status-letter { color: var(--gray); }
+    .status-card.e .status-letter { color: var(--cyan); }
+
+    .status-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: .6rem;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      color: var(--dim);
+    }
+
+    /* ── Verdict cards ─────────────────────────────── */
+    .verdict-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1.5rem;
+      width: 100%;
+      max-width: 860px;
+      margin-top: 2.5rem;
+    }
+
+    .verdict-card {
+      border-radius: 10px;
+      padding: 2rem 1.5rem;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .verdict-card.aprovado   { background: rgba(34,197,94,.08); border: 1px solid rgba(34,197,94,.25); }
+    .verdict-card.parcial    { background: rgba(234,179,8,.06);  border: 1px solid rgba(234,179,8,.25); }
+    .verdict-card.rejeitado  { background: rgba(239,68,68,.06);  border: 1px solid rgba(239,68,68,.25); }
+
+    .verdict-icon { font-size: 2rem; margin-bottom: .8rem; }
+    .verdict-title {
+      font-family: 'Syne', sans-serif;
+      font-size: .95rem;
+      font-weight: 700;
+      letter-spacing: .05em;
+    }
+    .verdict-card.aprovado  .verdict-title { color: var(--green); }
+    .verdict-card.parcial   .verdict-title { color: var(--yellow); }
+    .verdict-card.rejeitado .verdict-title { color: var(--red); }
+
+    .verdict-desc {
+      font-size: .78rem;
+      color: var(--dim);
+      margin-top: .5rem;
+      line-height: 1.5;
+    }
+
+    /* ── Steps ─────────────────────────────────────── */
+    .steps {
+      display: flex;
+      gap: 0;
+      align-items: stretch;
+      width: 100%;
+      max-width: 820px;
+      margin-top: 2.5rem;
+    }
+
+    .step {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      padding: 2rem 1.2rem;
+      border: 1px solid var(--border);
+      background: rgba(10,22,40,.5);
+      position: relative;
+    }
+    .step:first-child { border-radius: 8px 0 0 8px; }
+    .step:last-child  { border-radius: 0 8px 8px 0; }
+
+    .step + .step::before {
+      content: '→';
+      position: absolute; left: -14px;
+      top: 50%; transform: translateY(-50%);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: .9rem;
+      color: var(--orange);
+      z-index: 2;
+    }
+
+    .step-num {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: .65rem;
+      letter-spacing: .18em;
+      color: var(--orange);
+      text-transform: uppercase;
+      margin-bottom: 1rem;
+    }
+
+    .step-icon {
+      font-size: 2rem;
+      margin-bottom: 1rem;
+    }
+
+    .step-title {
+      font-family: 'Syne', sans-serif;
+      font-size: 1rem;
+      font-weight: 700;
+      margin-bottom: .4rem;
+    }
+
+    .step-desc {
+      font-size: .78rem;
+      color: var(--dim);
+      line-height: 1.5;
+    }
+
+    /* ── Problem stats ──────────────────────────────── */
+    .problem-cols {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 3rem;
+      width: 100%;
+      max-width: 820px;
+      margin-top: 2rem;
+      align-items: start;
+    }
+
+    .pain-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: .9rem;
+    }
+
+    .pain-list li {
+      display: flex;
+      align-items: flex-start;
+      gap: .8rem;
+      font-size: .9rem;
+      color: var(--gray);
+      line-height: 1.5;
+    }
+
+    .pain-list li::before {
+      content: '—';
+      color: var(--orange);
+      font-family: 'JetBrains Mono', monospace;
+      flex-shrink: 0;
+      margin-top: .05em;
+    }
+
+    .stat-block {
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+
+    .stat {
+      border-left: 2px solid var(--orange);
+      padding-left: 1.2rem;
+    }
+    .stat-value {
+      font-family: 'Syne', sans-serif;
+      font-size: 2.5rem;
+      font-weight: 800;
+      color: var(--text);
+      line-height: 1;
+    }
+    .stat-desc {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: .65rem;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      color: var(--dim);
+      margin-top: .3rem;
+    }
+
+    /* ── Stream demo ──────────────────────────────── */
+    .stream-window {
+      width: 100%;
+      max-width: 680px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: rgba(2,8,16,.8);
+      overflow: hidden;
+      margin-top: 2.5rem;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .stream-bar {
+      background: var(--surface);
+      padding: .5rem 1rem;
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .stream-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+    }
+    .stream-body {
+      padding: 1.2rem 1.5rem;
+      font-size: .72rem;
+      line-height: 2;
+      color: var(--dim);
+    }
+    .stream-line { display: block; }
+    .stream-line .tag   { color: var(--cyan); }
+    .stream-line .ok    { color: var(--green); }
+    .stream-line .warn  { color: var(--yellow); }
+    .stream-line .bad   { color: var(--red); }
+    .stream-line .label { color: var(--orange); }
+    .cursor {
+      display: inline-block;
+      width: 7px; height: 13px;
+      background: var(--orange);
+      vertical-align: middle;
+      animation: blink .8s step-end infinite;
+    }
+    @keyframes blink { 50% { opacity: 0; } }
+
+    /* ── Feature pills ────────────────────────────── */
+    .pill-row {
+      display: flex; flex-wrap: wrap; gap: .75rem;
+      margin-top: 2rem;
+    }
+    .pill {
+      display: flex; align-items: center; gap: .5rem;
+      border: 1px solid var(--border);
+      border-radius: 40px;
+      padding: .5rem 1.1rem;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: .7rem;
+      letter-spacing: .08em;
+      color: var(--gray);
+      background: rgba(10,22,40,.5);
+    }
+    .pill-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--orange);
+    }
+
+    /* ── Platform slide ───────────────────────────── */
+    .platform-badge {
+      display: inline-block;
+      border: 1px solid rgba(249,115,22,.3);
+      border-radius: 6px;
+      padding: .4rem 1rem;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: .65rem;
+      letter-spacing: .15em;
+      text-transform: uppercase;
+      color: var(--orange);
+      margin-bottom: 2rem;
+    }
+
+    .tool-chips {
+      display: flex; flex-wrap: wrap; gap: .6rem;
+      margin-top: 1.8rem;
+      justify-content: center;
+    }
+    .tool-chip {
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: .35rem .9rem;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: .62rem;
+      color: var(--dim);
+      letter-spacing: .05em;
+    }
+    .tool-chip.active {
+      border-color: rgba(249,115,22,.4);
+      color: var(--orange);
+      background: rgba(249,115,22,.05);
+    }
+
+    /* ── Progress bar ────────────────────────────── */
+    #progress {
+      position: fixed; top: 0; left: 0;
+      height: 2px;
+      background: var(--orange);
+      transition: width .4s ease;
+      z-index: 100;
+    }
+
+    /* ── Navigation ──────────────────────────────── */
+    #nav {
+      position: fixed;
+      bottom: 2.5rem; left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      align-items: center;
+      gap: 1.5rem;
+      z-index: 100;
+    }
+
+    .nav-btn {
+      width: 40px; height: 40px;
+      border-radius: 50%;
+      border: 1px solid var(--border);
+      background: rgba(10,22,40,.8);
+      color: var(--gray);
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1rem;
+      transition: border-color .2s, color .2s;
+      backdrop-filter: blur(8px);
+    }
+    .nav-btn:hover { border-color: var(--orange); color: var(--orange); }
+
+    .nav-dots {
+      display: flex; gap: .5rem; align-items: center;
+    }
+    .nav-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--dim);
+      cursor: pointer;
+      transition: background .25s, transform .25s;
+    }
+    .nav-dot.active { background: var(--orange); transform: scale(1.4); }
+
+    /* ── Slide counter ────────────────────────────── */
+    #counter {
+      position: fixed;
+      top: 2.5rem; right: 3rem;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: .65rem;
+      letter-spacing: .12em;
+      color: var(--dim);
+      z-index: 100;
+    }
+    #counter span { color: var(--orange); }
+  </style>
+</head>
+<body>
+
+<div id="progress"></div>
+
+<div id="counter"><span id="cur">01</span> / <span id="tot">08</span></div>
+
+<div id="deck">
+
+  <!-- ── 01 TITLE ───────────────────────────────── -->
+  <section class="slide active" data-index="0">
+    <div class="corner-tag">JulIA by <span>Noglem</span> · Análise</div>
+    <div class="slide-bg-num">01</div>
+
+    <div class="kicker">Documentação de Engenharia</div>
+    <h1>Parecer<br><em>Técnico</em></h1>
+    <div class="rule"></div>
+    <p class="lead">
+      Análise automatizada por IA entre especificações de engenharia
+      e documentação de fornecedores — item por item, com precisão industrial.
+    </p>
+
+    <div class="pill-row" style="margin-top:2.5rem">
+      <div class="pill"><span class="pill-dot"></span>Análise LLM</div>
+      <div class="pill"><span class="pill-dot"></span>Streaming em tempo real</div>
+      <div class="pill"><span class="pill-dot"></span>Exportação PDF / Excel</div>
+      <div class="pill"><span class="pill-dot"></span>Oil & Gas · Industrial</div>
+    </div>
+  </section>
+
+  <!-- ── 02 O PROBLEMA ──────────────────────────── -->
+  <section class="slide" data-index="1">
+    <div class="corner-tag">JulIA by <span>Noglem</span> · O Problema</div>
+    <div class="slide-bg-num">02</div>
+
+    <div style="width:100%;max-width:820px">
+      <div class="kicker">O processo atual</div>
+      <h2>Horas para comparar.<br><em>Dias para emitir.</em></h2>
+      <div class="rule"></div>
+
+      <div class="problem-cols">
+        <ul class="pain-list">
+          <li>Engenheiro lê especificação de requisito linha por linha</li>
+          <li>Abre documento do fornecedor em outra aba</li>
+          <li>Compara manualmente cada item — dezenas, às vezes centenas</li>
+          <li>Redige comentários, solicita revisões</li>
+          <li>Processo se repete a cada revisão do fornecedor</li>
+          <li>Alta chance de erro humano em documentos extensos</li>
+        </ul>
+
+        <div class="stat-block">
+          <div class="stat">
+            <div class="stat-value">4–8h</div>
+            <div class="stat-desc">Por análise manual típica</div>
+          </div>
+          <div class="stat">
+            <div class="stat-value">R·3</div>
+            <div class="stat-desc">Revisões médias por documento</div>
+          </div>
+          <div class="stat">
+            <div class="stat-value">↑ Custo</div>
+            <div class="stat-desc">Atraso em procurement</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 03 COMO FUNCIONA ───────────────────────── -->
+  <section class="slide" data-index="2">
+    <div class="corner-tag">JulIA by <span>Noglem</span> · Solução</div>
+    <div class="slide-bg-num">03</div>
+
+    <div class="kicker">Em três passos</div>
+    <h2>Do upload ao<br><em>parecer emitido.</em></h2>
+    <div class="rule"></div>
+
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">01</div>
+        <div class="step-icon">📄</div>
+        <div class="step-title">Upload</div>
+        <div class="step-desc">Especificação de engenharia + documentação do fornecedor</div>
+      </div>
+      <div class="step">
+        <div class="step-num">02</div>
+        <div class="step-icon">⚡</div>
+        <div class="step-title">Análise IA</div>
+        <div class="step-desc">Cada requisito é verificado contra o documento do fornecedor via LLM</div>
+      </div>
+      <div class="step">
+        <div class="step-num">03</div>
+        <div class="step-icon">✅</div>
+        <div class="step-title">Parecer</div>
+        <div class="step-desc">Relatório estruturado com status por item e veredicto final</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 04 ANÁLISE ITEM A ITEM ─────────────────── -->
+  <section class="slide" data-index="3">
+    <div class="corner-tag">JulIA by <span>Noglem</span> · Sistema de Status</div>
+    <div class="slide-bg-num">04</div>
+
+    <div class="kicker">Cada requisito recebe um status</div>
+    <h2>Análise<br><em>item a item.</em></h2>
+    <div class="rule"></div>
+
+    <div class="status-grid">
+      <div class="status-card a">
+        <div class="status-letter">A</div>
+        <div class="status-label">Aprovado</div>
+      </div>
+      <div class="status-card b">
+        <div class="status-letter">B</div>
+        <div class="status-label">Aprovado c/ Comentários</div>
+      </div>
+      <div class="status-card c">
+        <div class="status-letter">C</div>
+        <div class="status-label">Rejeitado</div>
+      </div>
+      <div class="status-card d">
+        <div class="status-letter">D</div>
+        <div class="status-label">Info Ausente</div>
+      </div>
+      <div class="status-card e">
+        <div class="status-letter">E</div>
+        <div class="status-label">Item Adicional</div>
+      </div>
+    </div>
+
+    <p class="lead" style="margin-top:2rem;font-size:.85rem;text-align:center">
+      A IA lê cada requisito da especificação e determina se o fornecedor atende,<br>
+      com justificativa técnica para cada decisão.
+    </p>
+  </section>
+
+  <!-- ── 05 VEREDICTO FINAL ─────────────────────── -->
+  <section class="slide" data-index="4">
+    <div class="corner-tag">JulIA by <span>Noglem</span> · Veredicto</div>
+    <div class="slide-bg-num">05</div>
+
+    <div class="kicker">Parecer consolidado</div>
+    <h2>Um veredicto.<br><em>Sem ambiguidade.</em></h2>
+    <div class="rule"></div>
+
+    <div class="verdict-row">
+      <div class="verdict-card aprovado">
+        <div class="verdict-icon">✓</div>
+        <div class="verdict-title">APROVADO</div>
+        <div class="verdict-desc">Fornecedor atende todos os requisitos da especificação</div>
+      </div>
+      <div class="verdict-card parcial">
+        <div class="verdict-icon">◑</div>
+        <div class="verdict-title">APROVADO COM COMENTÁRIOS</div>
+        <div class="verdict-desc">Atendimento parcial — desvios documentados para análise</div>
+      </div>
+      <div class="verdict-card rejeitado">
+        <div class="verdict-icon">✕</div>
+        <div class="verdict-title">REJEITADO</div>
+        <div class="verdict-desc">Não conformidades críticas — revisão obrigatória pelo fornecedor</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 06 TEMPO REAL ──────────────────────────── -->
+  <section class="slide" data-index="5">
+    <div class="corner-tag">JulIA by <span>Noglem</span> · Tecnologia</div>
+    <div class="slide-bg-num">06</div>
+
+    <div class="kicker">Streaming em tempo real</div>
+    <h2>Veja a análise<br><em>acontecer.</em></h2>
+    <div class="rule"></div>
+
+    <div class="stream-window">
+      <div class="stream-bar">
+        <div class="stream-dot" style="background:#ef4444"></div>
+        <div class="stream-dot" style="background:#eab308"></div>
+        <div class="stream-dot" style="background:#22c55e"></div>
+        <span style="font-size:.62rem;color:var(--dim);margin-left:.5rem;letter-spacing:.08em">PT-042 · Válvulas de Controle · Rev.3</span>
+      </div>
+      <div class="stream-body">
+        <span class="stream-line"><span class="label">REQ-01</span>  Pressão de operação ≥ 150 bar <span class="ok">→ A</span>  Fornecedor declara 165 bar</span>
+        <span class="stream-line"><span class="label">REQ-02</span>  Material corpo: ASTM A216 WCB  <span class="ok">→ A</span>  Confirmado no datasheet</span>
+        <span class="stream-line"><span class="label">REQ-03</span>  Certificação ATEX Zona 1        <span class="warn">→ B</span>  Declara ATEX Zona 2 — divergência menor</span>
+        <span class="stream-line"><span class="label">REQ-04</span>  Conexão flangeada ASME 150      <span class="ok">→ A</span>  Conforme</span>
+        <span class="stream-line"><span class="label">REQ-05</span>  Teste hidrostático 1.5× PN      <span class="bad">→ C</span>  Não informado no doc do fornecedor</span>
+        <span class="stream-line"><span class="label">REQ-06</span>  Pintura epóxi 2 demãos          <span class="ok">→ A</span>  RAL 7035, conforme spec<span class="cursor"></span></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 07 IMPACTO ─────────────────────────────── -->
+  <section class="slide" data-index="6">
+    <div class="corner-tag">JulIA by <span>Noglem</span> · Impacto</div>
+    <div class="slide-bg-num">07</div>
+
+    <div style="width:100%;max-width:820px">
+      <div class="kicker">O que muda na prática</div>
+      <h2>De horas para<br><em>minutos.</em></h2>
+      <div class="rule"></div>
+
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:2rem;margin-top:2.5rem">
+        <div class="stat" style="border-color:var(--green)">
+          <div class="stat-value" style="color:var(--green)">95%</div>
+          <div class="stat-desc">Redução no tempo de análise</div>
+        </div>
+        <div class="stat" style="border-color:var(--cyan)">
+          <div class="stat-value" style="color:var(--cyan)">100%</div>
+          <div class="stat-desc">Rastreabilidade por item</div>
+        </div>
+        <div class="stat" style="border-color:var(--orange)">
+          <div class="stat-value">∞</div>
+          <div class="stat-desc">Revisões sem custo adicional</div>
+        </div>
+      </div>
+
+      <ul class="pain-list" style="margin-top:2.5rem">
+        <li>Parecer gerado em minutos, não horas — engenheiro revisa, não produz</li>
+        <li>Histórico completo de todas as revisões e pareceres por projeto</li>
+        <li>Rastreabilidade total: cada status com justificativa técnica da IA</li>
+        <li>Exportação direta para PDF ou Excel para envio ao fornecedor</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ── 08 PLATAFORMA ──────────────────────────── -->
+  <section class="slide" data-index="7">
+    <div class="corner-tag">JulIA by <span>Noglem</span> · Plataforma</div>
+    <div class="slide-bg-num">08</div>
+
+    <div style="text-align:center;max-width:680px">
+      <div class="platform-badge">JulIA · Plataforma de IA para Engenharia</div>
+
+      <div class="kicker">Parte de um ecossistema completo</div>
+      <h2>Parecer Técnico<br>é uma ferramenta da <em>JulIA.</em></h2>
+      <div class="rule" style="margin-left:auto;margin-right:auto"></div>
+      <p class="lead" style="margin:0 auto;text-align:center">
+        A JulIA reúne agentes de IA especializados em engenharia —
+        desde extração de P&IDs até análise de documentação técnica.
+        Tudo integrado. Tudo rastreável.
+      </p>
+
+      <div class="tool-chips">
+        <div class="tool-chip active">Parecer Técnico</div>
+        <div class="tool-chip">Extrator de P&ID</div>
+        <div class="tool-chip">Extrator de Tabelas</div>
+        <div class="tool-chip">Tradutor AI</div>
+        <div class="tool-chip">Base de Conhecimento</div>
+        <div class="tool-chip">Quantitativos Civis</div>
+        <div class="tool-chip">Prensa Cabo Analyzer</div>
+      </div>
+
+      <p class="mono" style="margin-top:2.5rem;font-size:.7rem;color:var(--dim);letter-spacing:.1em">
+        noglem.com.br · www.noglem.com.br/dashboard/parecer-tecnico
+      </p>
+    </div>
+  </section>
+
+</div>
+
+<!-- Navigation -->
+<nav id="nav">
+  <button class="nav-btn" id="prev">←</button>
+  <div class="nav-dots" id="dots"></div>
+  <button class="nav-btn" id="next">→</button>
+</nav>
+
+<script>
+  const slides = document.querySelectorAll('.slide');
+  const total  = slides.length;
+  let current  = 0;
+
+  document.getElementById('tot').textContent = String(total).padStart(2,'0');
+
+  // Build dots
+  const dotsEl = document.getElementById('dots');
+  slides.forEach((_,i) => {
+    const d = document.createElement('div');
+    d.className = 'nav-dot' + (i === 0 ? ' active' : '');
+    d.addEventListener('click', () => goTo(i));
+    dotsEl.appendChild(d);
+  });
+
+  function goTo(n) {
+    if (n < 0 || n >= total || n === current) return;
+
+    slides[current].classList.remove('active');
+    slides[current].classList.add('exit');
+    setTimeout(() => slides[current === n ? current : current].classList.remove('exit'), 500);
+
+    // Handle exit animation direction
+    const prev = current;
+    current = n;
+
+    slides[prev].classList.remove('active');
+    slides[prev].classList.add('exit');
+    setTimeout(() => { slides[prev].classList.remove('exit'); }, 520);
+
+    slides[current].classList.add('active');
+
+    // Update UI
+    document.getElementById('cur').textContent = String(current + 1).padStart(2,'0');
+    document.querySelectorAll('.nav-dot').forEach((d, i) =>
+      d.classList.toggle('active', i === current));
+    document.getElementById('progress').style.width =
+      ((current + 1) / total * 100) + '%';
+  }
+
+  document.getElementById('prev').addEventListener('click', () => goTo(current - 1));
+  document.getElementById('next').addEventListener('click', () => goTo(current + 1));
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === ' ') {
+      e.preventDefault(); goTo(current + 1);
+    }
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+      e.preventDefault(); goTo(current - 1);
+    }
+  });
+
+  // Init progress
+  document.getElementById('progress').style.width = (1 / total * 100) + '%';
+
+  // Touch support
+  let touchX = 0;
+  document.addEventListener('touchstart', e => { touchX = e.touches[0].clientX; });
+  document.addEventListener('touchend', e => {
+    const dx = e.changedTouches[0].clientX - touchX;
+    if (Math.abs(dx) > 50) goTo(dx < 0 ? current + 1 : current - 1);
+  });
+</script>
+</body>
+</html>
