@@ -8,7 +8,6 @@ import httpx
 
 from app.core.config import settings
 from app.services.llm_prompt import (
-    SYSTEM_PROMPT,
     USER_PROMPT_TEMPLATE,
     CHUNK_USER_PROMPT_TEMPLATE,
     REDUCE_PROMPT,
@@ -641,6 +640,18 @@ def validate_value_consistency(
                 item.get("numero"),
                 status_label,
             )
+            justificativa = (item.get("justificativa_tecnica") or "").strip()
+            consistency_note = (
+                "[VALIDACAO_CONSISTENCIA] Termos do requisito foram encontrados "
+                f"no documento do fornecedor ({found_str}), mas o item foi "
+                f"classificado como {status_label}. Revisar classificacao."
+            )
+            if "VALIDACAO_CONSISTENCIA" not in justificativa:
+                item["justificativa_tecnica"] = (
+                    f"{justificativa}\n\n{consistency_note}"
+                    if justificativa
+                    else consistency_note
+                )
 
             flag_details.append({
                 "numero": item.get("numero"),

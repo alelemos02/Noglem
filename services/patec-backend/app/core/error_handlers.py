@@ -8,6 +8,17 @@ from fastapi.responses import JSONResponse
 logger = logging.getLogger(__name__)
 
 
+def _validation_error_details(exc: RequestValidationError) -> list[dict]:
+    details = []
+    for error in exc.errors():
+        normalized = dict(error)
+        ctx = normalized.get("ctx")
+        if isinstance(ctx, dict):
+            normalized["ctx"] = {key: str(value) for key, value in ctx.items()}
+        details.append(normalized)
+    return details
+
+
 def _request_id(request: Request) -> str:
     existing = request.headers.get("x-request-id")
     if existing:
@@ -25,7 +36,7 @@ def register_exception_handlers(app: FastAPI):
                 "error": {
                     "code": "validation_error",
                     "message": "Requisicao invalida",
-                    "details": exc.errors(),
+                    "details": _validation_error_details(exc),
                     "request_id": req_id,
                 }
             },

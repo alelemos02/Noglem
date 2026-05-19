@@ -8,8 +8,8 @@ print(f'DB: {settings.DATABASE_URL[:40]}...')
 print(f'DB Sync: {settings.DATABASE_URL_SYNC[:40]}...')
 "
 
-# Run alembic with a timeout to prevent hanging
-timeout 30 alembic upgrade head || echo "WARNING: Alembic migration failed or timed out, continuing..."
+# Run alembic before starting the API. If schema migration fails, the deploy must fail.
+timeout 120 alembic upgrade head
 
 echo "=== Starting PATEC API server ==="
 exec python run.py

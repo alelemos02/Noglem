@@ -26,6 +26,7 @@ def _to_response(p: Parecer) -> ParecerResponse:
         projeto=p.projeto,
         fornecedor=p.fornecedor,
         revisao=p.revisao,
+        disciplina=p.disciplina,
         status_processamento=p.status_processamento,
         parecer_geral=p.parecer_geral,
         comentario_geral=p.comentario_geral,
@@ -62,6 +63,7 @@ async def criar_parecer(
         projeto=data.projeto,
         fornecedor=data.fornecedor,
         revisao=data.revisao,
+        disciplina=data.disciplina,
         comentario_geral=data.comentario_geral,
         criado_por=current_user.id,
     )
