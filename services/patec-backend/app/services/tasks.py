@@ -132,6 +132,7 @@ def run_analysis_sync(
                     numero_parecer=parecer.numero_parecer,
                     on_progress=on_progress,
                     analysis_profile=analysis_profile,
+                    disciplina=getattr(parecer, "disciplina", "instrumentacao"),
                 )
                 db.add(
                     CacheAnalise(

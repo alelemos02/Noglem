@@ -12,12 +12,12 @@ from app.models.mensagem_chat import MensagemChat
 from app.models.parecer import Parecer
 from app.models.recomendacao import Recomendacao
 from app.services.analyzer import _extract_json, _validate_parecer_json
-from app.services.llm_prompt import SYSTEM_PROMPT
+from app.services.llm_prompt import SYSTEM_PROMPT, get_system_prompt
 
 logger = logging.getLogger(__name__)
 
 
-CHAT_SYSTEM_PROMPT = SYSTEM_PROMPT + """
+_CHAT_MODO_CONVERSA = """
 
 ## MODO CONVERSA
 
@@ -167,7 +167,8 @@ def build_chat_context(
     # Add new message
     contents.append({"role": "user", "parts": [{"text": nova_mensagem}]})
 
-    return CHAT_SYSTEM_PROMPT, contents
+    chat_system_prompt = get_system_prompt(getattr(parecer, "disciplina", "instrumentacao")) + _CHAT_MODO_CONVERSA
+    return chat_system_prompt, contents
 
 
 async def call_gemini_stream_async(

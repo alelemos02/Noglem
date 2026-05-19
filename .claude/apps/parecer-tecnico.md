@@ -14,6 +14,18 @@ metadata:
 
 Ferramenta de análise comparativa: recebe documentação de engenharia (especificações, datasheets) e documentos de fornecedores, e gera um parecer técnico item a item usando LLM. Cada item recebe um status (A=Aprovado, B=Aprovado com comentários, C=Rejeitado, D=Info ausente, E=Item adicional) e o parecer geral é: APROVADO, APROVADO_COM_COMENTARIOS ou REJEITADO.
 
+## Disciplinas
+
+O usuário seleciona a disciplina ao criar um novo parecer. A disciplina altera o system prompt enviado ao Gemini:
+
+| Disciplina | Status | System prompt |
+|------------|--------|---------------|
+| `instrumentacao` | Ativo | `SYSTEM_PROMPT_INSTRUMENTACAO` (ISA, IEC 61511, IEC 61508) |
+| `eletrico` | Ativo | `SYSTEM_PROMPT_ELETRICO` (NR-10, ABNT NBR 5410, IEC 60364, IEC 60079) |
+| `civil`, `mecanico`, `tubulacao` | Em breve (desabilitado na UI) | — |
+
+A lógica de seleção de prompt está em `get_system_prompt(disciplina)` em `llm_prompt.py`. O campo `disciplina` é armazenado no model `Parecer` e exibido como badge na lista.
+
 ## Arquivos principais
 
 ### Frontend
@@ -54,6 +66,7 @@ interface ParecerResponse {
   projeto: string;
   fornecedor: string;
   revisao: string;
+  disciplina: string;        // ex: "instrumentacao" | "eletrico"
   status_processamento: "pendente" | "processando" | "concluido" | "erro";
   parecer_geral: "APROVADO" | "APROVADO_COM_COMENTARIOS" | "REJEITADO" | null;
   total_itens: number;

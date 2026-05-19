@@ -44,6 +44,7 @@ export interface ParecerResponse {
   projeto: string;
   fornecedor: string;
   revisao: string;
+  disciplina: string;
   status_processamento: string;
   parecer_geral: string | null;
   comentario_geral: string | null;
@@ -70,6 +71,7 @@ export interface ParecerCreate {
   projeto: string;
   fornecedor: string;
   revisao?: string;
+  disciplina?: string;
 }
 
 export type ExportFormat = "pdf" | "xlsx" | "docx";

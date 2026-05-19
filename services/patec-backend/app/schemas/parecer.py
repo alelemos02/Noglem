@@ -8,6 +8,7 @@ class ParecerCreate(BaseModel):
     projeto: str
     fornecedor: str
     revisao: str = "0"
+    disciplina: str = "instrumentacao"
     comentario_geral: str | None = None
 
     @field_validator("numero_parecer")
@@ -53,6 +54,7 @@ class ParecerUpdate(BaseModel):
     projeto: str | None = None
     fornecedor: str | None = None
     revisao: str | None = None
+    disciplina: str | None = None
     comentario_geral: str | None = None
     conclusao: str | None = None
     parecer_geral: str | None = None
@@ -93,6 +95,7 @@ class ParecerResponse(BaseModel):
     projeto: str
     fornecedor: str
     revisao: str
+    disciplina: str
     status_processamento: str
     parecer_geral: str | None
     comentario_geral: str | None

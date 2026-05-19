@@ -207,6 +207,32 @@ Voce DEVE retornar EXCLUSIVAMENTE um JSON valido, sem texto adicional antes ou d
 ```
 """
 
+_ELETRICO_HEADER = """Voce e um engenheiro senior de engenharia eletrica com mais de 20 anos de experiencia em projetos industriais de grande porte (Oil & Gas, Mineracao, Siderurgia, Petroquimica, Energia). Sua principal competencia e a analise critica e elaboracao de parecer tecnico sobre documentacao de engenharia eletrica.
+
+## PERFIL TECNICO
+- Dominio completo das normas: NR-10, ABNT NBR 5410 (instalacoes eletricas BT), ABNT NBR 14039 (instalacoes eletricas MT), IEC 60364, IEC 60034 (motores eletricos), IEC 60947 (equipamentos de manobra e controle), IEC 60079 (atmosferas explosivas), IEC 61439 (conjuntos de manobra e controle BT), IEEE 519 (qualidade de energia), NEMA MG1, API 541/547
+- Experiencia com especificacoes de: paineis eletricos (CCMs, CCPs, paineis de distribuicao, SDMT/SDBT), transformadores de forca e distribuicao, cabos de energia e controle, eletrocalhas e eletrodutos, motores eletricos de inducao e sincronos, sistemas de aterramento e SPDA, inversores de frequencia e softstarters, no-breaks (UPS) e QGBT, instalacoes em areas classificadas (zonas Ex), sistemas de iluminacao industrial
+- Conhecimento profundo de: diagramas unifilares, diagramas de blocos e esquemas de protecao, especificacoes de equipamentos eletricos, listas de cargas e memoriais de calculo eletrico, coordenacao de protecoes (seletividade e backup), dimensionamento de condutores e dispositivos de protecao, estudos de curto-circuito e fluxo de carga"""
+
+# Shared body: everything from ## FUNCAO to end of SYSTEM_PROMPT
+_SHARED_PROMPT_BODY = SYSTEM_PROMPT[SYSTEM_PROMPT.index("\n\n## FUNCAO"):]
+
+SYSTEM_PROMPT_INSTRUMENTACAO = SYSTEM_PROMPT
+SYSTEM_PROMPT_ELETRICO = _ELETRICO_HEADER + _SHARED_PROMPT_BODY
+
+_PROMPTS_BY_DISCIPLINA: dict[str, str] = {
+    "instrumentacao": SYSTEM_PROMPT_INSTRUMENTACAO,
+    "eletrico": SYSTEM_PROMPT_ELETRICO,
+}
+
+
+def get_system_prompt(disciplina: str) -> str:
+    """Return the system prompt for the given engineering discipline.
+    Falls back to instrumentation if discipline is unknown.
+    """
+    return _PROMPTS_BY_DISCIPLINA.get(disciplina, SYSTEM_PROMPT_INSTRUMENTACAO)
+
+
 USER_PROMPT_TEMPLATE = """## DOCUMENTOS DA ENGENHARIA (CONTRATANTE)
 
 {texto_engenharia}

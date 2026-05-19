@@ -14,6 +14,7 @@ from app.services.llm_prompt import (
     REDUCE_PROMPT,
     PROFILE_ITEM_LIMIT_TEMPLATE,
     FIELD_OPTIMIZATION_SYSTEM,
+    get_system_prompt,
 )
 
 logger = logging.getLogger(__name__)
@@ -855,8 +856,10 @@ def analyze_single(
     fornecedor: str,
     numero_parecer: str,
     analysis_profile: str = DEFAULT_ANALYSIS_PROFILE,
+    disciplina: str = "instrumentacao",
 ) -> dict:
     """Analyze documents in a single API call (for smaller documents)."""
+    system_prompt = get_system_prompt(disciplina)
     profile_instruction = _profile_instruction(analysis_profile)
     user_content = USER_PROMPT_TEMPLATE.format(
         texto_engenharia=texto_engenharia,
@@ -867,7 +870,7 @@ def analyze_single(
     ) + profile_instruction
 
     logger.info("Calling Gemini API (single call, %d chars)", len(user_content))
-    response_text = _call_gemini(SYSTEM_PROMPT, user_content)
+    response_text = _call_gemini(system_prompt, user_content)
     logger.info("Gemini response received (%d chars)", len(response_text))
 
     try:
@@ -880,7 +883,7 @@ def analyze_single(
             "Seja mais CONCISO nas justificativas tecnicas (max 1-2 frases cada). "
             "Retorne SOMENTE o JSON valido, sem markdown.\n\n"
         )
-        response_text = _call_gemini(SYSTEM_PROMPT, concise_hint + user_content)
+        response_text = _call_gemini(system_prompt, concise_hint + user_content)
         data = _extract_json(response_text)
         return _validate_parecer_json(data)
 
@@ -893,8 +896,10 @@ def analyze_chunked(
     numero_parecer: str,
     on_progress: callable = None,
     analysis_profile: str = DEFAULT_ANALYSIS_PROFILE,
+    disciplina: str = "instrumentacao",
 ) -> dict:
     """Analyze documents using map-reduce for large documents."""
+    system_prompt = get_system_prompt(disciplina)
     profile_instruction = _profile_instruction(analysis_profile)
     eng_chunks = _split_text_into_chunks(texto_engenharia, MAX_INPUT_CHARS // 2)
     forn_chunks = _split_text_into_chunks(texto_fornecedor, MAX_INPUT_CHARS // 2)
@@ -924,7 +929,7 @@ def analyze_chunked(
         ) + profile_instruction
 
         logger.info("Calling Gemini API (chunk %d/%d, %d chars)", i + 1, total_chunks, len(user_content))
-        response_text = _call_gemini(SYSTEM_PROMPT, user_content)
+        response_text = _call_gemini(system_prompt, user_content)
         partial = _extract_json(response_text)
         partial_results.append(partial)
 
@@ -958,7 +963,7 @@ def analyze_chunked(
     ) + profile_instruction
 
     logger.info("Calling Gemini API (reduce step, %d chars)", len(reduce_content))
-    response_text = _call_gemini(SYSTEM_PROMPT, reduce_content)
+    response_text = _call_gemini(system_prompt, reduce_content)
     data = _extract_json(response_text)
 
     return _validate_parecer_json(data)
@@ -972,6 +977,7 @@ def analyze_documents(
     numero_parecer: str,
     on_progress: callable = None,
     analysis_profile: str = DEFAULT_ANALYSIS_PROFILE,
+    disciplina: str = "instrumentacao",
 ) -> dict:
     """Main entry point: choose single or chunked based on document size."""
     total_chars = len(texto_engenharia) + len(texto_fornecedor)
@@ -985,6 +991,7 @@ def analyze_documents(
             fornecedor,
             numero_parecer,
             analysis_profile=profile,
+            disciplina=disciplina,
         )
     else:
         return analyze_chunked(
@@ -995,4 +1002,5 @@ def analyze_documents(
             numero_parecer,
             on_progress=on_progress,
             analysis_profile=profile,
+            disciplina=disciplina,
         )

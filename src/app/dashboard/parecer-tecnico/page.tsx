@@ -6,6 +6,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { patecApi, type ParecerResponse } from "@/lib/patec-api";
 import { ProcessamentoBadge, ParecerGeralBadge } from "@/components/parecer-tecnico/status-badge";
+import { Badge } from "@/components/ui/badge";
+
+const DISCIPLINA_LABELS: Record<string, string> = {
+  instrumentacao: "Instrumentação",
+  eletrico: "Elétrico",
+  civil: "Civil",
+  mecanico: "Mecânico",
+  tubulacao: "Tubulação",
+};
 
 const STATUS_BAR_COLORS: Record<string, string> = {
   A: "bg-green-500",
@@ -214,9 +223,12 @@ export default function ParecerTecnicoPage() {
 
                 <Link href={`/dashboard/parecer-tecnico/${p.id}`} className="block space-y-3">
                   <div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-bold text-info-text">{p.numero_parecer}</span>
                       <ProcessamentoBadge status={p.status_processamento} />
+                      <Badge variant="secondary" className="text-xs">
+                        {DISCIPLINA_LABELS[p.disciplina] ?? p.disciplina}
+                      </Badge>
                     </div>
                     <p className="mt-0.5 text-sm font-medium text-text-primary">{p.projeto}</p>
                   </div>
