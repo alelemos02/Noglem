@@ -236,7 +236,7 @@ def get_system_prompt(disciplina: str) -> str:
 USER_PROMPT_TEMPLATE = """## DOCUMENTOS DA ENGENHARIA (CONTRATANTE)
 
 {texto_engenharia}
-
+{texto_anexos_section}
 ---
 
 ## DOCUMENTOS DO FORNECEDOR (VENDOR)
@@ -259,7 +259,7 @@ Numero do Parecer: {numero_parecer}
 CHUNK_USER_PROMPT_TEMPLATE = """## DOCUMENTOS DA ENGENHARIA (CONTRATANTE) - SECAO {chunk_index}/{total_chunks}
 
 {texto_engenharia}
-
+{texto_anexos_section}
 ---
 
 ## DOCUMENTOS DO FORNECEDOR (VENDOR) - SECAO {chunk_index}/{total_chunks}
@@ -278,6 +278,14 @@ NAO inclua texto antes ou depois do JSON. NAO use blocos de codigo markdown (```
 Projeto: {projeto}
 Fornecedor: {fornecedor}
 Numero do Parecer: {numero_parecer}
+"""
+
+PROFILE_INTEGRAL_TEMPLATE = """## PERFIL DE PROFUNDIDADE — Integral (sem limite de itens)
+
+### COBERTURA INTEGRAL (OBRIGATORIO)
+Voce DEVE extrair e analisar ABSOLUTAMENTE TODOS os requisitos tecnicos listados na documentacao de engenharia.
+NAO ha limite de itens — para cada requisito ou linha da tabela de especificacoes identificado, crie um item de analise correspondente.
+NAO omita nenhum item por julgamento de relevancia. Se a engenharia listou, voce analisa.
 """
 
 FIELD_OPTIMIZATION_SYSTEM = """Voce e um especialista em documentacao tecnica de engenharia industrial.

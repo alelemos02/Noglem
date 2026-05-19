@@ -26,6 +26,28 @@ O usuário seleciona a disciplina ao criar um novo parecer. A disciplina altera 
 
 A lógica de seleção de prompt está em `get_system_prompt(disciplina)` em `llm_prompt.py`. O campo `disciplina` é armazenado no model `Parecer` e exibido como badge na lista.
 
+## Tipos de documentos
+
+| Tipo (`Documento.tipo`) | Papel na análise |
+|-------------------------|-----------------|
+| `engenharia` | Documento principal de engenharia — especificação técnica a ser verificada |
+| `fornecedor` | Proposta técnica do fornecedor — comparada contra a especificação |
+| `anexo_engenharia` | Documentos complementares (datasheets de referência, normas internas) — fornecidos como contexto de apoio à IA, não como spec principal |
+
+O upload de `anexo_engenharia` usa o endpoint `POST /pareceres/{id}/documentos/anexo_engenharia`. Anexos são opcionais — a análise só exige `engenharia` + `fornecedor`. No prompt, os anexos aparecem na seção `## DOCUMENTOS COMPLEMENTARES (ENGENHARIA)` entre os docs de engenharia e os do fornecedor.
+
+## Perfis de análise (`perfil_analise`)
+
+| Perfil | Itens | Comportamento |
+|--------|-------|---------------|
+| `simples` | 10 | Desvios críticos: segurança, rejeições e bloqueios |
+| `padrao` | 15 | Cobertura equilibrada dos requisitos críticos e relevantes |
+| `completa` | 20 | Análise abrangente cobrindo todos os requisitos de impacto técnico |
+| `personalizado` / `custom_N` | N (1-100) | Número exato de itens definido pelo usuário |
+| `integral` | sem limite | Analisa TODOS os requisitos da tabela de engenharia na íntegra |
+
+O perfil `integral` usa `PROFILE_INTEGRAL_TEMPLATE` em `llm_prompt.py` (sem cap de itens) e é aceito pelo validator em `analise.py`.
+
 ## Arquivos principais
 
 ### Frontend

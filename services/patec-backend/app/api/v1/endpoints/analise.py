@@ -23,7 +23,7 @@ from app.services.tasks import start_analysis_in_background
 
 router = APIRouter(prefix="/pareceres/{parecer_id}", tags=["analise"])
 
-_VALID_PROFILE_RE = re.compile(r"^(simples|padrao|completa|triagem_tecnica|conformidade_tecnica|auditoria_tecnica_completa|custom_\d+)$")
+_VALID_PROFILE_RE = re.compile(r"^(simples|padrao|completa|integral|triagem_tecnica|conformidade_tecnica|auditoria_tecnica_completa|custom_\d+)$")
 
 
 class AnaliseResponse(BaseModel):

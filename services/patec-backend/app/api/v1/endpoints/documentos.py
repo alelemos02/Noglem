@@ -142,6 +142,16 @@ async def upload_fornecedor(
     return await _upload_doc(parecer_id, "fornecedor", file, db)
 
 
+@router.post("/anexo_engenharia", response_model=DocumentoResponse, status_code=status.HTTP_201_CREATED)
+async def upload_anexo_engenharia(
+    parecer_id: uuid.UUID,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(require_role("admin", "analista")),
+):
+    return await _upload_doc(parecer_id, "anexo_engenharia", file, db)
+
+
 @router.get("", response_model=list[DocumentoResponse])
 async def listar_documentos(
     parecer_id: uuid.UUID,

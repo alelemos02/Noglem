@@ -39,11 +39,11 @@ def _get_sync_engine():
 
 # Bump this version whenever SYSTEM_PROMPT or profile instructions change
 # to automatically invalidate cached results from previous prompt versions.
-PROMPT_VERSION = "4"
+PROMPT_VERSION = "5"
 
 
-def _compute_docs_hash(eng_text: str, forn_text: str, analysis_profile: str) -> str:
-    content = f"V:{PROMPT_VERSION}\nPROFILE:{analysis_profile}\nENG:{eng_text}\nFORN:{forn_text}"
+def _compute_docs_hash(eng_text: str, forn_text: str, analysis_profile: str, anexos_text: str = "") -> str:
+    content = f"V:{PROMPT_VERSION}\nPROFILE:{analysis_profile}\nENG:{eng_text}\nFORN:{forn_text}\nANEXOS:{anexos_text}"
     return hashlib.sha256(content.encode("utf-8")).hexdigest()
 
 
@@ -78,6 +78,7 @@ def run_analysis_sync(
 
             eng_docs = [d for d in docs if d.tipo == "engenharia"]
             forn_docs = [d for d in docs if d.tipo == "fornecedor"]
+            anexo_docs = [d for d in docs if d.tipo == "anexo_engenharia"]
 
             if not eng_docs:
                 raise ValueError("Nenhum documento de engenharia encontrado")
@@ -92,9 +93,13 @@ def run_analysis_sync(
                 f"### {d.nome_arquivo}\n\n{d.texto_extraido or ''}"
                 for d in forn_docs
             )
+            texto_anexos = "\n\n---\n\n".join(
+                f"### {d.nome_arquivo}\n\n{d.texto_extraido or ''}"
+                for d in anexo_docs
+            )
 
             set_progress(parecer_id, 25, "Verificando cache de analise...", "cache_lookup")
-            docs_hash = _compute_docs_hash(texto_engenharia, texto_fornecedor, analysis_profile)
+            docs_hash = _compute_docs_hash(texto_engenharia, texto_fornecedor, analysis_profile, texto_anexos)
             cached = db.execute(
                 select(CacheAnalise).where(CacheAnalise.hash_documentos == docs_hash)
             ).scalar_one_or_none()
@@ -127,6 +132,7 @@ def run_analysis_sync(
                 result = analyze_documents(
                     texto_engenharia=texto_engenharia,
                     texto_fornecedor=texto_fornecedor,
+                    texto_anexos=texto_anexos,
                     projeto=parecer.projeto,
                     fornecedor=parecer.fornecedor,
                     numero_parecer=parecer.numero_parecer,

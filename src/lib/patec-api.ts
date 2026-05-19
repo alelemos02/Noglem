@@ -239,7 +239,7 @@ export const patecApi = {
     list(parecerId: string) {
       return request<DocumentoResponse[]>(`/v1/pareceres/${parecerId}/documentos`);
     },
-    async upload(parecerId: string, tipo: "engenharia" | "fornecedor", file: File) {
+    async upload(parecerId: string, tipo: "engenharia" | "fornecedor" | "anexo_engenharia", file: File) {
       const formData = new FormData();
       formData.append("file", file);
       const response = await fetch(

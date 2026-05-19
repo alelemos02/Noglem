@@ -92,6 +92,12 @@ export const ANALYSIS_PROFILE_OPTIONS: Array<{
     description:
       "Defina o numero exato de itens que deseja analisar.",
   },
+  {
+    value: "integral",
+    label: "Integral — todos os requisitos",
+    description:
+      "Segue na integra todos os requisitos listados na tabela de engenharia, sem limite de itens. Recomendado quando a engenharia define uma tabela de requisitos a ser verificada integralmente.",
+  },
 ];
 
 export const STAGE_LABELS: Record<string, string> = {

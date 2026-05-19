@@ -13,6 +13,7 @@ from app.services.llm_prompt import (
     CHUNK_USER_PROMPT_TEMPLATE,
     REDUCE_PROMPT,
     PROFILE_ITEM_LIMIT_TEMPLATE,
+    PROFILE_INTEGRAL_TEMPLATE,
     FIELD_OPTIMIZATION_SYSTEM,
     get_system_prompt,
 )
@@ -29,6 +30,7 @@ _NAMED_PROFILES: dict[str, tuple[str, int]] = {
     "simples":  ("Simples",  10),
     "padrao":   ("Padrao",   15),
     "completa": ("Completa", 20),
+    "integral": ("Integral", 0),  # 0 = no cap — uses separate template
     # backward-compat aliases for cached results / old API calls
     "triagem_tecnica":          ("Simples",  10),
     "conformidade_tecnica":     ("Padrao",   15),
@@ -201,6 +203,8 @@ def get_profile_max_itens(profile: str) -> int:
 
 def _profile_instruction(profile: str | None) -> str:
     normalized = normalize_analysis_profile(profile)
+    if normalized == "integral":
+        return f"\n\n{PROFILE_INTEGRAL_TEMPLATE}\n"
     label = get_profile_label(normalized)
     max_itens = get_profile_max_itens(normalized)
     return f"\n\n{PROFILE_ITEM_LIMIT_TEMPLATE.format(label=label, max_itens=max_itens)}\n"
@@ -857,13 +861,20 @@ def analyze_single(
     numero_parecer: str,
     analysis_profile: str = DEFAULT_ANALYSIS_PROFILE,
     disciplina: str = "instrumentacao",
+    texto_anexos: str = "",
 ) -> dict:
     """Analyze documents in a single API call (for smaller documents)."""
     system_prompt = get_system_prompt(disciplina)
     profile_instruction = _profile_instruction(analysis_profile)
+    texto_anexos_section = (
+        f"\n\n## DOCUMENTOS COMPLEMENTARES (ENGENHARIA)\n\n{texto_anexos}\n\n"
+        if texto_anexos
+        else ""
+    )
     user_content = USER_PROMPT_TEMPLATE.format(
         texto_engenharia=texto_engenharia,
         texto_fornecedor=texto_fornecedor,
+        texto_anexos_section=texto_anexos_section,
         projeto=projeto,
         fornecedor=fornecedor,
         numero_parecer=numero_parecer,
@@ -897,10 +908,16 @@ def analyze_chunked(
     on_progress: callable = None,
     analysis_profile: str = DEFAULT_ANALYSIS_PROFILE,
     disciplina: str = "instrumentacao",
+    texto_anexos: str = "",
 ) -> dict:
     """Analyze documents using map-reduce for large documents."""
     system_prompt = get_system_prompt(disciplina)
     profile_instruction = _profile_instruction(analysis_profile)
+    texto_anexos_section = (
+        f"\n\n## DOCUMENTOS COMPLEMENTARES (ENGENHARIA)\n\n{texto_anexos}\n\n"
+        if texto_anexos
+        else ""
+    )
     eng_chunks = _split_text_into_chunks(texto_engenharia, MAX_INPUT_CHARS // 2)
     forn_chunks = _split_text_into_chunks(texto_fornecedor, MAX_INPUT_CHARS // 2)
 
@@ -921,6 +938,7 @@ def analyze_chunked(
         user_content = CHUNK_USER_PROMPT_TEMPLATE.format(
             texto_engenharia=eng_chunks[i],
             texto_fornecedor=forn_chunks[i],
+            texto_anexos_section=texto_anexos_section,
             chunk_index=i + 1,
             total_chunks=total_chunks,
             projeto=projeto,
@@ -978,6 +996,7 @@ def analyze_documents(
     on_progress: callable = None,
     analysis_profile: str = DEFAULT_ANALYSIS_PROFILE,
     disciplina: str = "instrumentacao",
+    texto_anexos: str = "",
 ) -> dict:
     """Main entry point: choose single or chunked based on document size."""
     total_chars = len(texto_engenharia) + len(texto_fornecedor)
@@ -992,6 +1011,7 @@ def analyze_documents(
             numero_parecer,
             analysis_profile=profile,
             disciplina=disciplina,
+            texto_anexos=texto_anexos,
         )
     else:
         return analyze_chunked(
@@ -1003,4 +1023,5 @@ def analyze_documents(
             on_progress=on_progress,
             analysis_profile=profile,
             disciplina=disciplina,
+            texto_anexos=texto_anexos,
         )

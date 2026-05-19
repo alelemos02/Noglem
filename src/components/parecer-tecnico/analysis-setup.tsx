@@ -75,6 +75,18 @@ export function AnalysisSetup() {
               onUploadComplete={loadDocumentos}
             />
           </div>
+          <div className="mt-4 border-t border-border pt-4">
+            <FileUploadZone
+              parecerId={parecer.id}
+              tipo="anexo_engenharia"
+              label="Anexos / Documentos Complementares (opcional)"
+              documentos={documentos}
+              onUploadComplete={loadDocumentos}
+            />
+            <p className="mt-1.5 text-xs text-text-tertiary">
+              Datasheets de referencia, normas internas, especificacoes gerais — usados como contexto de apoio pela IA.
+            </p>
+          </div>
         </div>
 
         {/* Analysis in progress */}

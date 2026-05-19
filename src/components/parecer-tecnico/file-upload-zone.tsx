@@ -5,7 +5,7 @@ import { patecApi, type DocumentoResponse } from "@/lib/patec-api";
 
 interface FileUploadZoneProps {
   parecerId: string;
-  tipo: "engenharia" | "fornecedor";
+  tipo: "engenharia" | "fornecedor" | "anexo_engenharia";
   label: string;
   documentos: DocumentoResponse[];
   onUploadComplete: () => void;
