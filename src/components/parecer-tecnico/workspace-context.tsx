@@ -146,6 +146,8 @@ interface WorkspaceContextValue {
   hasFornDocs: boolean;
   canAnalyze: boolean;
   statusCounts: Record<string, number>;
+  showSetupOverride: boolean;
+  setShowSetupOverride: (v: boolean) => void;
   selectItem: (id: string | null) => void;
   selectNextItem: () => void;
   selectPreviousItem: () => void;
@@ -212,6 +214,7 @@ export function ParecerWorkspaceProvider({ parecerId, children }: ProviderProps)
   const [analysisProfile, setAnalysisProfile] =
     useState<PerfilAnalise>("padrao");
   const [customItemCount, setCustomItemCount] = useState(25);
+  const [showSetupOverride, setShowSetupOverride] = useState(false);
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
 
   // --- Data loading ---
@@ -297,6 +300,7 @@ export function ParecerWorkspaceProvider({ parecerId, children }: ProviderProps)
             setAnalysisPercent(100);
             setAnalysisStage("completed");
             setAnalysisMessage("Analise concluida com sucesso.");
+            setShowSetupOverride(false);
             await refreshAll();
           } else if (status.status_processamento === "erro") {
             stopPolling();
@@ -424,6 +428,7 @@ export function ParecerWorkspaceProvider({ parecerId, children }: ProviderProps)
   const startAnalysis = useCallback(async () => {
     if (!parecer) return;
     setAnalysisError("");
+    setShowSetupOverride(false);
     const resolvedProfile: PerfilAnalise =
       analysisProfile === "personalizado"
         ? `custom_${Math.max(1, Math.min(customItemCount, 100))}`
@@ -470,6 +475,8 @@ export function ParecerWorkspaceProvider({ parecerId, children }: ProviderProps)
       hasFornDocs,
       canAnalyze,
       statusCounts,
+      showSetupOverride,
+      setShowSetupOverride,
       selectItem,
       selectNextItem,
       selectPreviousItem,
@@ -505,6 +512,7 @@ export function ParecerWorkspaceProvider({ parecerId, children }: ProviderProps)
       hasFornDocs,
       canAnalyze,
       statusCounts,
+      showSetupOverride,
       selectItem,
       selectNextItem,
       selectPreviousItem,

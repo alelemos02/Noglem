@@ -12,11 +12,11 @@ import { ChatPanelWrapper } from "./chat-panel-wrapper";
 type MobileTab = "lista" | "detalhe" | "chat";
 
 export function WorkspaceLayout() {
-  const { hasResults, selectedItemId, analyzing, parecer } = useWorkspace();
+  const { hasResults, selectedItemId, analyzing, parecer, showSetupOverride } = useWorkspace();
   const [mobileTab, setMobileTab] = useState<MobileTab>("lista");
 
   const showAnalysisSetup =
-    !hasResults && !analyzing && parecer?.status_processamento !== "processando";
+    (!hasResults || showSetupOverride) && !analyzing && parecer?.status_processamento !== "processando";
   const showAnalysisProgress =
     analyzing || parecer?.status_processamento === "processando";
 

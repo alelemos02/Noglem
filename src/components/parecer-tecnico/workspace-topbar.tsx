@@ -19,6 +19,9 @@ export function WorkspaceTopbar() {
     itens,
     documentos,
     hasResults,
+    analyzing,
+    showSetupOverride,
+    setShowSetupOverride,
     filters,
     setFilters,
     deleteParecer,
@@ -195,7 +198,18 @@ export function WorkspaceTopbar() {
           >
             ?
           </Button>
-          {hasResults && <ExportButton parecerId={parecer.id} />}
+          {hasResults && !analyzing && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 px-2 text-xs text-text-secondary hover:text-text-primary"
+              onClick={() => setShowSetupOverride(!showSetupOverride)}
+              title={showSetupOverride ? "Voltar aos resultados" : "Modificar documentos ou reanalisar"}
+            >
+              {showSetupOverride ? "← Resultados" : "Reanalisar"}
+            </Button>
+          )}
+          {hasResults && !showSetupOverride && <ExportButton parecerId={parecer.id} />}
           <Button
             variant="ghost"
             size="sm"
