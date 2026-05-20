@@ -31,6 +31,7 @@ export function AnalysisSetup() {
     hasFornDocs,
     hasResults,
     previewLoading,
+    previewError,
     loadPreview,
   } = useWorkspace();
 
@@ -179,6 +180,14 @@ export function AnalysisSetup() {
               <p className="text-center text-sm text-yellow-400">
                 Faca upload de pelo menos um documento do fornecedor.
               </p>
+            )}
+
+            {/* Preview error */}
+            {previewError && (
+              <div className="rounded-md bg-error-muted p-4">
+                <p className="text-sm font-medium text-error">Erro ao carregar prévia</p>
+                <p className="text-sm text-error/80">{previewError}</p>
+              </div>
             )}
 
             {/* Error */}
