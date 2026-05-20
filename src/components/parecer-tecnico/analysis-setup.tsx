@@ -3,6 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { FileUploadZone } from "./file-upload-zone";
 import { EstimativaCusto } from "./estimativa-custo";
+import { PreviewDialog } from "./preview-dialog";
 import {
   useWorkspace,
   ANALYSIS_PROFILE_OPTIONS,
@@ -29,6 +30,8 @@ export function AnalysisSetup() {
     hasEngDocs,
     hasFornDocs,
     hasResults,
+    previewLoading,
+    loadPreview,
   } = useWorkspace();
 
   if (!parecer) return null;
@@ -194,23 +197,31 @@ export function AnalysisSetup() {
 
             {/* Action button */}
             <div className="space-y-3 text-center">
-              <Button
-                onClick={startAnalysis}
-                disabled={!canAnalyze}
-                size="lg"
-              >
-                {hasResults
-                  ? "Reanalisar"
-                  : parecer.status_processamento === "erro"
+              {hasResults ? (
+                <Button
+                  onClick={startAnalysis}
+                  disabled={!canAnalyze}
+                  size="lg"
+                >
+                  {parecer.status_processamento === "erro"
                     ? "Tentar Novamente"
-                    : "Gerar Parecer Tecnico"}
-              </Button>
+                    : "Reanalisar"}
+                </Button>
+              ) : (
+                <Button
+                  onClick={() => loadPreview()}
+                  disabled={!canAnalyze}
+                  loading={previewLoading}
+                  size="lg"
+                >
+                  Avançar
+                </Button>
+              )}
 
               {canAnalyze && !hasResults && (
                 <>
                   <p className="text-xs text-text-tertiary">
-                    A analise sera feita via IA comparando os documentos de
-                    engenharia com os do fornecedor.
+                    Você poderá revisar os requisitos antes de iniciar a análise.
                   </p>
                   <EstimativaCusto parecerId={parecer.id} />
                 </>
@@ -219,6 +230,8 @@ export function AnalysisSetup() {
           </>
         )}
       </div>
+
+      <PreviewDialog />
     </div>
   );
 }

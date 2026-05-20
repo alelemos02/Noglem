@@ -14,6 +14,7 @@ from app.services.llm_prompt import (
     PROFILE_ITEM_LIMIT_TEMPLATE,
     PROFILE_INTEGRAL_TEMPLATE,
     FIELD_OPTIMIZATION_SYSTEM,
+    APPROVED_ITEMS_CONTEXT,
     get_system_prompt,
 )
 
@@ -873,6 +874,7 @@ def analyze_single(
     analysis_profile: str = DEFAULT_ANALYSIS_PROFILE,
     disciplina: str = "instrumentacao",
     texto_anexos: str = "",
+    itens_aprovados: list[dict] | None = None,
 ) -> dict:
     """Analyze documents in a single API call (for smaller documents)."""
     system_prompt = get_system_prompt(disciplina)
@@ -882,6 +884,14 @@ def analyze_single(
         if texto_anexos
         else ""
     )
+    approved_section = (
+        APPROVED_ITEMS_CONTEXT.format(
+            itens_json=json.dumps(itens_aprovados, ensure_ascii=False, indent=2),
+            total=len(itens_aprovados),
+        )
+        if itens_aprovados
+        else ""
+    )
     user_content = USER_PROMPT_TEMPLATE.format(
         texto_engenharia=texto_engenharia,
         texto_fornecedor=texto_fornecedor,
@@ -889,7 +899,7 @@ def analyze_single(
         projeto=projeto,
         fornecedor=fornecedor,
         numero_parecer=numero_parecer,
-    ) + profile_instruction
+    ) + approved_section + profile_instruction
 
     logger.info("Calling Gemini API (single call, %d chars)", len(user_content))
     response_text = _call_gemini(system_prompt, user_content)
@@ -920,6 +930,7 @@ def analyze_chunked(
     analysis_profile: str = DEFAULT_ANALYSIS_PROFILE,
     disciplina: str = "instrumentacao",
     texto_anexos: str = "",
+    itens_aprovados: list[dict] | None = None,
 ) -> dict:
     """Analyze documents using map-reduce for large documents."""
     system_prompt = get_system_prompt(disciplina)
@@ -927,6 +938,14 @@ def analyze_chunked(
     texto_anexos_section = (
         f"\n\n## DOCUMENTOS COMPLEMENTARES (ENGENHARIA)\n\n{texto_anexos}\n\n"
         if texto_anexos
+        else ""
+    )
+    approved_section = (
+        APPROVED_ITEMS_CONTEXT.format(
+            itens_json=json.dumps(itens_aprovados, ensure_ascii=False, indent=2),
+            total=len(itens_aprovados),
+        )
+        if itens_aprovados
         else ""
     )
     eng_chunks = _split_text_into_chunks(texto_engenharia, MAX_INPUT_CHARS // 2)
@@ -955,7 +974,7 @@ def analyze_chunked(
             projeto=projeto,
             fornecedor=fornecedor,
             numero_parecer=numero_parecer,
-        ) + profile_instruction
+        ) + approved_section + profile_instruction
 
         logger.info("Calling Gemini API (chunk %d/%d, %d chars)", i + 1, total_chunks, len(user_content))
         response_text = _call_gemini(system_prompt, user_content)
@@ -1008,6 +1027,7 @@ def analyze_documents(
     analysis_profile: str = DEFAULT_ANALYSIS_PROFILE,
     disciplina: str = "instrumentacao",
     texto_anexos: str = "",
+    itens_aprovados: list[dict] | None = None,
 ) -> dict:
     """Main entry point: choose single or chunked based on document size."""
     total_chars = len(texto_engenharia) + len(texto_fornecedor)
@@ -1023,6 +1043,7 @@ def analyze_documents(
             analysis_profile=profile,
             disciplina=disciplina,
             texto_anexos=texto_anexos,
+            itens_aprovados=itens_aprovados,
         )
     else:
         return analyze_chunked(
@@ -1035,4 +1056,5 @@ def analyze_documents(
             analysis_profile=profile,
             disciplina=disciplina,
             texto_anexos=texto_anexos,
+            itens_aprovados=itens_aprovados,
         )

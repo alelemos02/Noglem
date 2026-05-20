@@ -50,6 +50,7 @@ def _compute_docs_hash(eng_text: str, forn_text: str, analysis_profile: str, ane
 def run_analysis_sync(
     parecer_id: str,
     analysis_profile: str = DEFAULT_ANALYSIS_PROFILE,
+    itens_aprovados: list[dict] | None = None,
 ):
     """Run analysis in-process (no Celery), suitable for background threading."""
     analysis_profile = normalize_analysis_profile(analysis_profile)
@@ -139,6 +140,7 @@ def run_analysis_sync(
                     on_progress=on_progress,
                     analysis_profile=analysis_profile,
                     disciplina=getattr(parecer, "disciplina", "instrumentacao"),
+                    itens_aprovados=itens_aprovados,
                 )
                 db.add(
                     CacheAnalise(
@@ -352,11 +354,11 @@ def run_analysis_sync(
 def start_analysis_in_background(
     parecer_id: str,
     analysis_profile: str = DEFAULT_ANALYSIS_PROFILE,
+    itens_aprovados: list[dict] | None = None,
 ) -> str:
     """Start analysis via Celery queue and return the task id."""
     from app.worker import processar_parecer_task
-    
-    # Trigger task asynchronously using Celery
-    task = processar_parecer_task.delay(parecer_id, analysis_profile)
-    
+
+    task = processar_parecer_task.delay(parecer_id, analysis_profile, itens_aprovados)
+
     return task.id

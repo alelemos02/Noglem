@@ -19,6 +19,7 @@ import {
   type DocumentoResponse,
   type RecomendacaoResponse,
   type PerfilAnalise,
+  type PreviewItemCandidato,
 } from "@/lib/patec-api";
 
 // --- Constants shared across workspace ---
@@ -148,6 +149,14 @@ interface WorkspaceContextValue {
   statusCounts: Record<string, number>;
   showSetupOverride: boolean;
   setShowSetupOverride: (v: boolean) => void;
+  previewItems: PreviewItemCandidato[];
+  previewLoading: boolean;
+  previewError: string;
+  previewResumo: string;
+  showPreviewDialog: boolean;
+  setShowPreviewDialog: (v: boolean) => void;
+  loadPreview: (feedback?: string) => Promise<void>;
+  approveAndAnalyze: () => Promise<void>;
   selectItem: (id: string | null) => void;
   selectNextItem: () => void;
   selectPreviousItem: () => void;
@@ -215,6 +224,11 @@ export function ParecerWorkspaceProvider({ parecerId, children }: ProviderProps)
     useState<PerfilAnalise>("padrao");
   const [customItemCount, setCustomItemCount] = useState(25);
   const [showSetupOverride, setShowSetupOverride] = useState(false);
+  const [previewItems, setPreviewItems] = useState<PreviewItemCandidato[]>([]);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState("");
+  const [previewResumo, setPreviewResumo] = useState("");
+  const [showPreviewDialog, setShowPreviewDialog] = useState(false);
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
 
   // --- Data loading ---
@@ -443,6 +457,42 @@ export function ParecerWorkspaceProvider({ parecerId, children }: ProviderProps)
     }
   }, [parecer, analysisProfile, customItemCount, startPolling]);
 
+  const loadPreview = useCallback(async (feedback?: string) => {
+    if (!parecer) return;
+    setPreviewLoading(true);
+    setPreviewError("");
+    const resolvedProfile: PerfilAnalise =
+      analysisProfile === "personalizado"
+        ? `custom_${Math.max(1, Math.min(customItemCount, 100))}`
+        : analysisProfile;
+    try {
+      const result = await patecApi.analise.preview(parecer.id, resolvedProfile, feedback);
+      setPreviewItems(result.itens_candidatos);
+      setPreviewResumo(result.resumo);
+      setShowPreviewDialog(true);
+    } catch (err) {
+      setPreviewError(err instanceof Error ? err.message : "Erro ao gerar preview");
+    } finally {
+      setPreviewLoading(false);
+    }
+  }, [parecer, analysisProfile, customItemCount]);
+
+  const approveAndAnalyze = useCallback(async () => {
+    if (!parecer) return;
+    setShowPreviewDialog(false);
+    setAnalysisError("");
+    const resolvedProfile: PerfilAnalise =
+      analysisProfile === "personalizado"
+        ? `custom_${Math.max(1, Math.min(customItemCount, 100))}`
+        : analysisProfile;
+    try {
+      await patecApi.analise.iniciar(parecer.id, resolvedProfile, previewItems);
+      startPolling(resolvedProfile);
+    } catch (err) {
+      setAnalysisError(err instanceof Error ? err.message : "Erro ao iniciar analise");
+    }
+  }, [parecer, analysisProfile, customItemCount, previewItems, startPolling]);
+
   const deleteParecer = useCallback(async () => {
     if (!parecer) return;
     await patecApi.pareceres.delete(parecer.id);
@@ -477,6 +527,14 @@ export function ParecerWorkspaceProvider({ parecerId, children }: ProviderProps)
       statusCounts,
       showSetupOverride,
       setShowSetupOverride,
+      previewItems,
+      previewLoading,
+      previewError,
+      previewResumo,
+      showPreviewDialog,
+      setShowPreviewDialog,
+      loadPreview,
+      approveAndAnalyze,
       selectItem,
       selectNextItem,
       selectPreviousItem,
@@ -513,6 +571,13 @@ export function ParecerWorkspaceProvider({ parecerId, children }: ProviderProps)
       canAnalyze,
       statusCounts,
       showSetupOverride,
+      previewItems,
+      previewLoading,
+      previewError,
+      previewResumo,
+      showPreviewDialog,
+      loadPreview,
+      approveAndAnalyze,
       selectItem,
       selectNextItem,
       selectPreviousItem,

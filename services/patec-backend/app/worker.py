@@ -27,18 +27,17 @@ logger = logging.getLogger(__name__)
 
 # Register tasks
 @celery_app.task(bind=True, name="processar_parecer")
-def processar_parecer_task(self, parecer_id: str, analysis_profile: str):
+def processar_parecer_task(self, parecer_id: str, analysis_profile: str, itens_aprovados: list | None = None):
     """
     Celery task wrapper around the existing run_analysis_sync function.
     """
     logger.info("Starting analysis for parecer %s with profile %s", parecer_id, analysis_profile)
-    # We delay the import to avoid circular dependencies and ensure 
-    # the application context is loaded only in the worker process
     from app.services.tasks import run_analysis_sync
-    
+
     result = run_analysis_sync(
-        parecer_id=parecer_id, 
-        analysis_profile=analysis_profile
+        parecer_id=parecer_id,
+        analysis_profile=analysis_profile,
+        itens_aprovados=itens_aprovados,
     )
-    
+
     return result

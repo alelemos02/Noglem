@@ -20,6 +20,7 @@ from app.services.analyzer import (
     normalize_analysis_profile,
 )
 from app.services.tasks import start_analysis_in_background
+from app.services.preview import gerar_preview_itens
 
 router = APIRouter(prefix="/pareceres/{parecer_id}", tags=["analise"])
 
@@ -43,6 +44,7 @@ class StatusResponse(BaseModel):
 
 class AnaliseRequest(BaseModel):
     perfil_analise: str = DEFAULT_ANALYSIS_PROFILE
+    itens_aprovados: list[dict] | None = None
 
     @field_validator("perfil_analise")
     @classmethod
@@ -52,6 +54,33 @@ class AnaliseRequest(BaseModel):
                 "perfil_analise invalido. Use: simples, padrao, completa ou custom_N (ex: custom_30)"
             )
         return v
+
+
+class PreviewItensRequest(BaseModel):
+    perfil_analise: str = DEFAULT_ANALYSIS_PROFILE
+    feedback: str | None = None
+
+    @field_validator("perfil_analise")
+    @classmethod
+    def validate_perfil(cls, v: str) -> str:
+        if not _VALID_PROFILE_RE.match(v):
+            raise ValueError("perfil_analise invalido.")
+        return v
+
+
+class ItemCandidatoResponse(BaseModel):
+    numero: int
+    categoria: str
+    descricao_requisito: str
+    prioridade: str
+    norma_referencia: str | None = None
+    referencia_engenharia: str = ""
+
+
+class PreviewItensResponse(BaseModel):
+    itens_candidatos: list[ItemCandidatoResponse]
+    total_itens: int
+    resumo: str
 
 
 @router.post("/analisar", response_model=AnaliseResponse, status_code=status.HTTP_202_ACCEPTED)
@@ -113,7 +142,8 @@ async def iniciar_analise(
         f"Analise enfileirada ({perfil_label}) para processamento...",
         "queued",
     )
-    task_id = start_analysis_in_background(str(parecer_id), perfil_analise)
+    itens_aprovados = payload.itens_aprovados if payload else None
+    task_id = start_analysis_in_background(str(parecer_id), perfil_analise, itens_aprovados=itens_aprovados)
 
     # Audit log
     await registrar_auditoria(
@@ -134,6 +164,34 @@ async def iniciar_analise(
             "Use o endpoint de status para acompanhar."
         ),
     )
+
+
+@router.post("/preview-itens", response_model=PreviewItensResponse)
+async def preview_itens(
+    parecer_id: uuid.UUID,
+    payload: PreviewItensRequest | None = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(require_role("admin", "analista")),
+):
+    """Gera uma lista candidata de requisitos a partir dos documentos de engenharia (sincrono, sem comparacao com fornecedor)."""
+    result = await db.execute(select(Parecer).where(Parecer.id == parecer_id))
+    parecer = result.scalar_one_or_none()
+    if not parecer:
+        raise HTTPException(status_code=404, detail="Parecer nao encontrado")
+    if parecer.status_processamento == "processando":
+        raise HTTPException(status_code=400, detail="Parecer ja esta sendo processado")
+
+    perfil = payload.perfil_analise if payload else DEFAULT_ANALYSIS_PROFILE
+    feedback = payload.feedback if payload else None
+
+    try:
+        data = await gerar_preview_itens(parecer_id, db, perfil, feedback)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
+    return PreviewItensResponse(**data)
 
 
 @router.get("/status", response_model=StatusResponse)

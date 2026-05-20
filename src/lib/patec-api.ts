@@ -141,6 +141,21 @@ export interface StatusAnaliseResponse {
   total_itens: number;
 }
 
+export interface PreviewItemCandidato {
+  numero: number;
+  categoria: string;
+  descricao_requisito: string;
+  prioridade: "ALTA" | "MEDIA" | "BAIXA";
+  norma_referencia: string | null;
+  referencia_engenharia: string;
+}
+
+export interface PreviewItensResponse {
+  itens_candidatos: PreviewItemCandidato[];
+  total_itens: number;
+  resumo: string;
+}
+
 export interface RevisaoResponse {
   id: string;
   parecer_id: string;
@@ -261,10 +276,22 @@ export const patecApi = {
     },
   },
   analise: {
-    iniciar(parecerId: string, perfilAnalise: PerfilAnalise = "padrao") {
+    preview(parecerId: string, perfilAnalise: PerfilAnalise = "padrao", feedback?: string) {
+      return request<PreviewItensResponse>(`/v1/pareceres/${parecerId}/preview-itens`, {
+        method: "POST",
+        body: JSON.stringify({
+          perfil_analise: perfilAnalise,
+          ...(feedback ? { feedback } : {}),
+        }),
+      });
+    },
+    iniciar(parecerId: string, perfilAnalise: PerfilAnalise = "padrao", itensAprovados?: PreviewItemCandidato[]) {
       return request<AnaliseResponse>(`/v1/pareceres/${parecerId}/analisar`, {
         method: "POST",
-        body: JSON.stringify({ perfil_analise: perfilAnalise }),
+        body: JSON.stringify({
+          perfil_analise: perfilAnalise,
+          ...(itensAprovados ? { itens_aprovados: itensAprovados } : {}),
+        }),
       });
     },
     status(parecerId: string) {
