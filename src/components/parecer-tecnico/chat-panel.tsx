@@ -25,11 +25,13 @@ interface ChatPanelProps {
   onTableUpdated: () => void;
   contextItem?: ItemParecerResponse | null;
   fillHeight?: boolean;
+  showMessages?: boolean;
+  hideHeader?: boolean;
 }
 
 export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
   function ChatPanel(
-    { parecerId, onTableUpdated, contextItem, fillHeight },
+    { parecerId, onTableUpdated, contextItem, fillHeight, showMessages = true, hideHeader = false },
     ref
   ) {
     const [messages, setMessages] = useState<ChatMessageResponse[]>([]);
@@ -210,23 +212,26 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
     return (
       <div className={`flex flex-col ${fillHeight ? "h-full" : ""}`}>
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-2">
-          <p className="text-xs text-text-tertiary">
-            Converse com o especialista de IA sobre o parecer tecnico.
-          </p>
-          {messages.length > 0 && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-xs text-text-tertiary hover:text-red-400"
-              onClick={handleClearHistory}
-            >
-              Limpar
-            </Button>
-          )}
-        </div>
+        {!hideHeader && (
+          <div className="flex items-center justify-between px-4 py-2">
+            <p className="text-xs text-text-tertiary">
+              Converse com o especialista de IA sobre o parecer tecnico.
+            </p>
+            {messages.length > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-xs text-text-tertiary hover:text-error"
+                onClick={handleClearHistory}
+              >
+                Limpar
+              </Button>
+            )}
+          </div>
+        )}
 
         {/* Messages area */}
+        {showMessages && (
         <div
           className={`overflow-y-auto border-t border-border ${
             fillHeight ? "flex-1" : ""
@@ -256,6 +261,7 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
             <div ref={messagesEndRef} />
           </div>
         </div>
+        )}
 
         {/* Error display */}
         {error && (
