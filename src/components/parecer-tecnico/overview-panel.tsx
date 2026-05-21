@@ -18,65 +18,67 @@ export function OverviewPanel() {
           Resumo Executivo
         </h2>
 
-        <div className="flex flex-col gap-6 md:flex-row md:items-start md:justify-between">
-          {/* Stats */}
-          <div className="grid grid-cols-3 gap-4 sm:grid-cols-6">
-            <div className="text-center">
-              <p className="text-2xl font-bold text-text-primary">
-                {parecer.total_itens}
-              </p>
-              <p className="text-xs text-text-secondary">Total</p>
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
+          {/* Left: stats + chart */}
+          <div className="shrink-0 space-y-4">
+            <div className="grid grid-cols-3 gap-x-6 gap-y-3">
+              <div className="text-center">
+                <p className="text-2xl font-bold font-mono tabular-nums text-text-primary">
+                  {parecer.total_itens}
+                </p>
+                <p className="text-xs text-text-secondary">Total</p>
+              </div>
+              <div className="text-center">
+                <p className="text-2xl font-bold font-mono tabular-nums text-success">
+                  {parecer.total_aprovados}
+                </p>
+                <p className="text-xs text-text-secondary">Aprovados</p>
+              </div>
+              <div className="text-center">
+                <p className="text-2xl font-bold font-mono tabular-nums text-warning">
+                  {parecer.total_aprovados_comentarios}
+                </p>
+                <p className="text-xs text-text-secondary">Aprov. c/ Com.</p>
+              </div>
+              <div className="text-center">
+                <p className="text-2xl font-bold font-mono tabular-nums text-error">
+                  {parecer.total_rejeitados}
+                </p>
+                <p className="text-xs text-text-secondary">Rejeitados</p>
+              </div>
+              <div className="text-center">
+                <p className="text-2xl font-bold font-mono tabular-nums text-text-tertiary">
+                  {parecer.total_info_ausente}
+                </p>
+                <p className="text-xs text-text-secondary">Info Ausente</p>
+              </div>
+              <div className="text-center">
+                <p className="text-2xl font-bold font-mono tabular-nums text-info">
+                  {parecer.total_itens_adicionais}
+                </p>
+                <p className="text-xs text-text-secondary">Adicionais</p>
+              </div>
             </div>
-            <div className="text-center">
-              <p className="text-2xl font-bold text-green-400">
-                {parecer.total_aprovados}
-              </p>
-              <p className="text-xs text-text-secondary">Aprovados</p>
-            </div>
-            <div className="text-center">
-              <p className="text-2xl font-bold text-yellow-400">
-                {parecer.total_aprovados_comentarios}
-              </p>
-              <p className="text-xs text-text-secondary">Aprov. c/ Com.</p>
-            </div>
-            <div className="text-center">
-              <p className="text-2xl font-bold text-red-400">
-                {parecer.total_rejeitados}
-              </p>
-              <p className="text-xs text-text-secondary">Rejeitados</p>
-            </div>
-            <div className="text-center">
-              <p className="text-2xl font-bold text-gray-400">
-                {parecer.total_info_ausente}
-              </p>
-              <p className="text-xs text-text-secondary">Info Ausente</p>
-            </div>
-            <div className="text-center">
-              <p className="text-2xl font-bold text-blue-400">
-                {parecer.total_itens_adicionais}
-              </p>
-              <p className="text-xs text-text-secondary">Adicionais</p>
-            </div>
+
+            <SummaryChart
+              aprovados={parecer.total_aprovados}
+              aprovadosComentarios={parecer.total_aprovados_comentarios}
+              rejeitados={parecer.total_rejeitados}
+              infoAusente={parecer.total_info_ausente}
+              itensAdicionais={parecer.total_itens_adicionais}
+            />
           </div>
 
-          {/* Chart */}
-          <SummaryChart
-            aprovados={parecer.total_aprovados}
-            aprovadosComentarios={parecer.total_aprovados_comentarios}
-            rejeitados={parecer.total_rejeitados}
-            infoAusente={parecer.total_info_ausente}
-            itensAdicionais={parecer.total_itens_adicionais}
-          />
-        </div>
+          {/* Divider */}
+          <div className="hidden lg:block lg:self-stretch lg:border-l lg:border-border" />
 
-        {parecer.comentario_geral && (
-          <>
-            <div className="my-4 border-t border-border" />
-            <p className="text-sm text-text-primary">
+          {/* Right: executive summary text */}
+          {parecer.comentario_geral && (
+            <p className="flex-1 text-sm leading-relaxed text-text-primary">
               {parecer.comentario_geral}
             </p>
-          </>
-        )}
+          )}
+        </div>
       </div>
 
       {/* Metadata */}
