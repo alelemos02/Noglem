@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends
 from app.core.deps import require_internal_api_key
 from app.api.v1.endpoints import (
     auth, pareceres, documentos, analise, itens,
-    exportacoes, revisoes, estimativa, auditoria, chat,
+    exportacoes, revisoes, estimativa, auditoria, chat, ciclo_avaliativo,
 )
 
 api_router = APIRouter(dependencies=[Depends(require_internal_api_key)])
@@ -17,3 +17,4 @@ api_router.include_router(revisoes.router)
 api_router.include_router(estimativa.router)
 api_router.include_router(auditoria.router)
 api_router.include_router(chat.router)
+api_router.include_router(ciclo_avaliativo.router)

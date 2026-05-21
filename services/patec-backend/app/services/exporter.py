@@ -10,12 +10,20 @@ from reportlab.platypus import (
     SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak,
 )
 from openpyxl import Workbook
-from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side, GradientFill
+from openpyxl.styles.protection import Protection
 from openpyxl.utils import get_column_letter
 from docx import Document as DocxDocument
 from docx.shared import Pt
 from docx.enum.table import WD_TABLE_ALIGNMENT
 from docx.enum.text import WD_ALIGN_PARAGRAPH
+
+# Coluna onde o fornecedor preenche a resposta (1-based: F = 6)
+_CARTA_COL_RESPOSTA = 6
+# Coluna oculta com ITEM_ID (G = 7)
+_CARTA_COL_ITEM_ID = 7
+# Senha de proteção da planilha (protege colunas A-E e G; deixa F editável)
+_CARTA_SHEET_PASSWORD = "patec_pendencias"
 
 logger = logging.getLogger(__name__)
 
@@ -356,6 +364,146 @@ def export_xlsx(parecer, itens, recomendacoes) -> bytes:
 
     except Exception:
         logger.exception("Erro ao gerar XLSX para parecer %s", parecer.numero_parecer)
+        raise
+
+
+def export_carta_pendencias(parecer, itens_pendentes) -> bytes:
+    """
+    Gera a carta de pendências em XLSX para os itens em PENDENTE_FORNECEDOR.
+
+    Estrutura:
+      - Linha 1: instrução ao fornecedor
+      - Linha 2: cabeçalhos (A–G)
+      - Linhas 3+: um item por linha
+    Colunas A–E e G são protegidas (somente leitura).
+    Coluna F (Resposta do Fornecedor) é editável.
+    Coluna G (ITEM_ID) é oculta para guiar o reimport determinístico.
+    """
+    try:
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Pendencias"
+
+        header_font = Font(bold=True, color="FFFFFF", size=10)
+        header_fill = PatternFill(start_color="2D3748", end_color="2D3748", fill_type="solid")
+        instrucao_fill = PatternFill(start_color="FFF3CD", end_color="FFF3CD", fill_type="solid")
+        resposta_fill = PatternFill(start_color="E8F5E9", end_color="E8F5E9", fill_type="solid")
+        thin_border = Border(
+            left=Side(style="thin"), right=Side(style="thin"),
+            top=Side(style="thin"), bottom=Side(style="thin"),
+        )
+        locked_protection = Protection(locked=True)
+        unlocked_protection = Protection(locked=False)
+
+        # ── Linha 1: instrução ──────────────────────────────────────────
+        instrucao = (
+            "INSTRUCAO AO FORNECEDOR: Preencha APENAS a coluna F (Resposta do Fornecedor). "
+            "Nao altere nenhuma outra celula. Nao remova linhas nem colunas. "
+            "Retorne este arquivo preenchido para avaliacao."
+        )
+        ws.merge_cells("A1:F1")
+        cell = ws["A1"]
+        cell.value = instrucao
+        cell.font = Font(bold=True, size=9, color="7B4F00")
+        cell.fill = instrucao_fill
+        cell.alignment = Alignment(wrap_text=True, vertical="center")
+        cell.protection = locked_protection
+        ws.row_dimensions[1].height = 36
+
+        # ── Linha 2: cabeçalhos ─────────────────────────────────────────
+        cabecalhos = [
+            "Item",
+            "Disciplina/Categoria",
+            "Prioridade",
+            "Requisito da Engenharia",
+            "Pendencia / Acao Requerida",
+            "Resposta do Fornecedor",
+            "ITEM_ID",
+        ]
+        for col, titulo in enumerate(cabecalhos, 1):
+            cell = ws.cell(row=2, column=col, value=titulo)
+            cell.font = header_font
+            cell.fill = header_fill if col != _CARTA_COL_RESPOSTA else PatternFill(
+                start_color="1B5E20", end_color="1B5E20", fill_type="solid"
+            )
+            cell.border = thin_border
+            cell.alignment = Alignment(horizontal="center", wrap_text=True)
+            cell.protection = locked_protection
+
+        # Larguras das colunas
+        col_widths = [8, 22, 14, 55, 55, 55, 15]
+        for i, w in enumerate(col_widths, 1):
+            ws.column_dimensions[get_column_letter(i)].width = w
+
+        # Oculta coluna ITEM_ID
+        ws.column_dimensions[get_column_letter(_CARTA_COL_ITEM_ID)].hidden = True
+
+        # ── Linhas de dados ─────────────────────────────────────────────
+        prioridade_colors = {"ALTA": "FFCCCC", "MEDIA": "FFF3CC", "BAIXA": "E8F5E9"}
+
+        for item in itens_pendentes:
+            # Busca acao_requerida da última rodada (campo do item, fallback para o campo direto)
+            pendencia = (item.acao_requerida or "").strip() or "Ver justificativa tecnica."
+
+            row_values = [
+                item.numero,
+                item.categoria or "",
+                item.prioridade or "",
+                (item.descricao_requisito or "").strip(),
+                pendencia,
+                "",                      # Resposta — editável
+                str(item.id),            # ITEM_ID — oculto
+            ]
+
+            ws.append(row_values)
+            row_idx = ws.max_row
+
+            prio_color = prioridade_colors.get(item.prioridade or "", "FFFFFF")
+
+            for col in range(1, _CARTA_COL_ITEM_ID + 1):
+                cell = ws.cell(row=row_idx, column=col)
+                cell.border = thin_border
+                cell.alignment = Alignment(wrap_text=True, vertical="top")
+
+                if col == _CARTA_COL_RESPOSTA:
+                    cell.fill = resposta_fill
+                    cell.protection = unlocked_protection
+                elif col == 3:  # prioridade
+                    cell.fill = PatternFill(
+                        start_color=prio_color, end_color=prio_color, fill_type="solid"
+                    )
+                    cell.protection = locked_protection
+                else:
+                    cell.protection = locked_protection
+
+        # ── Metadados do parecer numa aba separada ──────────────────────
+        ws_meta = wb.create_sheet("Info")
+        ws_meta["A1"] = "Parecer"
+        ws_meta["B1"] = parecer.numero_parecer
+        ws_meta["A2"] = "Projeto"
+        ws_meta["B2"] = parecer.projeto
+        ws_meta["A3"] = "Fornecedor"
+        ws_meta["B3"] = parecer.fornecedor
+        ws_meta["A4"] = "Rodada"
+        ws_meta["B4"] = getattr(parecer, "rodada_atual", 1)
+        ws_meta["A5"] = "Data emissao"
+        ws_meta["B5"] = datetime.now().strftime("%d/%m/%Y")
+        ws_meta["A6"] = "Total pendentes"
+        ws_meta["B6"] = len(itens_pendentes)
+        ws_meta.column_dimensions["A"].width = 20
+        ws_meta.column_dimensions["B"].width = 40
+
+        # ── Protege a aba Pendencias (somente col F editável) ───────────
+        ws.protection.sheet = True
+        ws.protection.password = _CARTA_SHEET_PASSWORD
+        ws.protection.enable()
+
+        buffer = io.BytesIO()
+        wb.save(buffer)
+        return buffer.getvalue()
+
+    except Exception:
+        logger.exception("Erro ao gerar carta de pendencias para parecer %s", parecer.numero_parecer)
         raise
 
 
