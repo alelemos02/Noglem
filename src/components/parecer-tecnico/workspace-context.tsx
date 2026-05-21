@@ -149,6 +149,8 @@ interface WorkspaceContextValue {
   statusCounts: Record<string, number>;
   showSetupOverride: boolean;
   setShowSetupOverride: (v: boolean) => void;
+  showCiclo: boolean;
+  setShowCiclo: (v: boolean) => void;
   previewItems: PreviewItemCandidato[];
   previewLoading: boolean;
   previewError: string;
@@ -224,6 +226,7 @@ export function ParecerWorkspaceProvider({ parecerId, children }: ProviderProps)
     useState<PerfilAnalise>("padrao");
   const [customItemCount, setCustomItemCount] = useState(25);
   const [showSetupOverride, setShowSetupOverride] = useState(false);
+  const [showCiclo, setShowCiclo] = useState(false);
   const [previewItems, setPreviewItems] = useState<PreviewItemCandidato[]>([]);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState("");
@@ -527,6 +530,8 @@ export function ParecerWorkspaceProvider({ parecerId, children }: ProviderProps)
       statusCounts,
       showSetupOverride,
       setShowSetupOverride,
+      showCiclo,
+      setShowCiclo,
       previewItems,
       previewLoading,
       previewError,
@@ -571,6 +576,7 @@ export function ParecerWorkspaceProvider({ parecerId, children }: ProviderProps)
       canAnalyze,
       statusCounts,
       showSetupOverride,
+      showCiclo,
       previewItems,
       previewLoading,
       previewError,

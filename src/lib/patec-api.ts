@@ -55,6 +55,8 @@ export interface ParecerResponse {
   total_rejeitados: number;
   total_info_ausente: number;
   total_itens_adicionais: number;
+  rodada_atual: number;
+  status_global: string;
   criado_em: string;
   atualizado_em: string;
 }
@@ -103,8 +105,52 @@ export interface ItemParecerResponse {
   prioridade: string | null;
   norma_referencia: string | null;
   editado_manualmente: boolean;
+  estado: string;
   criado_em: string;
   atualizado_em: string;
+}
+
+export interface RodadaAvaliacaoResponse {
+  id: string;
+  numero_rodada: number;
+  origem: "PROPOSTA_INICIAL" | "RESPOSTA_FORNECEDOR" | "COMENTARIO_ENGENHARIA";
+  conteudo: string | null;
+  anexo_ref: string | null;
+  classificacao_ia: string | null;
+  veredito_ia: "ATENDE" | "PARCIAL" | "NAO_ATENDE" | null;
+  justificativa_ia: string | null;
+  acao_requerida: string | null;
+  decisao_humana: "ATENDE" | "PARCIAL" | "NAO_ATENDE" | null;
+  revisor: string | null;
+  criado_em: string;
+}
+
+export interface ItemRevisaoResponse {
+  id: string;
+  numero: number;
+  categoria: string | null;
+  descricao_requisito: string;
+  valor_requerido: string | null;
+  prioridade: string | null;
+  estado: string;
+  ultima_rodada: RodadaAvaliacaoResponse | null;
+}
+
+export interface CicloResumoResponse {
+  status_global: string;
+  rodada_atual: number;
+  contagem_por_estado: { estado: string; total: number }[];
+  total_itens: number;
+  tem_pendentes: boolean;
+  tem_em_reavaliacao: boolean;
+}
+
+export interface DecisoHumanaResponse {
+  item_id: string;
+  numero: number;
+  novo_estado: string;
+  status_global: string;
+  mensagem: string;
 }
 
 export interface ItemParecerUpdate {
@@ -357,6 +403,45 @@ export const patecApi = {
   estimativa: {
     getCusto(parecerId: string) {
       return request<EstimativaCustoResponse>(`/v1/pareceres/${parecerId}/estimativa-custo`);
+    },
+  },
+  ciclo: {
+    resumo(parecerId: string) {
+      return request<CicloResumoResponse>(`/v1/pareceres/${parecerId}/ciclo/resumo`);
+    },
+    itensEmReavaliacao(parecerId: string) {
+      return request<ItemRevisaoResponse[]>(`/v1/pareceres/${parecerId}/ciclo/reavaliacao`);
+    },
+    decidir(parecerId: string, itemId: string, decisao: "ATENDE" | "NAO_ATENDE" | "PARCIAL") {
+      return request<DecisoHumanaResponse>(
+        `/v1/pareceres/${parecerId}/ciclo/itens/${itemId}/decidir`,
+        { method: "POST", body: JSON.stringify({ decisao_humana: decisao }) }
+      );
+    },
+    escalonar(parecerId: string, itemId: string) {
+      return request<{ item_id: string; numero: number; novo_estado: string; status_global: string }>(
+        `/v1/pareceres/${parecerId}/ciclo/itens/${itemId}/escalonar`,
+        { method: "POST" }
+      );
+    },
+    historico(parecerId: string, itemId: string) {
+      return request<RodadaAvaliacaoResponse[]>(
+        `/v1/pareceres/${parecerId}/ciclo/itens/${itemId}/historico`
+      );
+    },
+    async downloadCarta(parecerId: string) {
+      const response = await fetch(
+        `/api/parecer-tecnico/v1/pareceres/${parecerId}/exportar/carta-pendencias`
+      );
+      if (!response.ok) {
+        const error = await response.json().catch(() => null);
+        throw new Error(extractErrorMessage(error, `Erro ${response.status}`));
+      }
+      const blob = await response.blob();
+      const cd = response.headers.get("content-disposition") || "";
+      const match = cd.match(/filename="?([^";]+)"?/i);
+      const filename = match?.[1] || "carta_pendencias.xlsx";
+      return { blob, filename };
     },
   },
   chat: {

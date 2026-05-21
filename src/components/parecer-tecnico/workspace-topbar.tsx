@@ -22,6 +22,8 @@ export function WorkspaceTopbar() {
     analyzing,
     showSetupOverride,
     setShowSetupOverride,
+    showCiclo,
+    setShowCiclo,
     filters,
     setFilters,
     deleteParecer,
@@ -198,7 +200,7 @@ export function WorkspaceTopbar() {
           >
             ?
           </Button>
-          {hasResults && !analyzing && (
+          {hasResults && !analyzing && !showCiclo && (
             <Button
               variant="ghost"
               size="sm"
@@ -209,7 +211,18 @@ export function WorkspaceTopbar() {
               {showSetupOverride ? "← Resultados" : "Reanalisar"}
             </Button>
           )}
-          {hasResults && !showSetupOverride && <ExportButton parecerId={parecer.id} />}
+          {hasResults && !analyzing && (
+            <Button
+              variant={showCiclo ? "secondary" : "ghost"}
+              size="sm"
+              className="h-8 px-2 text-xs"
+              onClick={() => { setShowCiclo(!showCiclo); setShowSetupOverride(false); }}
+              title="Ciclo iterativo de avaliação"
+            >
+              {showCiclo ? "← Parecer" : "Ciclo"}
+            </Button>
+          )}
+          {hasResults && !showSetupOverride && !showCiclo && <ExportButton parecerId={parecer.id} />}
           <Button
             variant="ghost"
             size="sm"

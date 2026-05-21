@@ -9,11 +9,12 @@ import { OverviewPanel } from "./overview-panel";
 import { AnalysisSetup } from "./analysis-setup";
 import { ChatPanelWrapper } from "./chat-panel-wrapper";
 import { ChatBar } from "./chat-bar";
+import { CicloAvaliacaoPanel } from "./ciclo-avaliacao-panel";
 
-type MobileTab = "lista" | "detalhe" | "chat";
+type MobileTab = "lista" | "detalhe" | "chat" | "ciclo";
 
 export function WorkspaceLayout() {
-  const { hasResults, selectedItemId, analyzing, parecer, showSetupOverride } = useWorkspace();
+  const { hasResults, selectedItemId, analyzing, parecer, showSetupOverride, showCiclo } = useWorkspace();
   const [mobileTab, setMobileTab] = useState<MobileTab>("lista");
 
   const showAnalysisSetup =
@@ -22,6 +23,7 @@ export function WorkspaceLayout() {
     analyzing || parecer?.status_processamento === "processando";
 
   const renderCenterPanel = () => {
+    if (showCiclo) return <CicloAvaliacaoPanel />;
     if (showAnalysisSetup || showAnalysisProgress) {
       return <AnalysisSetup />;
     }
@@ -42,11 +44,12 @@ export function WorkspaceLayout() {
             { key: "lista", label: "Itens" },
             { key: "detalhe", label: "Detalhe" },
             { key: "chat", label: "Chat IA" },
+            ...(hasResults ? [{ key: "ciclo" as const, label: "Ciclo" }] : []),
           ] as const
         ).map((tab) => (
           <button
             key={tab.key}
-            onClick={() => setMobileTab(tab.key)}
+            onClick={() => setMobileTab(tab.key as MobileTab)}
             className={`flex-1 px-4 py-2.5 text-sm font-medium transition-colors ${
               mobileTab === tab.key
                 ? "border-b-2 border-accent text-accent"
@@ -107,6 +110,11 @@ export function WorkspaceLayout() {
                 O chat com IA estara disponivel apos a analise.
               </div>
             )}
+          </div>
+        )}
+        {mobileTab === "ciclo" && hasResults && (
+          <div>
+            <CicloAvaliacaoPanel />
           </div>
         )}
       </div>

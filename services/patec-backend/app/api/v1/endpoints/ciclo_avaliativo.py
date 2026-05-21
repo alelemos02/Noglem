@@ -2,13 +2,12 @@
 Endpoints do ciclo iterativo de avaliação de pareceres técnicos.
 
 GET  /{parecer_id}/exportar/carta-pendencias
-    Exporta planilha xlsx com itens PENDENTE_FORNECEDOR para envio ao fornecedor.
-    Coluna F editável; coluna G (ITEM_ID) oculta para reimport determinístico.
-
 POST /{parecer_id}/reimportar-respostas
-    Recebe o xlsx preenchido pelo fornecedor, cria uma RodadaAvaliacao por item
-    respondido, chama o Agente Avaliador e atualiza o estado do item para
-    EM_REAVALIACAO. Itens sem ITEM_ID válido são sinalizados para resolução manual.
+GET  /{parecer_id}/ciclo/resumo
+GET  /{parecer_id}/ciclo/reavaliacao
+POST /{parecer_id}/ciclo/itens/{item_id}/decidir
+POST /{parecer_id}/ciclo/itens/{item_id}/escalonar
+GET  /{parecer_id}/ciclo/itens/{item_id}/historico
 """
 import asyncio
 import io
@@ -31,8 +30,12 @@ from app.models.rodada_avaliacao import RodadaAvaliacao
 from app.services.evaluator import avaliar_resposta
 from app.services.exporter import export_carta_pendencias
 from app.services.state_machine import (
+    ABERTO,
+    ESCALONADO,
     PENDENTE_FORNECEDOR,
     EM_REAVALIACAO,
+    RESOLVIDO,
+    TransicaoInvalidaError,
     compute_status_global,
     transicionar,
 )
@@ -310,3 +313,296 @@ async def reimportar_respostas(
         total_ignorados=n_ign,
         mensagem=mensagem,
     )
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Fase 3 — Validação humana e fechamento do ciclo
+# ──────────────────────────────────────────────────────────────────────────────
+
+class EstadoCount(BaseModel):
+    estado: str
+    total: int
+
+
+class CicloResumoResponse(BaseModel):
+    status_global: str
+    rodada_atual: int
+    contagem_por_estado: list[EstadoCount]
+    total_itens: int
+    tem_pendentes: bool
+    tem_em_reavaliacao: bool
+
+
+class RodadaResponse(BaseModel):
+    id: str
+    numero_rodada: int
+    origem: str
+    conteudo: str | None
+    anexo_ref: str | None
+    classificacao_ia: str | None
+    veredito_ia: str | None
+    justificativa_ia: str | None
+    acao_requerida: str | None
+    decisao_humana: str | None
+    revisor: str | None
+    criado_em: str
+
+
+class ItemRevisaoResponse(BaseModel):
+    id: str
+    numero: int
+    categoria: str | None
+    descricao_requisito: str
+    valor_requerido: str | None
+    prioridade: str | None
+    estado: str
+    ultima_rodada: RodadaResponse | None
+
+
+def _rodada_to_response(r: RodadaAvaliacao) -> RodadaResponse:
+    return RodadaResponse(
+        id=str(r.id),
+        numero_rodada=r.numero_rodada,
+        origem=r.origem,
+        conteudo=r.conteudo,
+        anexo_ref=r.anexo_ref,
+        classificacao_ia=r.classificacao_ia,
+        veredito_ia=r.veredito_ia,
+        justificativa_ia=r.justificativa_ia,
+        acao_requerida=r.acao_requerida,
+        decisao_humana=r.decisao_humana,
+        revisor=r.revisor,
+        criado_em=r.criado_em.isoformat(),
+    )
+
+
+@router.get("/{parecer_id}/ciclo/resumo", response_model=CicloResumoResponse)
+async def ciclo_resumo(
+    parecer_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    _current_user=Depends(get_current_user),
+):
+    parecer_result = await db.execute(select(Parecer).where(Parecer.id == parecer_id))
+    parecer = parecer_result.scalar_one_or_none()
+    if not parecer:
+        raise HTTPException(status_code=404, detail="Parecer nao encontrado")
+
+    estados_result = await db.execute(
+        select(ItemParecer.estado).where(ItemParecer.parecer_id == parecer_id)
+    )
+    todos_estados = [row[0] for row in estados_result.all()]
+
+    from collections import Counter
+    counts = Counter(todos_estados)
+    contagem = [
+        EstadoCount(estado=estado, total=total)
+        for estado, total in sorted(counts.items())
+    ]
+
+    return CicloResumoResponse(
+        status_global=getattr(parecer, "status_global", "EM_ANALISE"),
+        rodada_atual=getattr(parecer, "rodada_atual", 1),
+        contagem_por_estado=contagem,
+        total_itens=len(todos_estados),
+        tem_pendentes=counts.get(PENDENTE_FORNECEDOR, 0) > 0,
+        tem_em_reavaliacao=counts.get(EM_REAVALIACAO, 0) > 0,
+    )
+
+
+@router.get("/{parecer_id}/ciclo/reavaliacao", response_model=list[ItemRevisaoResponse])
+async def itens_em_reavaliacao(
+    parecer_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    _current_user=Depends(get_current_user),
+):
+    itens_result = await db.execute(
+        select(ItemParecer)
+        .where(
+            ItemParecer.parecer_id == parecer_id,
+            ItemParecer.estado == EM_REAVALIACAO,
+        )
+        .order_by(ItemParecer.numero)
+    )
+    itens = itens_result.scalars().all()
+
+    if not itens:
+        return []
+
+    item_ids = [i.id for i in itens]
+    rodadas_result = await db.execute(
+        select(RodadaAvaliacao)
+        .where(RodadaAvaliacao.item_id.in_(item_ids))
+        .order_by(RodadaAvaliacao.numero_rodada)
+    )
+    ultimas: dict[str, RodadaAvaliacao] = {}
+    for r in rodadas_result.scalars().all():
+        ultimas[str(r.item_id)] = r
+
+    return [
+        ItemRevisaoResponse(
+            id=str(i.id),
+            numero=i.numero,
+            categoria=i.categoria,
+            descricao_requisito=i.descricao_requisito,
+            valor_requerido=i.valor_requerido,
+            prioridade=i.prioridade,
+            estado=i.estado,
+            ultima_rodada=_rodada_to_response(ultimas[str(i.id)]) if str(i.id) in ultimas else None,
+        )
+        for i in itens
+    ]
+
+
+class DecisoHumanaRequest(BaseModel):
+    decisao_humana: str  # ATENDE | NAO_ATENDE | PARCIAL
+
+
+class DecisoHumanaResponse(BaseModel):
+    item_id: str
+    numero: int
+    novo_estado: str
+    status_global: str
+    mensagem: str
+
+
+@router.post("/{parecer_id}/ciclo/itens/{item_id}/decidir", response_model=DecisoHumanaResponse)
+async def decidir_item(
+    parecer_id: uuid.UUID,
+    item_id: uuid.UUID,
+    payload: DecisoHumanaRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(require_role("admin", "analista")),
+):
+    if payload.decisao_humana not in {"ATENDE", "NAO_ATENDE", "PARCIAL"}:
+        raise HTTPException(status_code=400, detail="decisao_humana deve ser ATENDE, NAO_ATENDE ou PARCIAL.")
+
+    item_result = await db.execute(
+        select(ItemParecer).where(
+            ItemParecer.id == item_id,
+            ItemParecer.parecer_id == parecer_id,
+        )
+    )
+    item = item_result.scalar_one_or_none()
+    if not item:
+        raise HTTPException(status_code=404, detail="Item nao encontrado neste parecer.")
+    if item.estado != EM_REAVALIACAO:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Item esta em estado '{item.estado}', nao em EM_REAVALIACAO.",
+        )
+
+    # Registra a decisão na rodada mais recente (RESPOSTA_FORNECEDOR)
+    ultima_result = await db.execute(
+        select(RodadaAvaliacao)
+        .where(RodadaAvaliacao.item_id == item_id)
+        .order_by(RodadaAvaliacao.numero_rodada.desc())
+        .limit(1)
+    )
+    ultima_rodada = ultima_result.scalar_one_or_none()
+    if ultima_rodada:
+        ultima_rodada.decisao_humana = payload.decisao_humana
+        revisor_id = getattr(current_user, "id", None)
+        ultima_rodada.revisor = str(revisor_id) if revisor_id else None
+
+    # Aplica transição de estado
+    evento = "aceitar" if payload.decisao_humana == "ATENDE" else "rejeitar"
+    item.estado = transicionar(item.estado, evento)
+
+    # Recalcula status_global
+    todos_estados_result = await db.execute(
+        select(ItemParecer.estado).where(ItemParecer.parecer_id == parecer_id)
+    )
+    todos_estados = [row[0] for row in todos_estados_result.all()]
+
+    parecer_result = await db.execute(select(Parecer).where(Parecer.id == parecer_id))
+    parecer = parecer_result.scalar_one_or_none()
+    novo_status_global = compute_status_global(todos_estados)
+    if parecer:
+        parecer.status_global = novo_status_global
+
+    await db.commit()
+
+    return DecisoHumanaResponse(
+        item_id=str(item_id),
+        numero=item.numero,
+        novo_estado=item.estado,
+        status_global=novo_status_global,
+        mensagem=(
+            f"Item {item.numero} movido para {item.estado}. "
+            + ("Resolucao confirmada." if item.estado == RESOLVIDO else "Aguardando nova rodada do fornecedor.")
+        ),
+    )
+
+
+class EscalonarResponse(BaseModel):
+    item_id: str
+    numero: int
+    novo_estado: str
+    status_global: str
+
+
+@router.post("/{parecer_id}/ciclo/itens/{item_id}/escalonar", response_model=EscalonarResponse)
+async def escalonar_item(
+    parecer_id: uuid.UUID,
+    item_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    _current_user=Depends(require_role("admin", "analista")),
+):
+    item_result = await db.execute(
+        select(ItemParecer).where(
+            ItemParecer.id == item_id,
+            ItemParecer.parecer_id == parecer_id,
+        )
+    )
+    item = item_result.scalar_one_or_none()
+    if not item:
+        raise HTTPException(status_code=404, detail="Item nao encontrado neste parecer.")
+
+    try:
+        item.estado = transicionar(item.estado, "escalar")
+    except TransicaoInvalidaError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    todos_estados_result = await db.execute(
+        select(ItemParecer.estado).where(ItemParecer.parecer_id == parecer_id)
+    )
+    todos_estados = [row[0] for row in todos_estados_result.all()]
+    novo_status_global = compute_status_global(todos_estados)
+
+    parecer_result = await db.execute(select(Parecer).where(Parecer.id == parecer_id))
+    parecer = parecer_result.scalar_one_or_none()
+    if parecer:
+        parecer.status_global = novo_status_global
+
+    await db.commit()
+
+    return EscalonarResponse(
+        item_id=str(item_id),
+        numero=item.numero,
+        novo_estado=item.estado,
+        status_global=novo_status_global,
+    )
+
+
+@router.get("/{parecer_id}/ciclo/itens/{item_id}/historico", response_model=list[RodadaResponse])
+async def historico_item(
+    parecer_id: uuid.UUID,
+    item_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    _current_user=Depends(get_current_user),
+):
+    item_result = await db.execute(
+        select(ItemParecer).where(
+            ItemParecer.id == item_id,
+            ItemParecer.parecer_id == parecer_id,
+        )
+    )
+    if not item_result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Item nao encontrado neste parecer.")
+
+    rodadas_result = await db.execute(
+        select(RodadaAvaliacao)
+        .where(RodadaAvaliacao.item_id == item_id)
+        .order_by(RodadaAvaliacao.numero_rodada)
+    )
+    return [_rodada_to_response(r) for r in rodadas_result.scalars().all()]

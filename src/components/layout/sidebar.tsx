@@ -93,7 +93,7 @@ export function Sidebar({ className }: SidebarProps) {
 
       <div className="border-t border-border p-4">
         <p className="text-xs text-muted-foreground font-mono tabular-nums">
-          Jul/IA v2.2.5
+          Jul/IA v2.3.0
         </p>
       </div>
     </aside>

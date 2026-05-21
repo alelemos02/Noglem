@@ -19,6 +19,7 @@ class ItemParecerResponse(BaseModel):
     prioridade: str | None
     norma_referencia: str | None
     editado_manualmente: bool
+    estado: str = "ABERTO"
     criado_em: datetime
     atualizado_em: datetime
 
