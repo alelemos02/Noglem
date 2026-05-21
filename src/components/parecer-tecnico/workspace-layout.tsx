@@ -8,6 +8,7 @@ import { ItemDetailPanel } from "./item-detail-panel";
 import { OverviewPanel } from "./overview-panel";
 import { AnalysisSetup } from "./analysis-setup";
 import { ChatPanelWrapper } from "./chat-panel-wrapper";
+import { ChatBar } from "./chat-bar";
 
 type MobileTab = "lista" | "detalhe" | "chat";
 
@@ -57,8 +58,8 @@ export function WorkspaceLayout() {
         ))}
       </div>
 
-      {/* Desktop: 3-panel grid */}
-      <div className="hidden flex-1 overflow-hidden lg:grid lg:grid-cols-[320px_1fr_384px]">
+      {/* Desktop: 2-panel grid */}
+      <div className="hidden flex-1 overflow-hidden lg:grid lg:grid-cols-[320px_1fr]">
         {/* Left panel - Item list */}
         <div className="overflow-y-auto border-r border-border bg-surface">
           {hasResults ? (
@@ -72,18 +73,14 @@ export function WorkspaceLayout() {
 
         {/* Center panel */}
         <div className="overflow-y-auto">{renderCenterPanel()}</div>
-
-        {/* Right panel - Chat */}
-        <div className="flex flex-col overflow-hidden border-l border-border bg-surface">
-          {hasResults ? (
-            <ChatPanelWrapper />
-          ) : (
-            <div className="flex h-full items-center justify-center p-6 text-center text-sm text-text-tertiary">
-              O chat com IA estara disponivel apos a analise.
-            </div>
-          )}
-        </div>
       </div>
+
+      {/* Bottom chat bar - desktop only, visible when results exist */}
+      {hasResults && (
+        <div className="hidden lg:block">
+          <ChatBar />
+        </div>
+      )}
 
       {/* Mobile: tabbed view */}
       <div className="flex-1 overflow-y-auto lg:hidden">
