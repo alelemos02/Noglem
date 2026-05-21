@@ -8,3 +8,4 @@ from app.models.audit_log import AuditLog  # noqa: F401
 from app.models.cache_analise import CacheAnalise  # noqa: F401
 from app.models.mensagem_chat import MensagemChat  # noqa: F401
 from app.models.documento_chunk import DocumentoChunk  # noqa: F401
+from app.models.rodada_avaliacao import RodadaAvaliacao  # noqa: F401

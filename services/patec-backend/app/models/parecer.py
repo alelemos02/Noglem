@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import String, Integer, Text, DateTime, ForeignKey
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -26,6 +26,8 @@ class Parecer(Base):
     total_rejeitados: Mapped[int] = mapped_column(Integer, default=0)
     total_info_ausente: Mapped[int] = mapped_column(Integer, default=0)
     total_itens_adicionais: Mapped[int] = mapped_column(Integer, default=0)
+    rodada_atual: Mapped[int] = mapped_column(Integer, default=1)
+    status_global: Mapped[str] = mapped_column(String(25), default="EM_ANALISE")
     criado_por: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("usuarios.id"), nullable=True
     )

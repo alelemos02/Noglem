@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import String, Integer, Text, Boolean, DateTime, ForeignKey, CheckConstraint
+from sqlalchemy import CheckConstraint, Boolean, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -12,6 +12,10 @@ class ItemParecer(Base):
     __table_args__ = (
         CheckConstraint("status IN ('A','B','C','D','E')", name="ck_status"),
         CheckConstraint("prioridade IN ('ALTA','MEDIA','BAIXA')", name="ck_prioridade"),
+        CheckConstraint(
+            "estado IN ('ABERTO','PENDENTE_FORNECEDOR','EM_REAVALIACAO','RESOLVIDO','ESCALONADO')",
+            name="ck_item_estado",
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
@@ -31,9 +35,16 @@ class ItemParecer(Base):
     prioridade: Mapped[str | None] = mapped_column(String(10), nullable=True)
     norma_referencia: Mapped[str | None] = mapped_column(String(200), nullable=True)
     editado_manualmente: Mapped[bool] = mapped_column(Boolean, default=False)
+    estado: Mapped[str] = mapped_column(String(25), nullable=False, default="ABERTO")
     criado_em: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     atualizado_em: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
     )
 
     parecer = relationship("Parecer", back_populates="itens")
+    rodadas = relationship(
+        "RodadaAvaliacao",
+        back_populates="item",
+        cascade="all, delete-orphan",
+        order_by="RodadaAvaliacao.numero_rodada",
+    )
