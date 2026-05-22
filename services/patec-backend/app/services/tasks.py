@@ -116,9 +116,15 @@ def run_analysis_sync(
                 idioma_relatorio,
                 texto_anexos,
             )
-            cached = db.execute(
-                select(CacheAnalise).where(CacheAnalise.hash_documentos == docs_hash)
-            ).scalar_one_or_none()
+            # When itens_aprovados is set the scope differs from a plain profile
+            # run — skip cache to avoid returning a stale result.
+            cached = (
+                None
+                if itens_aprovados
+                else db.execute(
+                    select(CacheAnalise).where(CacheAnalise.hash_documentos == docs_hash)
+                ).scalar_one_or_none()
+            )
 
             _llm_step = {"n": 0}
 
