@@ -164,13 +164,14 @@ def run_analysis_sync(
                     idioma_relatorio=idioma_relatorio,
                     itens_aprovados=itens_aprovados,
                 )
-                db.add(
-                    CacheAnalise(
-                        hash_documentos=docs_hash,
-                        resultado=result,
+                if not itens_aprovados:
+                    db.add(
+                        CacheAnalise(
+                            hash_documentos=docs_hash,
+                            resultado=result,
+                        )
                     )
-                )
-                logger.info("Cached result for hash %s", docs_hash[:16])
+                    logger.info("Cached result for hash %s", docs_hash[:16])
 
             set_progress(
                 parecer_id,
