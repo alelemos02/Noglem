@@ -132,6 +132,19 @@ Campos obrigatorios: `id`, `name`, `description`, `icon`, `href`, `category`, `s
 - Se a mudanca afeta contrato de API, atualize ambos os lados na mesma alteracao.
 - **DEPLOY / GITHUB:** Toda alteracao finalizada deve sempre ser comitada (`git commit`) e subida para o GitHub (`git push origin main`), para garantir que reflita no site.
 
+### Versionamento do site
+
+A versao do site e exibida no sidebar em `src/components/layout/sidebar.tsx`.
+**REGRA OBRIGATORIA:** A versao DEVE ser atualizada a cada deploy.
+
+Formato: `VX.Y.Z`
+
+| Segmento | Quando incrementar |
+|----------|-------------------|
+| **X** (ex: v**2**.0.3) | Impacto muito grande: redesign de layout, mudancas brutas de arquitetura |
+| **Y** (ex: v2.**0**.3) | Inclusao de nova ferramenta no dashboard |
+| **Z** (ex: v2.0.**3**) | Atualizacoes menores: melhorias em ferramentas existentes, correcoes, ajustes |
+
 ---
 
 ## Como Adicionar uma Nova Ferramenta
