@@ -10,7 +10,6 @@ from app.services.analyzer import _call_gemini, _extract_json
 from app.services.llm_prompt import (
     PREVIEW_SYSTEM_PROMPT,
     PREVIEW_USER_PROMPT_TEMPLATE,
-    get_report_language_instruction,
 )
 
 logger = logging.getLogger(__name__)
@@ -50,7 +49,7 @@ def _call_preview_llm(texto_engenharia: str, parecer, feedback: str | None) -> d
         feedback_section=feedback_section,
         projeto=parecer.projeto,
         numero_parecer=parecer.numero_parecer,
-    ) + get_report_language_instruction(getattr(parecer, "idioma_relatorio", "pt"))
+    )
     logger.info(
         "Preview LLM call: parecer=%s, eng_chars=%d, has_feedback=%s",
         parecer.id,
@@ -66,6 +65,10 @@ def _call_preview_llm(texto_engenharia: str, parecer, feedback: str | None) -> d
         item["numero"] = i + 1
         if item.get("prioridade") not in valid_prios:
             item["prioridade"] = "MEDIA"
+        item.setdefault(
+            "descricao_requisito",
+            item.get("description", item.get("descricao", item.get("requirement_description", ""))),
+        )
         item.setdefault("norma_referencia", None)
         item.setdefault("referencia_engenharia", "")
 
