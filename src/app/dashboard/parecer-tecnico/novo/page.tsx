@@ -6,7 +6,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { patecApi } from "@/lib/patec-api";
+import { patecApi, type ReportLanguage } from "@/lib/patec-api";
 import { cn } from "@/lib/utils";
 
 type DisciplinaKey = "instrumentacao" | "eletrico" | "civil" | "mecanico" | "tubulacao";
@@ -51,6 +51,12 @@ const DISCIPLINAS: Disciplina[] = [
   },
 ];
 
+const IDIOMAS_RELATORIO: { value: ReportLanguage; label: string }[] = [
+  { value: "pt", label: "Português" },
+  { value: "es", label: "Espanhol" },
+  { value: "en", label: "Inglês" },
+];
+
 export default function NovoParecerPage() {
   const router = useRouter();
   const [disciplina, setDisciplina] = useState<DisciplinaKey | null>(null);
@@ -58,6 +64,7 @@ export default function NovoParecerPage() {
   const [projeto, setProjeto] = useState("");
   const [fornecedor, setFornecedor] = useState("");
   const [revisao, setRevisao] = useState("0");
+  const [idiomaRelatorio, setIdiomaRelatorio] = useState<ReportLanguage>("pt");
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState("");
 
@@ -74,6 +81,7 @@ export default function NovoParecerPage() {
         fornecedor: fornecedor.trim(),
         revisao: revisao.trim() || "0",
         disciplina: disciplina!,
+        idioma_relatorio: idiomaRelatorio,
       });
       router.push(`/dashboard/parecer-tecnico/${parecer.id}`);
     } catch (err) {
@@ -184,6 +192,23 @@ export default function NovoParecerPage() {
             onChange={(e) => setRevisao(e.target.value)}
             placeholder="0"
           />
+        </div>
+
+        <div>
+          <label className="mb-1 block text-sm font-medium text-text-secondary">
+            Idioma do Relatório
+          </label>
+          <select
+            value={idiomaRelatorio}
+            onChange={(e) => setIdiomaRelatorio(e.target.value as ReportLanguage)}
+            className="w-full rounded-md border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+          >
+            {IDIOMAS_RELATORIO.map((idioma) => (
+              <option key={idioma.value} value={idioma.value}>
+                {idioma.label}
+              </option>
+            ))}
+          </select>
         </div>
 
         {error && (

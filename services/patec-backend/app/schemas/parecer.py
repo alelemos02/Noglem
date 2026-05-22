@@ -9,6 +9,7 @@ class ParecerCreate(BaseModel):
     fornecedor: str
     revisao: str = "0"
     disciplina: str = "instrumentacao"
+    idioma_relatorio: str = "pt"
     comentario_geral: str | None = None
 
     @field_validator("numero_parecer")
@@ -49,12 +50,20 @@ class ParecerCreate(BaseModel):
             raise ValueError("Revisao deve ter no maximo 10 caracteres")
         return v
 
+    @field_validator("idioma_relatorio")
+    @classmethod
+    def validate_idioma_relatorio(cls, v: str) -> str:
+        if v not in {"pt", "es", "en"}:
+            raise ValueError("Idioma do relatorio invalido. Use: pt, es ou en")
+        return v
+
 
 class ParecerUpdate(BaseModel):
     projeto: str | None = None
     fornecedor: str | None = None
     revisao: str | None = None
     disciplina: str | None = None
+    idioma_relatorio: str | None = None
     comentario_geral: str | None = None
     conclusao: str | None = None
     parecer_geral: str | None = None
@@ -88,6 +97,13 @@ class ParecerUpdate(BaseModel):
             raise ValueError("Revisao deve ter no maximo 10 caracteres")
         return v.strip() if v else v
 
+    @field_validator("idioma_relatorio")
+    @classmethod
+    def validate_idioma_relatorio(cls, v: str | None) -> str | None:
+        if v is not None and v not in {"pt", "es", "en"}:
+            raise ValueError("Idioma do relatorio invalido. Use: pt, es ou en")
+        return v
+
 
 class ParecerResponse(BaseModel):
     id: str
@@ -96,6 +112,7 @@ class ParecerResponse(BaseModel):
     fornecedor: str
     revisao: str
     disciplina: str
+    idioma_relatorio: str
     status_processamento: str
     parecer_geral: str | None
     comentario_geral: str | None

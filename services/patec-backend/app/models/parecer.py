@@ -16,6 +16,7 @@ class Parecer(Base):
     fornecedor: Mapped[str] = mapped_column(String(200), nullable=False)
     revisao: Mapped[str] = mapped_column(String(10), default="0")
     disciplina: Mapped[str] = mapped_column(String(30), nullable=False, default="instrumentacao")
+    idioma_relatorio: Mapped[str] = mapped_column(String(10), nullable=False, default="pt")
     status_processamento: Mapped[str] = mapped_column(String(20), default="pendente")
     parecer_geral: Mapped[str | None] = mapped_column(String(30), nullable=True)
     comentario_geral: Mapped[str | None] = mapped_column(Text, nullable=True)

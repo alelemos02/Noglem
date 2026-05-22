@@ -5,7 +5,7 @@ from app.api.v1.endpoints.pareceres import _to_response
 from app.models.parecer import Parecer
 
 
-def test_to_response_includes_disciplina():
+def test_to_response_includes_disciplina_and_idioma_relatorio():
     now = datetime.now(UTC)
     parecer = Parecer(
         id=uuid.uuid4(),
@@ -14,6 +14,7 @@ def test_to_response_includes_disciplina():
         fornecedor="Fornecedor",
         revisao="0",
         disciplina="eletrico",
+        idioma_relatorio="es",
         status_processamento="pendente",
         parecer_geral=None,
         comentario_geral=None,
@@ -31,3 +32,4 @@ def test_to_response_includes_disciplina():
     response = _to_response(parecer)
 
     assert response.disciplina == "eletrico"
+    assert response.idioma_relatorio == "es"

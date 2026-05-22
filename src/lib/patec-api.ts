@@ -45,6 +45,7 @@ export interface ParecerResponse {
   fornecedor: string;
   revisao: string;
   disciplina: string;
+  idioma_relatorio: ReportLanguage;
   status_processamento: string;
   parecer_geral: string | null;
   comentario_geral: string | null;
@@ -74,10 +75,12 @@ export interface ParecerCreate {
   fornecedor: string;
   revisao?: string;
   disciplina?: string;
+  idioma_relatorio?: ReportLanguage;
 }
 
 export type ExportFormat = "pdf" | "xlsx" | "docx";
 export type PerfilAnalise = "simples" | "padrao" | "completa" | string;
+export type ReportLanguage = "pt" | "es" | "en";
 
 export interface DocumentoResponse {
   id: string;

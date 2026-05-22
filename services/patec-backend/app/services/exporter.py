@@ -7,10 +7,10 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import mm
 from reportlab.platypus import (
-    SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak,
+    SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
 )
 from openpyxl import Workbook
-from openpyxl.styles import Font, PatternFill, Alignment, Border, Side, GradientFill
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.styles.protection import Protection
 from openpyxl.utils import get_column_letter
 from docx import Document as DocxDocument
@@ -61,33 +61,279 @@ DEFAULT_OBSERVATION_BY_STATUS = {
     "E": "Item adicional apresentado pelo fornecedor e pendente de avaliacao da engenharia.",
 }
 
+_REPORT_TEXTS = {
+    "pt": {
+        "title": "PARECER TECNICO DE ENGENHARIA",
+        "number": "Numero",
+        "number_full": "Numero do Parecer",
+        "date": "Data",
+        "project": "Projeto",
+        "revision": "Revisao",
+        "supplier": "Fornecedor",
+        "opinion": "Parecer",
+        "general_opinion": "Parecer Geral",
+        "pending": "Pendente",
+        "status": "Status",
+        "information": "Informacoes do Parecer",
+        "executive_summary": "RESUMO EXECUTIVO",
+        "executive_summary_title": "Resumo Executivo",
+        "total": "Total",
+        "total_items": "Total de Itens",
+        "approved": "Aprovados",
+        "approved_comments": "Aprov. c/ Com.",
+        "approved_comments_full": "Aprovados com Comentarios",
+        "rejected": "Rejeitados",
+        "missing_info": "Info Ausente",
+        "missing_info_full": "Informacao Ausente",
+        "additional": "Adicionais",
+        "additional_full": "Itens Adicionais",
+        "general_comment": "Comentario Geral",
+        "items": "ITENS DO PARECER",
+        "items_title": "Itens do Parecer",
+        "engineering_request": "Solicitacao da Engenharia",
+        "supplier_proposal": "Proposto pelo Fornecedor",
+        "observation": "Observacao",
+        "required_value": "Valor requerido",
+        "engineering_ref": "Ref. engenharia",
+        "informed_value": "Valor informado",
+        "supplier_ref": "Ref. fornecedor",
+        "not_informed": "Nao informado",
+        "conclusion": "CONCLUSAO",
+        "conclusion_title": "Conclusao",
+        "recommendations": "RECOMENDACOES",
+        "recommendations_title": "Recomendacoes",
+        "sheet_summary": "Resumo",
+        "sheet_items": "Itens",
+        "sheet_recommendations": "Recomendacoes",
+    },
+    "es": {
+        "title": "DICTAMEN TECNICO DE INGENIERIA",
+        "number": "Numero",
+        "number_full": "Numero del Dictamen",
+        "date": "Fecha",
+        "project": "Proyecto",
+        "revision": "Revision",
+        "supplier": "Proveedor",
+        "opinion": "Dictamen",
+        "general_opinion": "Dictamen General",
+        "pending": "Pendiente",
+        "status": "Estado",
+        "information": "Informacion del Dictamen",
+        "executive_summary": "RESUMEN EJECUTIVO",
+        "executive_summary_title": "Resumen Ejecutivo",
+        "total": "Total",
+        "total_items": "Total de Items",
+        "approved": "Aprobados",
+        "approved_comments": "Aprob. c/ Com.",
+        "approved_comments_full": "Aprobados con Comentarios",
+        "rejected": "Rechazados",
+        "missing_info": "Info Ausente",
+        "missing_info_full": "Informacion Ausente",
+        "additional": "Adicionales",
+        "additional_full": "Items Adicionales",
+        "general_comment": "Comentario General",
+        "items": "ITEMS DEL DICTAMEN",
+        "items_title": "Items del Dictamen",
+        "engineering_request": "Solicitud de Ingenieria",
+        "supplier_proposal": "Propuesto por el Proveedor",
+        "observation": "Observacion",
+        "required_value": "Valor requerido",
+        "engineering_ref": "Ref. ingenieria",
+        "informed_value": "Valor informado",
+        "supplier_ref": "Ref. proveedor",
+        "not_informed": "No informado",
+        "conclusion": "CONCLUSION",
+        "conclusion_title": "Conclusion",
+        "recommendations": "RECOMENDACIONES",
+        "recommendations_title": "Recomendaciones",
+        "sheet_summary": "Resumen",
+        "sheet_items": "Items",
+        "sheet_recommendations": "Recomendaciones",
+    },
+    "en": {
+        "title": "ENGINEERING TECHNICAL OPINION",
+        "number": "Number",
+        "number_full": "Opinion Number",
+        "date": "Date",
+        "project": "Project",
+        "revision": "Revision",
+        "supplier": "Supplier",
+        "opinion": "Opinion",
+        "general_opinion": "Overall Opinion",
+        "pending": "Pending",
+        "status": "Status",
+        "information": "Opinion Information",
+        "executive_summary": "EXECUTIVE SUMMARY",
+        "executive_summary_title": "Executive Summary",
+        "total": "Total",
+        "total_items": "Total Items",
+        "approved": "Approved",
+        "approved_comments": "Appr. w/ Com.",
+        "approved_comments_full": "Approved with Comments",
+        "rejected": "Rejected",
+        "missing_info": "Missing Info",
+        "missing_info_full": "Missing Information",
+        "additional": "Additional",
+        "additional_full": "Additional Items",
+        "general_comment": "General Comment",
+        "items": "OPINION ITEMS",
+        "items_title": "Opinion Items",
+        "engineering_request": "Engineering Request",
+        "supplier_proposal": "Supplier Proposal",
+        "observation": "Observation",
+        "required_value": "Required value",
+        "engineering_ref": "Engineering ref.",
+        "informed_value": "Informed value",
+        "supplier_ref": "Supplier ref.",
+        "not_informed": "Not informed",
+        "conclusion": "CONCLUSION",
+        "conclusion_title": "Conclusion",
+        "recommendations": "RECOMMENDATIONS",
+        "recommendations_title": "Recommendations",
+        "sheet_summary": "Summary",
+        "sheet_items": "Items",
+        "sheet_recommendations": "Recommendations",
+    },
+}
 
-def _build_solicitacao_engenharia(item) -> str:
+_STATUS_LABELS_BY_LANGUAGE = {
+    "pt": STATUS_LABELS,
+    "es": {
+        "A": "APROBADO",
+        "B": "APROBADO CON COMENTARIOS",
+        "C": "RECHAZADO",
+        "D": "INFORMACION AUSENTE",
+        "E": "ITEM ADICIONAL DEL PROVEEDOR",
+    },
+    "en": {
+        "A": "APPROVED",
+        "B": "APPROVED WITH COMMENTS",
+        "C": "REJECTED",
+        "D": "MISSING INFORMATION",
+        "E": "ADDITIONAL SUPPLIER ITEM",
+    },
+}
+
+_DEFAULT_OBSERVATIONS_BY_LANGUAGE = {
+    "pt": DEFAULT_OBSERVATION_BY_STATUS,
+    "es": {
+        "A": "Item conforme con los requisitos tecnicos de ingenieria, sin desvios identificados.",
+        "B": "Item parcialmente conforme; requiere ajustes para cumplimiento completo.",
+        "C": "Item no conforme con los requisitos tecnicos y requiere revision del proveedor.",
+        "D": "Informacion tecnica ausente en la documentacion del proveedor.",
+        "E": "Item adicional presentado por el proveedor y pendiente de evaluacion de ingenieria.",
+    },
+    "en": {
+        "A": "Item meets the engineering technical requirements with no deviations identified.",
+        "B": "Item is partially compliant and requires adjustments for full compliance.",
+        "C": "Item is non-compliant with the technical requirements and requires supplier revision.",
+        "D": "Technical information is missing from the supplier documentation.",
+        "E": "Additional supplier item pending engineering evaluation.",
+    },
+}
+
+_GENERAL_OPINION_LABELS = {
+    "pt": {
+        "APROVADO": "APROVADO",
+        "APROVADO COM COMENTARIOS": "APROVADO COM COMENTARIOS",
+        "REJEITADO": "REJEITADO",
+    },
+    "es": {
+        "APROVADO": "APROBADO",
+        "APROVADO COM COMENTARIOS": "APROBADO CON COMENTARIOS",
+        "REJEITADO": "RECHAZADO",
+    },
+    "en": {
+        "APROVADO": "APPROVED",
+        "APROVADO COM COMENTARIOS": "APPROVED WITH COMMENTS",
+        "REJEITADO": "REJECTED",
+    },
+}
+
+_PROCESSING_STATUS_LABELS = {
+    "pt": {
+        "pendente": "Pendente",
+        "processando": "Processando",
+        "concluido": "Concluido",
+        "erro": "Erro",
+    },
+    "es": {
+        "pendente": "Pendiente",
+        "processando": "Procesando",
+        "concluido": "Concluido",
+        "erro": "Error",
+    },
+    "en": {
+        "pendente": "Pending",
+        "processando": "Processing",
+        "concluido": "Completed",
+        "erro": "Error",
+    },
+}
+
+
+def _get_report_language(parecer) -> str:
+    idioma = getattr(parecer, "idioma_relatorio", "pt")
+    return idioma if idioma in _REPORT_TEXTS else "pt"
+
+
+def _get_report_texts(idioma_relatorio: str) -> dict[str, str]:
+    return _REPORT_TEXTS.get(idioma_relatorio, _REPORT_TEXTS["pt"])
+
+
+def _status_label(status: str, idioma_relatorio: str) -> str:
+    return _STATUS_LABELS_BY_LANGUAGE.get(idioma_relatorio, STATUS_LABELS).get(status, status)
+
+
+def _general_opinion_label(parecer_geral: str | None, idioma_relatorio: str) -> str:
+    texts = _get_report_texts(idioma_relatorio)
+    if not parecer_geral:
+        return texts["pending"]
+    return _GENERAL_OPINION_LABELS.get(idioma_relatorio, _GENERAL_OPINION_LABELS["pt"]).get(
+        parecer_geral,
+        parecer_geral,
+    )
+
+
+def _processing_status_label(status_processamento: str, idioma_relatorio: str) -> str:
+    return _PROCESSING_STATUS_LABELS.get(idioma_relatorio, _PROCESSING_STATUS_LABELS["pt"]).get(
+        status_processamento,
+        status_processamento,
+    )
+
+
+def _build_solicitacao_engenharia(item, idioma_relatorio: str = "pt") -> str:
+    texts = _get_report_texts(idioma_relatorio)
     parts = [item.descricao_requisito or ""]
     if item.valor_requerido:
-        parts.append(f"Valor requerido: {item.valor_requerido}")
+        parts.append(f"{texts['required_value']}: {item.valor_requerido}")
     if item.referencia_engenharia:
-        parts.append(f"Ref. engenharia: {item.referencia_engenharia}")
+        parts.append(f"{texts['engineering_ref']}: {item.referencia_engenharia}")
     return "\n".join(part for part in parts if part and part.strip()).strip() or "-"
 
 
-def _build_proposto_fornecedor(item) -> str:
+def _build_proposto_fornecedor(item, idioma_relatorio: str = "pt") -> str:
+    texts = _get_report_texts(idioma_relatorio)
     parts = []
     if item.valor_fornecedor:
-        parts.append(f"Valor informado: {item.valor_fornecedor}")
+        parts.append(f"{texts['informed_value']}: {item.valor_fornecedor}")
     if item.referencia_fornecedor:
-        parts.append(f"Ref. fornecedor: {item.referencia_fornecedor}")
-    return "\n".join(part for part in parts if part and part.strip()).strip() or "Nao informado"
+        parts.append(f"{texts['supplier_ref']}: {item.referencia_fornecedor}")
+    return "\n".join(part for part in parts if part and part.strip()).strip() or texts["not_informed"]
 
 
-def _build_observacao(item) -> str:
+def _build_observacao(item, idioma_relatorio: str = "pt") -> str:
     justificativa = (item.justificativa_tecnica or "").strip()
     if justificativa:
         return justificativa
 
-    return DEFAULT_OBSERVATION_BY_STATUS.get(
+    defaults = _DEFAULT_OBSERVATIONS_BY_LANGUAGE.get(
+        idioma_relatorio,
+        DEFAULT_OBSERVATION_BY_STATUS,
+    )
+    return defaults.get(
         item.status,
-        "Item nao aprovado. Revisar conformidade tecnica deste requisito.",
+        _DEFAULT_OBSERVATIONS_BY_LANGUAGE["pt"]["B"],
     )
 
 
@@ -95,6 +341,8 @@ def export_pdf(parecer, itens, recomendacoes) -> bytes:
     """Generate a PDF report for the parecer."""
     try:
         export_itens = itens[:MAX_EXPORT_ITEMS]
+        idioma_relatorio = _get_report_language(parecer)
+        texts = _get_report_texts(idioma_relatorio)
         buffer = io.BytesIO()
         doc = SimpleDocTemplate(
             buffer, pagesize=A4,
@@ -119,14 +367,14 @@ def export_pdf(parecer, itens, recomendacoes) -> bytes:
         elements = []
 
         # Title
-        elements.append(Paragraph("PARECER TECNICO DE ENGENHARIA", styles["Header1"]))
+        elements.append(Paragraph(texts["title"], styles["Header1"]))
         elements.append(Spacer(1, 4 * mm))
 
         # Metadata table
         meta_data = [
-            ["Numero:", parecer.numero_parecer, "Data:", datetime.now().strftime("%d/%m/%Y")],
-            ["Projeto:", parecer.projeto, "Revisao:", parecer.revisao],
-            ["Fornecedor:", parecer.fornecedor, "Parecer:", parecer.parecer_geral or "Pendente"],
+            [f"{texts['number']}:", parecer.numero_parecer, f"{texts['date']}:", datetime.now().strftime("%d/%m/%Y")],
+            [f"{texts['project']}:", parecer.projeto, f"{texts['revision']}:", parecer.revisao],
+            [f"{texts['supplier']}:", parecer.fornecedor, f"{texts['opinion']}:", _general_opinion_label(parecer.parecer_geral, idioma_relatorio)],
         ]
         meta_table = Table(meta_data, colWidths=[25 * mm, 60 * mm, 22 * mm, 60 * mm])
         meta_table.setStyle(TableStyle([
@@ -143,9 +391,16 @@ def export_pdf(parecer, itens, recomendacoes) -> bytes:
         elements.append(Spacer(1, 6 * mm))
 
         # Executive Summary
-        elements.append(Paragraph("RESUMO EXECUTIVO", styles["Header2"]))
+        elements.append(Paragraph(texts["executive_summary"], styles["Header2"]))
         summary_data = [
-            ["Total", "Aprovados", "Aprov. c/ Com.", "Rejeitados", "Info Ausente", "Adicionais"],
+            [
+                texts["total"],
+                texts["approved"],
+                texts["approved_comments"],
+                texts["rejected"],
+                texts["missing_info"],
+                texts["additional"],
+            ],
             [
                 str(parecer.total_itens), str(parecer.total_aprovados),
                 str(parecer.total_aprovados_comentarios), str(parecer.total_rejeitados),
@@ -179,29 +434,29 @@ def export_pdf(parecer, itens, recomendacoes) -> bytes:
 
         if parecer.comentario_geral:
             elements.append(Paragraph(
-                f"<b>Comentario Geral:</b> {parecer.comentario_geral}", styles["SmallBody"]
+                f"<b>{texts['general_comment']}:</b> {parecer.comentario_geral}", styles["SmallBody"]
             ))
             elements.append(Spacer(1, 4 * mm))
 
         # Items table
         if export_itens:
-            elements.append(Paragraph("ITENS DO PARECER", styles["Header2"]))
+            elements.append(Paragraph(texts["items"], styles["Header2"]))
 
             item_header = [
-                "Solicitacao da Engenharia",
-                "Proposto pelo Fornecedor",
-                "Status",
-                "Observacao",
+                texts["engineering_request"],
+                texts["supplier_proposal"],
+                texts["status"],
+                texts["observation"],
             ]
             col_widths = [50 * mm, 42 * mm, 22 * mm, 56 * mm]
 
             rows = [item_header]
             for item in export_itens:
                 rows.append([
-                    Paragraph(_build_solicitacao_engenharia(item)[:800], styles["SmallBody"]),
-                    Paragraph(_build_proposto_fornecedor(item)[:800], styles["SmallBody"]),
-                    Paragraph(STATUS_LABELS.get(item.status, item.status), styles["CenteredSmallBody"]),
-                    Paragraph(_build_observacao(item)[:800], styles["SmallBody"]),
+                    Paragraph(_build_solicitacao_engenharia(item, idioma_relatorio)[:800], styles["SmallBody"]),
+                    Paragraph(_build_proposto_fornecedor(item, idioma_relatorio)[:800], styles["SmallBody"]),
+                    Paragraph(_status_label(item.status, idioma_relatorio), styles["CenteredSmallBody"]),
+                    Paragraph(_build_observacao(item, idioma_relatorio)[:800], styles["SmallBody"]),
                 ])
 
             item_table = Table(rows, colWidths=col_widths, repeatRows=1)
@@ -229,13 +484,13 @@ def export_pdf(parecer, itens, recomendacoes) -> bytes:
 
         # Conclusion
         if parecer.conclusao:
-            elements.append(Paragraph("CONCLUSAO", styles["Header2"]))
+            elements.append(Paragraph(texts["conclusion"], styles["Header2"]))
             elements.append(Paragraph(parecer.conclusao, styles["Normal"]))
             elements.append(Spacer(1, 4 * mm))
 
         # Recommendations
         if recomendacoes:
-            elements.append(Paragraph("RECOMENDACOES", styles["Header2"]))
+            elements.append(Paragraph(texts["recommendations"], styles["Header2"]))
             for rec in recomendacoes:
                 elements.append(Paragraph(f"&bull; {rec.texto}", styles["Normal"]))
             elements.append(Spacer(1, 4 * mm))
@@ -252,6 +507,8 @@ def export_xlsx(parecer, itens, recomendacoes) -> bytes:
     """Generate an XLSX report for the parecer."""
     try:
         export_itens = itens[:MAX_EXPORT_ITEMS]
+        idioma_relatorio = _get_report_language(parecer)
+        texts = _get_report_texts(idioma_relatorio)
         wb = Workbook()
 
         header_font = Font(bold=True, color="FFFFFF", size=10)
@@ -272,27 +529,27 @@ def export_xlsx(parecer, itens, recomendacoes) -> bytes:
 
         # Sheet 1: Resumo
         ws = wb.active
-        ws.title = "Resumo"
+        ws.title = texts["sheet_summary"]
         ws.column_dimensions["A"].width = 25
         ws.column_dimensions["B"].width = 50
 
         info = [
-            ("PARECER TECNICO DE ENGENHARIA", ""),
+            (texts["title"], ""),
             ("", ""),
-            ("Numero do Parecer", parecer.numero_parecer),
-            ("Projeto", parecer.projeto),
-            ("Fornecedor", parecer.fornecedor),
-            ("Revisao", parecer.revisao),
-            ("Data", datetime.now().strftime("%d/%m/%Y")),
-            ("Parecer Geral", parecer.parecer_geral or "Pendente"),
+            (texts["number_full"], parecer.numero_parecer),
+            (texts["project"], parecer.projeto),
+            (texts["supplier"], parecer.fornecedor),
+            (texts["revision"], parecer.revisao),
+            (texts["date"], datetime.now().strftime("%d/%m/%Y")),
+            (texts["general_opinion"], _general_opinion_label(parecer.parecer_geral, idioma_relatorio)),
             ("", ""),
-            ("RESUMO EXECUTIVO", ""),
-            ("Total de Itens", parecer.total_itens),
-            ("Aprovados (A)", parecer.total_aprovados),
-            ("Aprovados com Comentarios (B)", parecer.total_aprovados_comentarios),
-            ("Rejeitados (C)", parecer.total_rejeitados),
-            ("Informacao Ausente (D)", parecer.total_info_ausente),
-            ("Itens Adicionais (E)", parecer.total_itens_adicionais),
+            (texts["executive_summary"], ""),
+            (texts["total_items"], parecer.total_itens),
+            (f"{texts['approved']} (A)", parecer.total_aprovados),
+            (f"{texts['approved_comments_full']} (B)", parecer.total_aprovados_comentarios),
+            (f"{texts['rejected']} (C)", parecer.total_rejeitados),
+            (f"{texts['missing_info_full']} (D)", parecer.total_info_ausente),
+            (f"{texts['additional_full']} (E)", parecer.total_itens_adicionais),
         ]
         for row_idx, (label, value) in enumerate(info, 1):
             ws.cell(row=row_idx, column=1, value=label).font = Font(bold=True) if label else Font()
@@ -302,19 +559,19 @@ def export_xlsx(parecer, itens, recomendacoes) -> bytes:
 
         if parecer.comentario_geral:
             ws.append([""])
-            ws.append(["Comentario Geral", parecer.comentario_geral])
+            ws.append([texts["general_comment"], parecer.comentario_geral])
 
         if parecer.conclusao:
             ws.append([""])
-            ws.append(["Conclusao", parecer.conclusao])
+            ws.append([texts["conclusion_title"], parecer.conclusao])
 
         # Sheet 2: Itens
-        ws2 = wb.create_sheet("Itens")
+        ws2 = wb.create_sheet(texts["sheet_items"])
         headers = [
-            "Solicitacao da Engenharia",
-            "Proposto pelo Fornecedor",
-            "Status",
-            "Observacao",
+            texts["engineering_request"],
+            texts["supplier_proposal"],
+            texts["status"],
+            texts["observation"],
         ]
         for col, h in enumerate(headers, 1):
             cell = ws2.cell(row=1, column=col, value=h)
@@ -329,10 +586,10 @@ def export_xlsx(parecer, itens, recomendacoes) -> bytes:
 
         for item in export_itens:
             row = [
-                _build_solicitacao_engenharia(item),
-                _build_proposto_fornecedor(item),
-                STATUS_LABELS.get(item.status, item.status),
-                _build_observacao(item),
+                _build_solicitacao_engenharia(item, idioma_relatorio),
+                _build_proposto_fornecedor(item, idioma_relatorio),
+                _status_label(item.status, idioma_relatorio),
+                _build_observacao(item, idioma_relatorio),
             ]
             ws2.append(row)
             row_idx = ws2.max_row
@@ -346,8 +603,8 @@ def export_xlsx(parecer, itens, recomendacoes) -> bytes:
                     )
 
         # Sheet 3: Recomendacoes
-        ws3 = wb.create_sheet("Recomendacoes")
-        for col, h in enumerate(["#", "Recomendacao"], 1):
+        ws3 = wb.create_sheet(texts["sheet_recommendations"])
+        for col, h in enumerate(["#", texts["recommendations_title"]], 1):
             cell = ws3.cell(row=1, column=col, value=h)
             cell.font = header_font
             cell.fill = header_fill
@@ -518,6 +775,8 @@ def export_docx(parecer, itens, recomendacoes) -> bytes:
 
 def _build_docx(parecer, itens, recomendacoes) -> bytes:
     export_itens = itens[:MAX_EXPORT_ITEMS]
+    idioma_relatorio = _get_report_language(parecer)
+    texts = _get_report_texts(idioma_relatorio)
     doc = DocxDocument()
 
     # Style adjustments
@@ -526,20 +785,20 @@ def _build_docx(parecer, itens, recomendacoes) -> bytes:
     style.font.name = "Calibri"
 
     # Title
-    title = doc.add_heading("PARECER TECNICO DE ENGENHARIA", level=0)
+    title = doc.add_heading(texts["title"], level=0)
     title.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
     # Metadata
-    doc.add_heading("Informacoes do Parecer", level=1)
+    doc.add_heading(texts["information"], level=1)
     meta_table = doc.add_table(rows=4, cols=4)
     meta_table.style = "Table Grid"
     meta_table.alignment = WD_TABLE_ALIGNMENT.CENTER
 
     meta_data = [
-        ("Numero:", parecer.numero_parecer, "Data:", datetime.now().strftime("%d/%m/%Y")),
-        ("Projeto:", parecer.projeto, "Revisao:", parecer.revisao),
-        ("Fornecedor:", parecer.fornecedor, "Parecer:", parecer.parecer_geral or "Pendente"),
-        ("Total Itens:", str(parecer.total_itens), "Status:", parecer.status_processamento),
+        (f"{texts['number']}:", parecer.numero_parecer, f"{texts['date']}:", datetime.now().strftime("%d/%m/%Y")),
+        (f"{texts['project']}:", parecer.projeto, f"{texts['revision']}:", parecer.revisao),
+        (f"{texts['supplier']}:", parecer.fornecedor, f"{texts['opinion']}:", _general_opinion_label(parecer.parecer_geral, idioma_relatorio)),
+        (f"{texts['total_items']}:", str(parecer.total_itens), f"{texts['status']}:", _processing_status_label(parecer.status_processamento, idioma_relatorio)),
     ]
     for i, (l1, v1, l2, v2) in enumerate(meta_data):
         row = meta_table.rows[i]
@@ -562,12 +821,19 @@ def _build_docx(parecer, itens, recomendacoes) -> bytes:
     doc.add_paragraph()
 
     # Executive Summary
-    doc.add_heading("Resumo Executivo", level=1)
+    doc.add_heading(texts["executive_summary_title"], level=1)
     summary_table = doc.add_table(rows=2, cols=6)
     summary_table.style = "Table Grid"
     summary_table.alignment = WD_TABLE_ALIGNMENT.CENTER
 
-    headers = ["Total", "Aprovados", "Aprov. c/ Com.", "Rejeitados", "Info Ausente", "Adicionais"]
+    headers = [
+        texts["total"],
+        texts["approved"],
+        texts["approved_comments"],
+        texts["rejected"],
+        texts["missing_info"],
+        texts["additional"],
+    ]
     values = [
         parecer.total_itens, parecer.total_aprovados, parecer.total_aprovados_comentarios,
         parecer.total_rejeitados, parecer.total_info_ausente, parecer.total_itens_adicionais,
@@ -586,24 +852,24 @@ def _build_docx(parecer, itens, recomendacoes) -> bytes:
     if parecer.comentario_geral:
         doc.add_paragraph()
         p = doc.add_paragraph()
-        p.add_run("Comentario Geral: ").bold = True
+        p.add_run(f"{texts['general_comment']}: ").bold = True
         p.add_run(parecer.comentario_geral)
 
     doc.add_paragraph()
 
     # Items
     if export_itens:
-        doc.add_heading("Itens do Parecer", level=1)
+        doc.add_heading(texts["items_title"], level=1)
 
         items_table = doc.add_table(rows=1, cols=4)
         items_table.style = "Table Grid"
         items_table.alignment = WD_TABLE_ALIGNMENT.CENTER
 
         headers = [
-            "Solicitacao da Engenharia",
-            "Proposto pelo Fornecedor",
-            "Status",
-            "Observacao",
+            texts["engineering_request"],
+            texts["supplier_proposal"],
+            texts["status"],
+            texts["observation"],
         ]
         for idx, title in enumerate(headers):
             cell = items_table.rows[0].cells[idx]
@@ -613,19 +879,19 @@ def _build_docx(parecer, itens, recomendacoes) -> bytes:
 
         for item in export_itens:
             row = items_table.add_row().cells
-            row[0].text = _build_solicitacao_engenharia(item)
-            row[1].text = _build_proposto_fornecedor(item)
-            row[2].text = STATUS_LABELS.get(item.status, item.status)
-            row[3].text = _build_observacao(item)
+            row[0].text = _build_solicitacao_engenharia(item, idioma_relatorio)
+            row[1].text = _build_proposto_fornecedor(item, idioma_relatorio)
+            row[2].text = _status_label(item.status, idioma_relatorio)
+            row[3].text = _build_observacao(item, idioma_relatorio)
 
     # Conclusion
     if parecer.conclusao:
-        doc.add_heading("Conclusao", level=1)
+        doc.add_heading(texts["conclusion_title"], level=1)
         doc.add_paragraph(parecer.conclusao)
 
     # Recommendations
     if recomendacoes:
-        doc.add_heading("Recomendacoes", level=1)
+        doc.add_heading(texts["recommendations_title"], level=1)
         for rec in recomendacoes:
             doc.add_paragraph(rec.texto, style="List Bullet")
 

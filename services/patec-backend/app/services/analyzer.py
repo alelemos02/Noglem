@@ -15,6 +15,7 @@ from app.services.llm_prompt import (
     PROFILE_INTEGRAL_TEMPLATE,
     FIELD_OPTIMIZATION_SYSTEM,
     APPROVED_ITEMS_CONTEXT,
+    get_report_language_instruction,
     get_system_prompt,
 )
 
@@ -816,7 +817,7 @@ def _needs_optimization(itens: list[dict]) -> bool:
     return False
 
 
-def optimize_item_fields(data: dict) -> dict:
+def optimize_item_fields(data: dict, idioma_relatorio: str = "pt") -> dict:
     """
     Post-processing: compact verbose fields via a focused LLM call.
     Skipped entirely if all fields are already within their character limits.
@@ -841,7 +842,7 @@ def optimize_item_fields(data: dict) -> dict:
     user_content = (
         f"Otimize os campos dos {len(itens)} itens abaixo conforme as regras de comprimento.\n\n"
         f"{items_json}"
-    )
+    ) + get_report_language_instruction(idioma_relatorio)
 
     try:
         response_text = _call_gemini(FIELD_OPTIMIZATION_SYSTEM, user_content)
@@ -873,6 +874,7 @@ def analyze_single(
     numero_parecer: str,
     analysis_profile: str = DEFAULT_ANALYSIS_PROFILE,
     disciplina: str = "instrumentacao",
+    idioma_relatorio: str = "pt",
     texto_anexos: str = "",
     itens_aprovados: list[dict] | None = None,
 ) -> dict:
@@ -899,7 +901,7 @@ def analyze_single(
         projeto=projeto,
         fornecedor=fornecedor,
         numero_parecer=numero_parecer,
-    ) + approved_section + profile_instruction
+    ) + approved_section + profile_instruction + get_report_language_instruction(idioma_relatorio)
 
     logger.info("Calling Gemini API (single call, %d chars)", len(user_content))
     response_text = _call_gemini(system_prompt, user_content)
@@ -929,6 +931,7 @@ def analyze_chunked(
     on_progress: callable = None,
     analysis_profile: str = DEFAULT_ANALYSIS_PROFILE,
     disciplina: str = "instrumentacao",
+    idioma_relatorio: str = "pt",
     texto_anexos: str = "",
     itens_aprovados: list[dict] | None = None,
 ) -> dict:
@@ -974,7 +977,7 @@ def analyze_chunked(
             projeto=projeto,
             fornecedor=fornecedor,
             numero_parecer=numero_parecer,
-        ) + approved_section + profile_instruction
+        ) + approved_section + profile_instruction + get_report_language_instruction(idioma_relatorio)
 
         logger.info("Calling Gemini API (chunk %d/%d, %d chars)", i + 1, total_chunks, len(user_content))
         response_text = _call_gemini(system_prompt, user_content)
@@ -1008,7 +1011,7 @@ def analyze_chunked(
         projeto=projeto,
         fornecedor=fornecedor,
         numero_parecer=numero_parecer,
-    ) + profile_instruction
+    ) + profile_instruction + get_report_language_instruction(idioma_relatorio)
 
     logger.info("Calling Gemini API (reduce step, %d chars)", len(reduce_content))
     response_text = _call_gemini(system_prompt, reduce_content)
@@ -1026,6 +1029,7 @@ def analyze_documents(
     on_progress: callable = None,
     analysis_profile: str = DEFAULT_ANALYSIS_PROFILE,
     disciplina: str = "instrumentacao",
+    idioma_relatorio: str = "pt",
     texto_anexos: str = "",
     itens_aprovados: list[dict] | None = None,
 ) -> dict:
@@ -1042,6 +1046,7 @@ def analyze_documents(
             numero_parecer,
             analysis_profile=profile,
             disciplina=disciplina,
+            idioma_relatorio=idioma_relatorio,
             texto_anexos=texto_anexos,
             itens_aprovados=itens_aprovados,
         )
@@ -1055,6 +1060,7 @@ def analyze_documents(
             on_progress=on_progress,
             analysis_profile=profile,
             disciplina=disciplina,
+            idioma_relatorio=idioma_relatorio,
             texto_anexos=texto_anexos,
             itens_aprovados=itens_aprovados,
         )

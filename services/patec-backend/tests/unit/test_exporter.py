@@ -13,6 +13,7 @@ class DummyParecer:
     projeto: str = "Projeto Teste"
     fornecedor: str = "Fornecedor X"
     revisao: str = "A"
+    idioma_relatorio: str = "pt"
     parecer_geral: str | None = "APROVADO"
     status_processamento: str = "concluido"
     comentario_geral: str | None = "Comentario geral"
@@ -57,6 +58,19 @@ def test_export_xlsx_has_expected_sheets():
     payload = export_xlsx(DummyParecer(), [DummyItem()], [DummyRecomendacao()])
     wb = load_workbook(io.BytesIO(payload), data_only=True)
     assert wb.sheetnames == ["Resumo", "Itens", "Recomendacoes"]
+    wb.close()
+
+
+def test_export_xlsx_uses_selected_report_language():
+    payload = export_xlsx(
+        DummyParecer(idioma_relatorio="en"),
+        [DummyItem(status="B")],
+        [DummyRecomendacao()],
+    )
+    wb = load_workbook(io.BytesIO(payload), data_only=True)
+    assert wb.sheetnames == ["Summary", "Items", "Recommendations"]
+    assert wb["Summary"]["A1"].value == "ENGINEERING TECHNICAL OPINION"
+    assert wb["Items"]["C2"].value == "APPROVED WITH COMMENTS"
     wb.close()
 
 

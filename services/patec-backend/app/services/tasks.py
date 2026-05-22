@@ -1,6 +1,5 @@
 import hashlib
 import logging
-import threading
 import uuid
 
 from sqlalchemy import create_engine, select, text
@@ -39,11 +38,20 @@ def _get_sync_engine():
 
 # Bump this version whenever SYSTEM_PROMPT or profile instructions change
 # to automatically invalidate cached results from previous prompt versions.
-PROMPT_VERSION = "5"
+PROMPT_VERSION = "6"
 
 
-def _compute_docs_hash(eng_text: str, forn_text: str, analysis_profile: str, anexos_text: str = "") -> str:
-    content = f"V:{PROMPT_VERSION}\nPROFILE:{analysis_profile}\nENG:{eng_text}\nFORN:{forn_text}\nANEXOS:{anexos_text}"
+def _compute_docs_hash(
+    eng_text: str,
+    forn_text: str,
+    analysis_profile: str,
+    idioma_relatorio: str,
+    anexos_text: str = "",
+) -> str:
+    content = (
+        f"V:{PROMPT_VERSION}\nPROFILE:{analysis_profile}\nLANG:{idioma_relatorio}\n"
+        f"ENG:{eng_text}\nFORN:{forn_text}\nANEXOS:{anexos_text}"
+    )
     return hashlib.sha256(content.encode("utf-8")).hexdigest()
 
 
@@ -100,7 +108,14 @@ def run_analysis_sync(
             )
 
             set_progress(parecer_id, 25, "Verificando cache de analise...", "cache_lookup")
-            docs_hash = _compute_docs_hash(texto_engenharia, texto_fornecedor, analysis_profile, texto_anexos)
+            idioma_relatorio = getattr(parecer, "idioma_relatorio", "pt")
+            docs_hash = _compute_docs_hash(
+                texto_engenharia,
+                texto_fornecedor,
+                analysis_profile,
+                idioma_relatorio,
+                texto_anexos,
+            )
             cached = db.execute(
                 select(CacheAnalise).where(CacheAnalise.hash_documentos == docs_hash)
             ).scalar_one_or_none()
@@ -140,6 +155,7 @@ def run_analysis_sync(
                     on_progress=on_progress,
                     analysis_profile=analysis_profile,
                     disciplina=getattr(parecer, "disciplina", "instrumentacao"),
+                    idioma_relatorio=idioma_relatorio,
                     itens_aprovados=itens_aprovados,
                 )
                 db.add(
@@ -227,7 +243,7 @@ def run_analysis_sync(
                 "Otimizando campos da analise...",
                 "optimizing_fields",
             )
-            result = optimize_item_fields(result)
+            result = optimize_item_fields(result, idioma_relatorio=idioma_relatorio)
 
             set_progress(parecer_id, 90, "Salvando resultados no banco...", "saving_results")
             db.execute(

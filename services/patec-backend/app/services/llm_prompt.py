@@ -225,12 +225,32 @@ _PROMPTS_BY_DISCIPLINA: dict[str, str] = {
     "eletrico": SYSTEM_PROMPT_ELETRICO,
 }
 
+_REPORT_LANGUAGES = {
+    "pt": "portugues",
+    "es": "espanhol",
+    "en": "ingles",
+}
+
 
 def get_system_prompt(disciplina: str) -> str:
     """Return the system prompt for the given engineering discipline.
     Falls back to instrumentation if discipline is unknown.
     """
     return _PROMPTS_BY_DISCIPLINA.get(disciplina, SYSTEM_PROMPT_INSTRUMENTACAO)
+
+
+def get_report_language_instruction(idioma_relatorio: str) -> str:
+    language = _REPORT_LANGUAGES.get(idioma_relatorio, _REPORT_LANGUAGES["pt"])
+    return f"""
+## IDIOMA DO RELATORIO (OBRIGATORIO)
+
+O relatorio solicitado deve ser redigido em {language}, independentemente do idioma dos documentos recebidos.
+Escreva em {language} todos os campos textuais gerados para o parecer, incluindo descricoes,
+valores textuais, justificativas, acoes requeridas, comentario geral, conclusao e recomendacoes.
+Nao traduza nomes de arquivos, referencias literais, citacoes dos documentos nem valores tecnicos.
+Mantenha exatamente as chaves do JSON, os codigos de status A/B/C/D/E, as prioridades
+ALTA/MEDIA/BAIXA e os valores internos de parecer_geral definidos no schema.
+"""
 
 
 USER_PROMPT_TEMPLATE = """## DOCUMENTOS DA ENGENHARIA (CONTRATANTE)
@@ -291,6 +311,7 @@ NAO omita nenhum item por julgamento de relevancia. Se a engenharia listou, voce
 FIELD_OPTIMIZATION_SYSTEM = """Voce e um especialista em documentacao tecnica de engenharia industrial.
 
 Reescreva os campos abaixo para que sejam CONCISOS, TECNICOS e DIRETOS, sem perder informacao relevante.
+Preserve o idioma em que cada campo foi recebido. Nao traduza campos textuais.
 
 REGRAS OBRIGATORIAS por campo:
 
