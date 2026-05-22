@@ -93,6 +93,7 @@ _REPORT_TEXTS = {
         "engineering_request": "Solicitacao da Engenharia",
         "supplier_proposal": "Proposto pelo Fornecedor",
         "observation": "Observacao",
+        "supplier_comment": "Comentario Fornecedor",
         "required_value": "Valor requerido",
         "engineering_ref": "Ref. engenharia",
         "informed_value": "Valor informado",
@@ -137,6 +138,7 @@ _REPORT_TEXTS = {
         "engineering_request": "Solicitud de Ingenieria",
         "supplier_proposal": "Propuesto por el Proveedor",
         "observation": "Observacion",
+        "supplier_comment": "Comentario Proveedor",
         "required_value": "Valor requerido",
         "engineering_ref": "Ref. ingenieria",
         "informed_value": "Valor informado",
@@ -181,6 +183,7 @@ _REPORT_TEXTS = {
         "engineering_request": "Engineering Request",
         "supplier_proposal": "Supplier Proposal",
         "observation": "Observation",
+        "supplier_comment": "Supplier Comment",
         "required_value": "Required value",
         "engineering_ref": "Engineering ref.",
         "informed_value": "Informed value",
@@ -572,15 +575,20 @@ def export_xlsx(parecer, itens, recomendacoes) -> bytes:
             texts["supplier_proposal"],
             texts["status"],
             texts["observation"],
+            texts["supplier_comment"],
         ]
+        supplier_comment_col = len(headers)  # last column index (1-based)
+        supplier_comment_fill = PatternFill(start_color="FFF9C4", end_color="FFF9C4", fill_type="solid")
         for col, h in enumerate(headers, 1):
             cell = ws2.cell(row=1, column=col, value=h)
             cell.font = header_font
-            cell.fill = header_fill
+            cell.fill = header_fill if col != supplier_comment_col else PatternFill(
+                start_color="F9A825", end_color="F9A825", fill_type="solid"
+            )
             cell.border = thin_border
             cell.alignment = Alignment(horizontal="center", wrap_text=True)
 
-        col_widths = [60, 55, 24, 75]
+        col_widths = [60, 55, 24, 75, 55]
         for i, w in enumerate(col_widths, 1):
             ws2.column_dimensions[get_column_letter(i)].width = w
 
@@ -590,17 +598,19 @@ def export_xlsx(parecer, itens, recomendacoes) -> bytes:
                 _build_proposto_fornecedor(item, idioma_relatorio),
                 _status_label(item.status, idioma_relatorio),
                 _build_observacao(item, idioma_relatorio),
+                "",
             ]
             ws2.append(row)
             row_idx = ws2.max_row
             fill = status_fills.get(item.status)
-            if fill:
-                for col in range(1, len(headers) + 1):
-                    ws2.cell(row=row_idx, column=col).fill = fill
-                    ws2.cell(row=row_idx, column=col).border = thin_border
-                    ws2.cell(row=row_idx, column=col).alignment = Alignment(
-                        wrap_text=True, vertical="top"
-                    )
+            for col in range(1, len(headers) + 1):
+                cell = ws2.cell(row=row_idx, column=col)
+                if col == supplier_comment_col:
+                    cell.fill = supplier_comment_fill
+                elif fill:
+                    cell.fill = fill
+                cell.border = thin_border
+                cell.alignment = Alignment(wrap_text=True, vertical="top")
 
         # Sheet 3: Recomendacoes
         ws3 = wb.create_sheet(texts["sheet_recommendations"])
