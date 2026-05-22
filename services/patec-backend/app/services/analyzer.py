@@ -880,7 +880,9 @@ def analyze_single(
 ) -> dict:
     """Analyze documents in a single API call (for smaller documents)."""
     system_prompt = get_system_prompt(disciplina)
-    profile_instruction = _profile_instruction(analysis_profile)
+    # When itens_aprovados is set, the user already decided the scope — skip profile limit
+    # to avoid the LLM discarding approved items that exceed the profile's max count.
+    profile_instruction = "" if itens_aprovados else _profile_instruction(analysis_profile)
     texto_anexos_section = (
         f"\n\n## DOCUMENTOS COMPLEMENTARES (ENGENHARIA)\n\n{texto_anexos}\n\n"
         if texto_anexos
@@ -937,7 +939,8 @@ def analyze_chunked(
 ) -> dict:
     """Analyze documents using map-reduce for large documents."""
     system_prompt = get_system_prompt(disciplina)
-    profile_instruction = _profile_instruction(analysis_profile)
+    # When itens_aprovados is set, the user already decided the scope — skip profile limit
+    profile_instruction = "" if itens_aprovados else _profile_instruction(analysis_profile)
     texto_anexos_section = (
         f"\n\n## DOCUMENTOS COMPLEMENTARES (ENGENHARIA)\n\n{texto_anexos}\n\n"
         if texto_anexos

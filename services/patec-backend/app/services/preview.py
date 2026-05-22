@@ -11,6 +11,7 @@ from app.services.llm_prompt import (
     PREVIEW_SYSTEM_PROMPT,
     PREVIEW_USER_PROMPT_TEMPLATE,
 )
+from app.services.analyzer import get_profile_label, get_profile_max_itens, normalize_analysis_profile
 
 logger = logging.getLogger(__name__)
 
@@ -38,18 +39,25 @@ async def _load_eng_text(parecer_id, db: AsyncSession):
     return texto, parecer
 
 
-def _call_preview_llm(texto_engenharia: str, parecer, feedback: str | None) -> dict:
+def _call_preview_llm(texto_engenharia: str, parecer, perfil_analise: str, feedback: str | None) -> dict:
     feedback_section = (
         f"\nFEEDBACK DO USUARIO (incorporar obrigatoriamente):\n{feedback}\n\n"
         if feedback and feedback.strip()
         else ""
+    )
+    normalized_profile = normalize_analysis_profile(perfil_analise)
+    max_itens = get_profile_max_itens(normalized_profile)
+    profile_label = get_profile_label(normalized_profile)
+    limit_instruction = (
+        f"\n\nRESTRICAO DE VOLUME: retorne NO MAXIMO {max_itens} itens "
+        f"(perfil {profile_label}). Priorize seguranca, certificacoes e desvios criticos.\n"
     )
     user_content = PREVIEW_USER_PROMPT_TEMPLATE.format(
         texto_engenharia=texto_engenharia,
         feedback_section=feedback_section,
         projeto=parecer.projeto,
         numero_parecer=parecer.numero_parecer,
-    )
+    ) + limit_instruction
     logger.info(
         "Preview LLM call: parecer=%s, eng_chars=%d, has_feedback=%s",
         parecer.id,
@@ -86,4 +94,4 @@ async def gerar_preview_itens(
     feedback: str | None = None,
 ) -> dict:
     texto_eng, parecer = await _load_eng_text(parecer_id, db)
-    return await asyncio.to_thread(_call_preview_llm, texto_eng, parecer, feedback)
+    return await asyncio.to_thread(_call_preview_llm, texto_eng, parecer, perfil_analise, feedback)
