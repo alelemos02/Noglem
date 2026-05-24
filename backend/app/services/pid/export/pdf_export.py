@@ -36,6 +36,57 @@ def export_highlighted_pdf(
         logger.error(f"Failed to open {input_pdf_path} for highlighting: {e}")
         return ""
 
+    _annotate_document(doc, input_pdf_path, result)
+
+    doc.save(str(path))
+    doc.close()
+
+    absolute_path = str(path.absolute())
+    logger.info(f"Marked Vector PDF exported to {absolute_path}")
+    return absolute_path
+
+
+def export_highlighted_pdf_bundle(
+    input_pdf_paths: list[str],
+    output_pdf_path: str,
+    result: ExtractionResult,
+) -> str:
+    """Generate one marked PDF containing all input PDFs in order."""
+    path = Path(output_pdf_path)
+    if not path.parent.exists():
+        path.parent.mkdir(parents=True, exist_ok=True)
+
+    output_doc = fitz.open()
+    try:
+        for input_pdf_path in input_pdf_paths:
+            try:
+                doc = fitz.open(input_pdf_path)
+            except Exception as e:
+                logger.error(f"Failed to open {input_pdf_path} for highlighting: {e}")
+                continue
+
+            _annotate_document(doc, input_pdf_path, result)
+            output_doc.insert_pdf(doc)
+            doc.close()
+
+        if len(output_doc) == 0:
+            logger.error("No PDF pages available for bundled highlighted export")
+            output_doc.close()
+            return ""
+
+        output_doc.save(str(path))
+    finally:
+        try:
+            output_doc.close()
+        except Exception:
+            pass
+
+    absolute_path = str(path.absolute())
+    logger.info(f"Bundled marked Vector PDF exported to {absolute_path}")
+    return absolute_path
+
+
+def _annotate_document(doc: fitz.Document, input_pdf_path: str, result: ExtractionResult) -> None:
     input_source = str(Path(input_pdf_path).resolve())
 
     # Group instruments by page. When a batch has many PDFs, keep only
@@ -79,7 +130,6 @@ def export_highlighted_pdf(
             if page.rotation != 0:
                 rect = rect * page.derotation_matrix
 
-            # Add subtle blue vector box
             annot = page.add_rect_annot(rect)
             annot.set_colors(stroke=(0.0, 0.0, 1.0), fill=None)
             annot.set_border(width=1.5, dashes=[3, 3])
@@ -90,7 +140,6 @@ def export_highlighted_pdf(
         for inst in instruments_by_page.get(page_idx, []):
             if inst.confidence < 0.15:
                 continue
-            # Margin proportional to text height: consistent across different font sizes.
             inst_h = max(inst.position.bottom - inst.position.top, 2.0)
             margin = max(min(inst_h * 1.2, 12.0), 4.0)
             rect = fitz.Rect(
@@ -102,21 +151,16 @@ def export_highlighted_pdf(
             if page.rotation != 0:
                 rect = rect * page.derotation_matrix
 
-            # Determine colors based on symbology
             if getattr(inst, "furnished_by_package", False):
-                # Furnished by package (Blue)
                 stroke_color = (0.0, 0.0, 1.0)
                 fill_color = (0.6, 0.8, 1.0)
             elif inst.is_physical:
-                # Field physical (Yellow stroke, light yellow transluscent fill)
                 stroke_color = (1.0, 0.85, 0.0)
                 fill_color = (1.0, 1.0, 0.0)
             else:
-                # DCS / Room (Red stroke, light red transluscent fill)
                 stroke_color = (1.0, 0.0, 0.0)
                 fill_color = (1.0, 0.6, 0.6)
 
-            # Low confidence Override
             if inst.confidence < 0.5:
                 stroke_color = (1.0, 0.5, 0.0)
                 fill_color = (1.0, 0.8, 0.5)
@@ -126,10 +170,3 @@ def export_highlighted_pdf(
             annot.set_opacity(0.35)
             annot.set_border(width=1.5)
             annot.update()
-
-    doc.save(str(path))
-    doc.close()
-
-    absolute_path = str(path.absolute())
-    logger.info(f"Marked Vector PDF exported to {absolute_path}")
-    return absolute_path

@@ -22,7 +22,7 @@ class Settings(BaseSettings):
 
     # Gemini API
     GEMINI_API_KEY: str = ""
-    GEMINI_MODEL: str = "gemini-2.0-flash"
+    GEMINI_MODEL: str = "gemini-3.5-flash"
     GEMINI_EMBEDDING_MODEL: str = "gemini-embedding-001"
     GEMINI_MAX_RETRIES: int = 4
     GEMINI_RETRY_BASE_SECONDS: float = 2.0

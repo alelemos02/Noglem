@@ -22,7 +22,7 @@ from app.services.pid.core.hierarchy import build_hierarchy
 from app.services.pid.core.cross_sheet import reconcile_cross_sheets
 from app.services.pid.core.validator import validate
 from app.services.pid.export.excel_export import export_to_excel
-from app.services.pid.export.pdf_export import export_highlighted_pdf
+from app.services.pid.export.pdf_export import export_highlighted_pdf, export_highlighted_pdf_bundle
 from app.services.pid.models.instrument import ExtractionResult
 
 logger = logging.getLogger(__name__)
@@ -41,10 +41,31 @@ class PidExtractService:
         use_llm: bool = False,
     ) -> ExtractionResult:
         """Run the full extraction pipeline on a PDF file."""
+        return self.extract_many([pdf_path], profile_name, max_distance, use_llm=use_llm)
+
+    def extract_many(
+        self,
+        pdf_paths: list[str],
+        profile_name: str = "promon",
+        max_distance: float = 200.0,
+        use_llm: bool = False,
+        source_filenames: dict[str, str] | None = None,
+    ) -> ExtractionResult:
+        """Run the full extraction pipeline on one or more PDF files."""
         tag_profile = load_profile(CONFIG_PATH, profile_name)
 
         result = ExtractionResult()
-        self._process_single_pdf(pdf_path, tag_profile, max_distance, result)
+        for pdf_path in pdf_paths:
+            start_instruments = len(result.instruments)
+            start_equipment = len(result.equipment)
+
+            self._process_single_pdf(pdf_path, tag_profile, max_distance, result)
+
+            display_name = self._resolve_source_filename(pdf_path, source_filenames)
+            for inst in result.instruments[start_instruments:]:
+                inst.source_filename = display_name
+            for eq in result.equipment[start_equipment:]:
+                eq.source_filename = display_name
 
         if result.instruments:
             reconcile_cross_sheets(result)
@@ -58,6 +79,17 @@ class PidExtractService:
 
         return result
 
+    @staticmethod
+    def _resolve_source_filename(
+        pdf_path: str,
+        source_filenames: dict[str, str] | None,
+    ) -> str:
+        if not source_filenames:
+            return Path(pdf_path).name
+
+        resolved_path = str(Path(pdf_path).resolve())
+        return source_filenames.get(pdf_path) or source_filenames.get(resolved_path) or Path(pdf_path).name
+
     def extract_to_json(
         self,
         pdf_path: str,
@@ -69,6 +101,24 @@ class PidExtractService:
         result = self.extract(pdf_path, profile_name, max_distance, use_llm=use_llm)
         return self._result_to_dict(result)
 
+    def extract_many_to_json(
+        self,
+        pdf_paths: list[str],
+        profile_name: str = "promon",
+        max_distance: float = 200.0,
+        use_llm: bool = False,
+        source_filenames: dict[str, str] | None = None,
+    ) -> Dict[str, Any]:
+        """Extract several PDFs and return a JSON-serializable summary."""
+        result = self.extract_many(
+            pdf_paths,
+            profile_name,
+            max_distance,
+            use_llm=use_llm,
+            source_filenames=source_filenames,
+        )
+        return self._result_to_dict(result)
+
     def extract_to_excel(
         self,
         pdf_path: str,
@@ -76,10 +126,41 @@ class PidExtractService:
         profile_name: str = "promon",
         max_distance: float = 200.0,
         use_llm: bool = False,
+        source_filename: str | None = None,
+        single_sheet: bool = False,
     ) -> str:
         """Extract and export to Excel."""
-        result = self.extract(pdf_path, profile_name, max_distance, use_llm=use_llm)
-        return export_to_excel(result, output_path)
+        source_filenames = None
+        if source_filename:
+            source_filenames = {str(Path(pdf_path).resolve()): source_filename}
+        result = self.extract_many(
+            [pdf_path],
+            profile_name,
+            max_distance,
+            use_llm=use_llm,
+            source_filenames=source_filenames,
+        )
+        return export_to_excel(result, output_path, include_support_sheets=not single_sheet)
+
+    def extract_many_to_excel(
+        self,
+        pdf_paths: list[str],
+        output_path: str,
+        profile_name: str = "promon",
+        max_distance: float = 200.0,
+        use_llm: bool = False,
+        source_filenames: dict[str, str] | None = None,
+        single_sheet: bool = False,
+    ) -> str:
+        """Extract several PDFs and export a consolidated Excel file."""
+        result = self.extract_many(
+            pdf_paths,
+            profile_name,
+            max_distance,
+            use_llm=use_llm,
+            source_filenames=source_filenames,
+        )
+        return export_to_excel(result, output_path, include_support_sheets=not single_sheet)
 
     def extract_to_annotated_pdf(
         self,
@@ -88,13 +169,42 @@ class PidExtractService:
         profile_name: str = "promon",
         max_distance: float = 200.0,
         use_llm: bool = False,
+        source_filename: str | None = None,
     ) -> str:
         """Extract instruments and save annotated vector PDF.
 
         Color coding: yellow=field, red=DCS, blue=furnished, orange=low confidence.
         """
-        result = self.extract(pdf_path, profile_name, max_distance, use_llm=use_llm)
+        source_filenames = None
+        if source_filename:
+            source_filenames = {str(Path(pdf_path).resolve()): source_filename}
+        result = self.extract_many(
+            [pdf_path],
+            profile_name,
+            max_distance,
+            use_llm=use_llm,
+            source_filenames=source_filenames,
+        )
         return export_highlighted_pdf(pdf_path, output_path, result)
+
+    def extract_many_to_annotated_pdf(
+        self,
+        pdf_paths: list[str],
+        output_path: str,
+        profile_name: str = "promon",
+        max_distance: float = 200.0,
+        use_llm: bool = False,
+        source_filenames: dict[str, str] | None = None,
+    ) -> str:
+        """Extract several PDFs and save one annotated vector PDF."""
+        result = self.extract_many(
+            pdf_paths,
+            profile_name,
+            max_distance,
+            use_llm=use_llm,
+            source_filenames=source_filenames,
+        )
+        return export_highlighted_pdf_bundle(pdf_paths, output_path, result)
 
     def _process_single_pdf(
         self,

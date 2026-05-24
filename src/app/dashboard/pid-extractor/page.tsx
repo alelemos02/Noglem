@@ -129,12 +129,18 @@ function ClassificationBadge({ classification, isPhysical }: { classification: s
   return <Badge variant="error" className="text-xs whitespace-nowrap">{classification}</Badge>;
 }
 
+function getDownloadFilename(disposition: string | null, fallback: string) {
+  const match = disposition?.match(/filename="?([^"]+)"?/i);
+  return match?.[1] ?? fallback;
+}
+
 /* ─── Component ─── */
 
 export default function PidExtractorPage() {
   const [files, setFiles] = useState<File[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingIndex, setProcessingIndex] = useState(-1);
+  const [exportingIndex, setExportingIndex] = useState(-1);
   const [isDownloading, setIsDownloading] = useState(false);
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
   const [result, setResult] = useState<ExtractResult | null>(null);
@@ -182,6 +188,84 @@ export default function PidExtractorPage() {
     formData.append("profile", "promon");
     formData.append("use_llm", "false");
     return formData;
+  };
+
+  const buildBatchUploadFormData = (batchId: string, file: File, index: number) => {
+    const formData = new FormData();
+    formData.append("batch_id", batchId);
+    formData.append("index", String(index));
+    formData.append("file", file);
+    return formData;
+  };
+
+  const buildBatchFinalizeFormData = (batchId: string) => {
+    const formData = new FormData();
+    formData.append("batch_id", batchId);
+    formData.append("profile", "promon");
+    formData.append("use_llm", "false");
+    return formData;
+  };
+
+  const readApiError = async (response: Response, fallback: string) => {
+    const data = await response.json().catch(() => null) as { error?: string } | null;
+    return data?.error || fallback;
+  };
+
+  const startBatch = async () => {
+    const response = await fetch("/api/pid/extract/batch/start", { method: "POST" });
+    const data = await response.json().catch(() => null) as { batch_id?: string; error?: string } | null;
+
+    if (!response.ok || !data?.batch_id) {
+      throw new Error(data?.error || "Erro ao iniciar exportação consolidada");
+    }
+
+    return data.batch_id;
+  };
+
+  const uploadBatchFiles = async (batchId: string) => {
+    for (let i = 0; i < files.length; i++) {
+      setExportingIndex(i);
+      const response = await fetch("/api/pid/extract/batch/upload", {
+        method: "POST",
+        body: buildBatchUploadFormData(batchId, files[i], i),
+      });
+
+      if (!response.ok) {
+        throw new Error(await readApiError(response, `Erro ao enviar "${files[i].name}"`));
+      }
+    }
+  };
+
+  const downloadBlob = (blob: Blob, filename: string) => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const downloadBatchArtifact = async (
+    route: "/api/pid/extract/batch/download" | "/api/pid/extract/batch/preview",
+    fallbackFilename: string
+  ) => {
+    const batchId = await startBatch();
+    await uploadBatchFiles(batchId);
+
+    const response = await fetch(route, {
+      method: "POST",
+      body: buildBatchFinalizeFormData(batchId),
+    });
+
+    if (!response.ok) {
+      throw new Error(await readApiError(response, "Erro ao gerar arquivo consolidado"));
+    }
+
+    const blob = await response.blob();
+    const filename = getDownloadFilename(response.headers.get("content-disposition"), fallbackFilename);
+    downloadBlob(blob, filename);
   };
 
   const extractOne = async (file: File, attempt = 0): Promise<ExtractResult> => {
@@ -232,26 +316,23 @@ export default function PidExtractorPage() {
     if (!files.length) return;
     setIsDownloading(true);
     try {
-      for (const file of files) {
+      if (files.length > 1) {
+        await downloadBatchArtifact("/api/pid/extract/batch/download", "instrument_index_consolidado.xlsx");
+      } else {
+        const file = files[0];
         const response = await fetch("/api/pid/extract/download", {
           method: "POST",
           body: buildFormData(file),
         });
         if (!response.ok) throw new Error(`Erro ao gerar Excel para "${file.name}"`);
         const blob = await response.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `${file.name.replace(".pdf", "")}_instrument_index.xlsx`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+        downloadBlob(blob, `${file.name.replace(".pdf", "")}_instrument_index.xlsx`);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro desconhecido");
     } finally {
       setIsDownloading(false);
+      setExportingIndex(-1);
     }
   };
 
@@ -259,26 +340,23 @@ export default function PidExtractorPage() {
     if (!files.length) return;
     setIsDownloadingPdf(true);
     try {
-      for (const file of files) {
+      if (files.length > 1) {
+        await downloadBatchArtifact("/api/pid/extract/batch/preview", "pids_anotados_consolidado.pdf");
+      } else {
+        const file = files[0];
         const response = await fetch("/api/pid/extract/preview", {
           method: "POST",
           body: buildFormData(file),
         });
         if (!response.ok) throw new Error(`Erro ao gerar PDF anotado para "${file.name}"`);
         const blob = await response.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `${file.name.replace(".pdf", "")}_anotado.pdf`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+        downloadBlob(blob, `${file.name.replace(".pdf", "")}_anotado.pdf`);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro desconhecido");
     } finally {
       setIsDownloadingPdf(false);
+      setExportingIndex(-1);
     }
   };
 
@@ -325,7 +403,7 @@ export default function PidExtractorPage() {
               <div className="space-y-1 p-3">
                 {files.map((f, i) => {
                   const isOversized = oversizedFiles.has(f.name);
-                  const isActive = processingIndex === i;
+                  const isActive = processingIndex === i || exportingIndex === i;
                   return (
                     <div
                       key={f.name}
@@ -346,7 +424,7 @@ export default function PidExtractorPage() {
                         {(f.size / 1024 / 1024).toFixed(2)} MB
                         {isOversized && " — acima do limite"}
                       </span>
-                      {!isProcessing && (
+                      {!isProcessing && !isDownloading && !isDownloadingPdf && (
                         <button
                           onClick={() => removeFile(i)}
                           className="ml-1 shrink-0 rounded p-0.5 text-text-tertiary hover:text-text-primary"
@@ -360,17 +438,16 @@ export default function PidExtractorPage() {
 
                 {/* Totals row */}
                 <div className={`flex items-center justify-between rounded px-3 py-1.5 text-xs font-medium ${
-                  totalSize > SIZE_LIMIT ? "bg-error-muted text-error" : "bg-surface text-text-secondary"
+                  oversizedFiles.size > 0 ? "bg-error-muted text-error" : "bg-surface text-text-secondary"
                 }`}>
                   <span>{files.length} arquivo{files.length > 1 ? "s" : ""}</span>
                   <span className="font-mono tabular-nums">
-                    Total: {(totalSize / 1024 / 1024).toFixed(2)} MB / 4,00 MB
-                    {totalSize > SIZE_LIMIT && " ⚠"}
+                    Total selecionado: {(totalSize / 1024 / 1024).toFixed(2)} MB
                   </span>
                 </div>
 
                 {/* Add more */}
-                {!isProcessing && (
+                {!isProcessing && !isDownloading && !isDownloadingPdf && (
                   <label className="flex cursor-pointer items-center gap-1.5 px-1 pt-1 text-xs text-text-secondary hover:text-text-primary">
                     <Upload className="h-3.5 w-3.5" />
                     Adicionar mais arquivos
@@ -390,14 +467,14 @@ export default function PidExtractorPage() {
 
           {/* Size limit notice */}
           <div className={`flex items-start gap-2 rounded-lg px-3 py-2.5 text-sm ${
-            totalSize > SIZE_LIMIT && files.length > 0
+            oversizedFiles.size > 0
               ? "bg-error-muted text-error"
               : "bg-warning-muted text-warning"
           }`}>
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
             <span>
               <strong>Limite de 4 MB por arquivo.</strong>{" "}
-              {totalSize > SIZE_LIMIT && files.length > 0
+              {oversizedFiles.size > 0
                 ? "Um ou mais arquivos excedem o limite — remova-os ou substitua por versões menores antes de extrair."
                 : "Cada arquivo é enviado individualmente. P&IDs com muitas páginas podem exceder esse limite — divida antes de fazer o upload."}
             </span>
@@ -458,29 +535,29 @@ export default function PidExtractorPage() {
             ))}
 
             <div className="ml-auto flex gap-2">
-              <Button onClick={handleDownload} disabled={isDownloading} className="gap-2">
+              <Button onClick={handleDownload} disabled={isDownloading || isDownloadingPdf} className="gap-2">
                 {isDownloading ? (
                   <>
                     <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                    Gerando...
+                    {files.length > 1 ? `Enviando ${exportingIndex + 1 || 1} de ${files.length}...` : "Gerando..."}
                   </>
                 ) : (
                   <>
                     <Download className="h-4 w-4" />
-                    {files.length > 1 ? `Baixar ${files.length} Excels` : "Baixar Excel"}
+                    {files.length > 1 ? "Baixar Excel Consolidado" : "Baixar Excel"}
                   </>
                 )}
               </Button>
-              <Button onClick={handleDownloadPdf} disabled={isDownloadingPdf} variant="outline" className="gap-2">
+              <Button onClick={handleDownloadPdf} disabled={isDownloading || isDownloadingPdf} variant="outline" className="gap-2">
                 {isDownloadingPdf ? (
                   <>
                     <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                    Gerando...
+                    {files.length > 1 ? `Enviando ${exportingIndex + 1 || 1} de ${files.length}...` : "Gerando..."}
                   </>
                 ) : (
                   <>
                     <FileText className="h-4 w-4" />
-                    {files.length > 1 ? `Baixar ${files.length} PDFs Anotados` : "Baixar PDF Anotado"}
+                    {files.length > 1 ? "Baixar PDF Anotado Consolidado" : "Baixar PDF Anotado"}
                   </>
                 )}
               </Button>

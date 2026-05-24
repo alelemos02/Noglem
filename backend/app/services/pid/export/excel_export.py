@@ -29,10 +29,14 @@ THIN_BORDER = Border(
 )
 
 
-def export_to_excel(result: ExtractionResult, output_path: str) -> str:
+def export_to_excel(
+    result: ExtractionResult,
+    output_path: str,
+    include_support_sheets: bool = True,
+) -> str:
     """Export extraction results to a formatted Excel file.
 
-    Creates three sheets:
+    Creates the instrument index sheet and, by default, support sheets:
     1. Instrument Index - Main tag list
     2. Loops - Loop summary
     3. Validation - Warnings and errors
@@ -49,14 +53,15 @@ def export_to_excel(result: ExtractionResult, output_path: str) -> str:
     # Sheet 1: Instrument Index
     _create_instrument_sheet(wb, result)
 
-    # Sheet 2: Loops
-    _create_loops_sheet(wb, result)
+    if include_support_sheets:
+        # Sheet 2: Loops
+        _create_loops_sheet(wb, result)
 
-    # Sheet 3: Validation
-    _create_validation_sheet(wb, result)
+        # Sheet 3: Validation
+        _create_validation_sheet(wb, result)
 
-    # Sheet 4: Drawing Info
-    _create_metadata_sheet(wb, result)
+        # Sheet 4: Drawing Info
+        _create_metadata_sheet(wb, result)
 
     # Save
     path = Path(output_path)
@@ -127,7 +132,8 @@ def _create_instrument_sheet(wb: Workbook, result: ExtractionResult) -> None:
             inst.parent_tag,
             ", ".join(inst.children_tags) if inst.children_tags else "",
             inst.sheet_name or str(inst.page_index + 1),
-            Path(getattr(inst, "source_pdf", "")).name if getattr(inst, "source_pdf", "") else "",
+            getattr(inst, "source_filename", "")
+            or (Path(getattr(inst, "source_pdf", "")).name if getattr(inst, "source_pdf", "") else ""),
             f"{inst.confidence:.0%}",
             "; ".join(inst.notes) if inst.notes else "",
         ]

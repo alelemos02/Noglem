@@ -102,7 +102,7 @@ Formato: `VX.Y.Z`
 | **Y** (ex: v2.**0**.3) | Inclusao de nova ferramenta no dashboard |
 | **Z** (ex: v2.0.**3**) | Atualizacoes menores: melhorias em ferramentas existentes, correcoes, ajustes |
 
-Versao atual: **v2.1.0**
+
 
 ---
 
