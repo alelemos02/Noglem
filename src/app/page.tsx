@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/ui/logo";
@@ -63,9 +62,7 @@ const features = [
 ];
 
 export default async function HomePage() {
-  const { userId } = await auth();
-
-  if (userId) {
+  if (process.env.LOCAL_DEV === "true") {
     redirect("/dashboard");
   }
 

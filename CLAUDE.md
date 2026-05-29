@@ -106,6 +106,14 @@ Formato: `VX.Y.Z`
 
 ---
 
+## Design System
+Sempre leia `DESIGN.md` antes de tomar qualquer decisao visual ou de UI.
+Fontes, cores, spacing, layout e direcao estetica estao definidos la.
+Nao desvie sem aprovacao explicita do usuario.
+Em modo QA, sinalize qualquer codigo que nao siga o DESIGN.md.
+
+---
+
 ## Atualizacao deste arquivo
 
 `CLAUDE.md` e `AGENTS.md` **nao sao atualizados automaticamente**.

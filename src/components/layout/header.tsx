@@ -1,19 +1,25 @@
 "use client";
 
-import { UserButton } from "@clerk/nextjs";
 import { Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/ui/logo";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 
 interface HeaderProps {
   onMenuClick?: () => void;
 }
+
+// UserButton is lazy-imported so it only loads when Clerk is active
+let ClerkUserButton: React.ComponentType<{ afterSignOutUrl?: string; appearance?: object }> | null = null;
+if (typeof window !== "undefined" || process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY) {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    ClerkUserButton = require("@clerk/nextjs").UserButton;
+  } catch {
+    ClerkUserButton = null;
+  }
+}
+
+const LOCAL_DEV = process.env.NEXT_PUBLIC_LOCAL_DEV === "true";
 
 export function Header({ onMenuClick }: HeaderProps) {
   return (
@@ -33,25 +39,16 @@ export function Header({ onMenuClick }: HeaderProps) {
       </div>
 
       <div className="flex items-center gap-4">
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <div>
-                <UserButton
-                  afterSignOutUrl="/"
-                  appearance={{
-                    elements: {
-                      avatarBox: "h-8 w-8",
-                    },
-                  }}
-                />
-              </div>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>Minha conta</p>
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
+        {LOCAL_DEV ? (
+          <span className="rounded-full bg-warning-muted px-3 py-1 text-xs font-medium text-warning">
+            Dev Local
+          </span>
+        ) : ClerkUserButton ? (
+          <ClerkUserButton
+            afterSignOutUrl="/"
+            appearance={{ elements: { avatarBox: "h-8 w-8" } }}
+          />
+        ) : null}
       </div>
     </header>
   );
