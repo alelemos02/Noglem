@@ -11,34 +11,15 @@ export const metadata: Metadata = {
   keywords: ["engenharia", "agentes", "agentes de ia", "ferramentas", "pdf", "tradução", "IA", "documentos"],
 };
 
-const LOCAL_DEV = process.env.LOCAL_DEV === "true";
-
 const isClerkConfigured =
-  !LOCAL_DEV &&
   process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY &&
   !process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY.includes("YOUR_KEY_HERE");
-
-function BaseLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <html lang="pt-BR" className="dark">
-      <body className="font-body antialiased">
-        <Suspense fallback={null}>
-          <PostHogProvider>{children}</PostHogProvider>
-        </Suspense>
-      </body>
-    </html>
-  );
-}
 
 export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  if (LOCAL_DEV) {
-    return <BaseLayout>{children}</BaseLayout>;
-  }
-
   if (!isClerkConfigured) {
     return (
       <html lang="pt-BR" className="dark">
@@ -73,7 +54,13 @@ export default function RootLayout({
 
   return (
     <ClerkProvider localization={ptBR}>
-      <BaseLayout>{children}</BaseLayout>
+      <html lang="pt-BR" className="dark">
+        <body className="font-body antialiased">
+          <Suspense fallback={null}>
+            <PostHogProvider>{children}</PostHogProvider>
+          </Suspense>
+        </body>
+      </html>
     </ClerkProvider>
   );
 }

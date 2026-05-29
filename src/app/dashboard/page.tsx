@@ -1,15 +1,10 @@
 "use client";
 
-import { redirect } from "next/navigation";
-import { getToolsByCategory, visibleTools as tools } from "@/lib/tools-registry";
+import { getToolsByCategory, tools } from "@/lib/tools-registry";
 import { ToolCard } from "@/components/dashboard/tool-card";
 import { cn } from "@/lib/utils";
 
 export default function DashboardPage() {
-  if (process.env.NEXT_PUBLIC_LOCAL_DEV === "true") {
-    redirect("/dashboard/parecer-tecnico");
-  }
-
   const grouped = getToolsByCategory();
 
   return (

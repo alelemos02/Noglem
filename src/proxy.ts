@@ -1,8 +1,4 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
-import { NextResponse } from "next/server";
-import type { NextRequest } from "next/server";
-
-const LOCAL_DEV = process.env.LOCAL_DEV === "true";
 
 const isPublicRoute = createRouteMatcher([
   "/",
@@ -11,14 +7,11 @@ const isPublicRoute = createRouteMatcher([
   "/api/webhook(.*)",
 ]);
 
-// In LOCAL_DEV mode skip Clerk entirely — all routes are public
-export default LOCAL_DEV
-  ? (_request: NextRequest) => NextResponse.next()
-  : clerkMiddleware(async (auth, request) => {
-      if (!isPublicRoute(request)) {
-        await auth.protect();
-      }
-    });
+export default clerkMiddleware(async (auth, request) => {
+  if (!isPublicRoute(request)) {
+    await auth.protect();
+  }
+});
 
 export const config = {
   matcher: [

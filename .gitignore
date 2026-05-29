@@ -49,4 +49,3 @@ venv/
 .venv/
 uploads/
 .env*.local
-.gstack/

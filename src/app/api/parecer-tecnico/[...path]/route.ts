@@ -4,22 +4,15 @@ import { auth } from "@clerk/nextjs/server";
 // PATEC backend URL (separate from main backend)
 const PATEC_URL = process.env.PATEC_API_URL || "http://localhost:8000";
 const INTERNAL_API_KEY = process.env.INTERNAL_API_KEY || "";
-const LOCAL_DEV = process.env.LOCAL_DEV === "true";
 
 async function handler(
   request: NextRequest,
   { params }: { params: Promise<{ path: string[] }> }
 ) {
   try {
-    let userId: string | null = null;
-    if (LOCAL_DEV) {
-      userId = "local-dev-user";
-    } else {
-      const session = await auth();
-      userId = session.userId;
-      if (!userId) {
-        return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
-      }
+    const { userId } = await auth();
+    if (!userId) {
+      return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
     }
 
     const { path: pathSegments } = await params;
