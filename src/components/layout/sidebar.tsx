@@ -6,7 +6,7 @@ import { Home } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
-import { tools, getStatusBadgeProps } from "@/lib/tools-registry";
+import { visibleTools as tools, getStatusBadgeProps } from "@/lib/tools-registry";
 
 interface SidebarProps {
   className?: string;
@@ -93,7 +93,7 @@ export function Sidebar({ className }: SidebarProps) {
 
       <div className="border-t border-border p-4">
         <p className="text-xs text-muted-foreground font-mono tabular-nums">
-          Jul/IA v2.3.7
+          Jul/IA v2.3.8
         </p>
       </div>
     </aside>

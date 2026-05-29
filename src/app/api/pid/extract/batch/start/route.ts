@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { API_URL, buildBackendAuthHeaders } from "@/lib/backend";
 
+export const maxDuration = 300;
+
 export async function POST() {
   try {
     const { userId } = await auth();
