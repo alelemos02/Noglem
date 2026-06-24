@@ -6,7 +6,7 @@ from fastapi.responses import FileResponse
 from app.config import settings
 from app.dependencies.rate_limit import enforce_pdf_rate_limit
 from app.dependencies.security import require_internal_api_key
-from app.models.schemas import ExtractResponse, ConvertResponse, FormatResponse
+from app.models.schemas import ExtractResponse, ConvertResponse, FormatResponse, ExcelFromTablesRequest
 from app.services.pdf_extract_service import PdfExtractService
 from app.services.pdf_convert_service import PdfConvertService
 from app.services.word_format_service import WordFormatService
@@ -100,6 +100,39 @@ async def download_excel(
             if os.path.exists(path):
                 os.remove(path)
         raise HTTPException(status_code=500, detail=f"Erro na extração: {str(e)}")
+
+
+@router.post("/extract/excel")
+async def excel_from_tables(
+    payload: ExcelFromTablesRequest,
+    _: None = Depends(enforce_pdf_rate_limit),
+):
+    """
+    Gera um Excel a partir de tabelas já extraídas (JSON).
+
+    Usado pelo fluxo de auto-split do frontend: quando o PDF original passa do
+    limite de upload do Vercel (~4,5 MB), ele é dividido no navegador, cada parte
+    é extraída via /extract, e o download chama este endpoint com as tabelas já
+    consolidadas — evitando reenviar o PDF grande.
+    """
+    file_id = str(uuid.uuid4())
+    output_excel = os.path.join(settings.OUTPUT_DIR, f"{file_id}.xlsx")
+
+    try:
+        tables = [t.model_dump() for t in payload.tables]
+        extract_service.tables_to_excel(tables, output_excel)
+
+        safe_name = os.path.splitext(payload.filename or "tabelas")[0]
+        return FileResponse(
+            output_excel,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            filename=f"{safe_name}.xlsx",
+        )
+
+    except Exception as e:
+        if os.path.exists(output_excel):
+            os.remove(output_excel)
+        raise HTTPException(status_code=500, detail=f"Erro ao gerar Excel: {str(e)}")
 
 
 @router.post("/convert", response_model=ConvertResponse)

@@ -90,20 +90,27 @@ class PdfExtractService:
         Extrai tabelas e salva como arquivo Excel.
         """
         result = self.extract_tables(pdf_path, page_indices)
+        return self.tables_to_excel(result["tables"], output_path)
 
-        if not result["tables"]:
+    def tables_to_excel(self, tables: List[Dict[str, Any]], output_path: str) -> str:
+        """
+        Escreve uma lista de tabelas já extraídas como arquivo Excel.
+        Compartilhado entre a extração direta e o fluxo de auto-split (que envia
+        as tabelas já extraídas em JSON, pois o PDF original é grande demais).
+        """
+        if not tables:
             # Se não achar nada, cria um Excel vazio com aviso (comportamento original)
             with pd.ExcelWriter(output_path, engine="openpyxl") as writer:
                 pd.DataFrame(["Nenhuma tabela encontrada"]).to_excel(writer, sheet_name="Info", header=False, index=False)
             return output_path
 
+        used_names = {}
         with pd.ExcelWriter(output_path, engine="openpyxl") as writer:
-            for i, table_data in enumerate(result["tables"]):
-                # Criar DataFrame
+            for table_data in tables:
                 # Se rows for vazio mas tiver headers, cria vazio. Se ambos vazios, pula.
                 if not table_data["headers"] and not table_data["rows"]:
                     continue
-                    
+
                 df = pd.DataFrame(table_data["rows"], columns=table_data["headers"])
 
                 # Nome da sheet (máximo 31 caracteres)
@@ -113,6 +120,14 @@ class PdfExtractService:
                 for char in [':', '[', ']', '?', '/', '*', '\\']:
                     sheet_name = sheet_name.replace(char, '')
                 sheet_name = sheet_name[:31]
+
+                # Garantir unicidade do nome (auto-split pode gerar páginas repetidas)
+                if sheet_name in used_names:
+                    used_names[sheet_name] += 1
+                    suffix = f" ({used_names[sheet_name]})"
+                    sheet_name = sheet_name[: 31 - len(suffix)] + suffix
+                else:
+                    used_names[sheet_name] = 0
 
                 # Salvar no Excel
                 df.to_excel(writer, sheet_name=sheet_name, index=False)

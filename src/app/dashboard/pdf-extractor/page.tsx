@@ -5,6 +5,7 @@ import { Table, Upload, FileText, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { splitPdfBySize } from "@/lib/pdf-split";
 
 interface TableData {
   page: number;
@@ -20,6 +21,33 @@ interface ExtractResult {
   tables: TableData[];
 }
 
+const SIZE_LIMIT = 4 * 1024 * 1024; // 4 MB — limite hard do Vercel por request
+
+/** Extrai as tabelas de um único arquivo (já dentro do limite de upload). */
+async function extractTablesFromFile(file: File): Promise<ExtractResult> {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const response = await fetch("/api/pdf/extract", {
+    method: "POST",
+    body: formData,
+  });
+
+  if (response.status === 413) {
+    throw new Error(
+      "Uma das partes ainda ficou grande demais para o servidor. Tente um PDF com páginas mais leves."
+    );
+  }
+
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    throw new Error(data.error || "Erro na extração");
+  }
+
+  return data as ExtractResult;
+}
+
 export default function PdfExtractorPage() {
   const [file, setFile] = useState<File | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -27,6 +55,9 @@ export default function PdfExtractorPage() {
   const [result, setResult] = useState<ExtractResult | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [error, setError] = useState("");
+  const [progress, setProgress] = useState<{ current: number; total: number } | null>(null);
+
+  const willSplit = file ? file.size > SIZE_LIMIT : false;
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -54,56 +85,77 @@ export default function PdfExtractorPage() {
 
     setIsProcessing(true);
     setError("");
+    setProgress(null);
     try {
-      const formData = new FormData();
-      formData.append("file", file);
-
-      const response = await fetch("/api/pdf/extract", {
-        method: "POST",
-        body: formData,
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || "Erro na extração");
+      // Arquivo dentro do limite: envia direto.
+      if (file.size <= SIZE_LIMIT) {
+        const data = await extractTablesFromFile(file);
+        setResult({ ...data, filename: file.name });
+        return;
       }
 
-      setResult(data);
+      // Arquivo grande: divide no navegador e processa parte por parte.
+      const chunks = await splitPdfBySize(file, SIZE_LIMIT);
+      const mergedTables: TableData[] = [];
+      let totalPages = 0;
+
+      for (let i = 0; i < chunks.length; i++) {
+        setProgress({ current: i + 1, total: chunks.length });
+        const chunkFile = new File([chunks[i].blob], `parte-${i + 1}.pdf`, {
+          type: "application/pdf",
+        });
+        const data = await extractTablesFromFile(chunkFile);
+
+        totalPages += data.total_pages;
+        const offset = chunks[i].startPage - 1; // remapeia para a página original
+        for (const t of data.tables) {
+          mergedTables.push({ ...t, page: t.page + offset });
+        }
+      }
+
+      setResult({
+        filename: file.name,
+        total_pages: totalPages,
+        tables_found: mergedTables.length,
+        tables: mergedTables,
+      });
     } catch (err) {
       const message = err instanceof Error ? err.message : "Erro desconhecido";
       setError(message);
       console.error("Erro na extração:", err);
     } finally {
       setIsProcessing(false);
+      setProgress(null);
     }
   };
 
   const handleDownload = async () => {
-    if (!file) return;
+    if (!result) return;
 
     setIsDownloading(true);
+    setError("");
     try {
-      const formData = new FormData();
-      formData.append("file", file);
-
-      const response = await fetch(
-        "/api/pdf/extract/download",
-        {
-          method: "POST",
-          body: formData,
-        }
-      );
+      // Gera o Excel a partir das tabelas já extraídas (funciona inclusive quando
+      // o PDF original foi grande demais para reenviar — fluxo de auto-split).
+      const response = await fetch("/api/pdf/extract/excel", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          filename: result.filename,
+          tables: result.tables,
+        }),
+      });
 
       if (!response.ok) {
-        throw new Error("Erro ao gerar Excel");
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error || "Erro ao gerar Excel");
       }
 
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${file.name.replace(".pdf", "")}_tabelas.xlsx`;
+      a.download = `${result.filename.replace(/\.pdf$/i, "")}_tabelas.xlsx`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -153,10 +205,11 @@ export default function PdfExtractorPage() {
           >
             {file ? (
               <div className="flex flex-col items-center gap-2">
-                <FileText className="h-12 w-12 text-success" />
+                <FileText className={`h-12 w-12 ${willSplit ? "text-warning" : "text-success"}`} />
                 <p className="font-medium">{file.name}</p>
-                <p className="text-sm text-muted-foreground">
+                <p className={`text-sm ${willSplit ? "text-warning font-medium" : "text-muted-foreground"}`}>
                   {(file.size / 1024 / 1024).toFixed(2)} MB
+                  {willSplit && " — será dividido automaticamente"}
                 </p>
                 <Button
                   variant="outline"
@@ -198,6 +251,15 @@ export default function PdfExtractorPage() {
         </div>
       )}
 
+      {/* Size notice */}
+      {file && !result && willSplit && (
+        <div className="rounded-lg border border-warning/50 bg-warning-muted p-3 text-center text-sm text-warning">
+          Este PDF passa de 4 MB (limite do servidor). Ele será{" "}
+          <strong>dividido automaticamente em partes</strong> no seu navegador antes
+          do envio, e o resultado é consolidado num só.
+        </div>
+      )}
+
       {/* Extract Button */}
       {file && !result && (
         <div className="flex justify-center">
@@ -210,7 +272,11 @@ export default function PdfExtractorPage() {
             {isProcessing ? (
               <>
                 <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                Extraindo tabelas...
+                {progress
+                  ? `Processando parte ${progress.current} de ${progress.total}...`
+                  : willSplit
+                    ? "Dividindo o PDF..."
+                    : "Extraindo tabelas..."}
               </>
             ) : (
               <>

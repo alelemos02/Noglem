@@ -34,6 +34,13 @@ class ExtractResponse(BaseModel):
     tables: List[TableData]
 
 
+class ExcelFromTablesRequest(BaseModel):
+    """Gera um Excel a partir de tabelas já extraídas (usado no fluxo de auto-split,
+    onde o PDF original é grande demais para reenviar ao backend)."""
+    filename: str = "tabelas"
+    tables: List[TableData]
+
+
 class ConvertResponse(BaseModel):
     filename: str
     original_size: int
