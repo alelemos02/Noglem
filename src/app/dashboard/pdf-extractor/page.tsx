@@ -23,29 +23,42 @@ interface ExtractResult {
 
 const SIZE_LIMIT = 4 * 1024 * 1024; // 4 MB — limite hard do Vercel por request
 
-/** Extrai as tabelas de um único arquivo (já dentro do limite de upload). */
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Extrai as tabelas de um único arquivo (já dentro do limite de upload).
+ * Faz retry com backoff em 429 (rate limit), já que o auto-split dispara várias
+ * partes em sequência.
+ */
 async function extractTablesFromFile(file: File): Promise<ExtractResult> {
-  const formData = new FormData();
-  formData.append("file", file);
+  for (let attempt = 0; ; attempt++) {
+    const formData = new FormData();
+    formData.append("file", file);
 
-  const response = await fetch("/api/pdf/extract", {
-    method: "POST",
-    body: formData,
-  });
+    const response = await fetch("/api/pdf/extract", {
+      method: "POST",
+      body: formData,
+    });
 
-  if (response.status === 413) {
-    throw new Error(
-      "Uma das partes ainda ficou grande demais para o servidor. Tente um PDF com páginas mais leves."
-    );
+    if (response.status === 413) {
+      throw new Error(
+        "Uma das partes ainda ficou grande demais para o servidor. Tente um PDF com páginas mais leves."
+      );
+    }
+
+    if (response.status === 429 && attempt < 4) {
+      await sleep(1500 * (attempt + 1)); // 1.5s, 3s, 4.5s, 6s
+      continue;
+    }
+
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      throw new Error(data.error || "Erro na extração");
+    }
+
+    return data as ExtractResult;
   }
-
-  const data = await response.json().catch(() => ({}));
-
-  if (!response.ok) {
-    throw new Error(data.error || "Erro na extração");
-  }
-
-  return data as ExtractResult;
 }
 
 export default function PdfExtractorPage() {
@@ -100,6 +113,7 @@ export default function PdfExtractorPage() {
       let totalPages = 0;
 
       for (let i = 0; i < chunks.length; i++) {
+        if (i > 0) await sleep(300); // espaça os envios pra não saturar o rate limit
         setProgress({ current: i + 1, total: chunks.length });
         const chunkFile = new File([chunks[i].blob], `parte-${i + 1}.pdf`, {
           type: "application/pdf",

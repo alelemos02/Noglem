@@ -68,5 +68,6 @@ O Vercel rejeita request com corpo > ~4,5 MB na borda (HTTP 413 `FUNCTION_PAYLOA
 - Barra de progresso mostra "Processando parte X de N".
 - Edge case: se uma única página sozinha passa do limite (ex.: scan em altíssima resolução), lança `PageTooLargeError` com mensagem pedindo para comprimir — não dá para dividir por página.
 - O download do Excel **não reenvia o PDF**: manda as tabelas já extraídas (JSON) para `/api/pdf/extract/excel`, que reusa `tables_to_excel` no backend. Por isso funciona mesmo para PDFs grandes.
+- **Rate limit:** como o split dispara N requests por extração, o backend usa `RATE_LIMIT_PDF_PER_MIN = 60` (era 5 — 5 não comportava nem um PDF dividido em 6+ partes). O frontend espaça os envios em 300ms e faz retry com backoff (1,5s × tentativa, até 4) em 429.
 
 Mesmo limite/quirk da ferramenta pid-extractor (que ainda bloqueia em vez de auto-dividir).

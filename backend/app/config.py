@@ -30,7 +30,9 @@ class Settings:
 
     # Rate limits (requests per minute per user)
     RATE_LIMIT_TRANSLATE_PER_MIN = int(os.getenv("RATE_LIMIT_TRANSLATE_PER_MIN", "30"))
-    RATE_LIMIT_PDF_PER_MIN = int(os.getenv("RATE_LIMIT_PDF_PER_MIN", "5"))
+    # Auto-split do Extrator de Tabelas divide PDFs grandes em várias partes e
+    # envia cada uma como um request — por isso o limite acompanha o do PID (60).
+    RATE_LIMIT_PDF_PER_MIN = int(os.getenv("RATE_LIMIT_PDF_PER_MIN", "60"))
     RATE_LIMIT_PID_PER_MIN = int(os.getenv("RATE_LIMIT_PID_PER_MIN", "60"))
 
     # Microsoft Graph (Email RAG)
