@@ -1,6 +1,114 @@
+import json
+import logging
+import os
+from concurrent.futures import ThreadPoolExecutor
+from typing import Dict, List, Any, Optional
+
 import pdfplumber
 import pandas as pd
-from typing import Dict, List, Any
+
+logger = logging.getLogger(__name__)
+
+# Render DPI para páginas escaneadas antes de mandar pro Gemini. 150 mantém o OCR
+# preciso (testado no instrument index) e é mais rápido/leve que 200.
+OCR_RENDER_DPI = 150
+# As páginas de um chunk são OCR'd em paralelo. O frontend limita o chunk a poucas
+# páginas para o request caber no timeout do Vercel (~60s); 5 workers cobrem isso.
+OCR_MAX_WORKERS = 5
+
+_OCR_PROMPT = (
+    "Você está extraindo dados tabulares da imagem de UMA página de um documento "
+    "técnico de engenharia escaneado (ex.: instrument index, lista de cabos, folha "
+    "de dados). Extraia TODAS as tabelas visíveis na página.\n"
+    "Responda APENAS com JSON neste formato:\n"
+    '{"tables": [{"headers": ["coluna 1", "coluna 2", ...], '
+    '"rows": [["celula", "celula", ...], ...]}]}\n'
+    "Regras:\n"
+    "- Preserve a ordem das colunas exatamente como aparecem.\n"
+    "- Cada linha de rows deve ter o mesmo número de elementos que headers; use \"\" para célula vazia.\n"
+    "- Transcreva o texto fielmente; não invente, não resuma e não traduza valores.\n"
+    "- Ignore o carimbo/título do desenho e blocos de assinatura se não fizerem parte da tabela principal.\n"
+    '- Se não houver tabela, responda {"tables": []}.'
+)
+
+_ocr_model = None
+_ocr_available: Optional[bool] = None
+
+
+def _get_ocr_model():
+    """Carrega o modelo Gemini de visão sob demanda (mesmo padrão do pdf_comments_service)."""
+    global _ocr_model, _ocr_available
+    if _ocr_available is False:
+        return None
+    if _ocr_model is not None:
+        return _ocr_model
+
+    api_key = os.environ.get("GOOGLE_API_KEY") or os.environ.get("GEMINI_API_KEY")
+    if not api_key:
+        _ocr_available = False
+        return None
+
+    try:
+        import google.generativeai as genai
+
+        genai.configure(api_key=api_key)
+        _ocr_model = genai.GenerativeModel("gemini-3.5-flash")
+        _ocr_available = True
+        return _ocr_model
+    except Exception:
+        logger.exception("Falha ao inicializar o modelo Gemini para OCR")
+        _ocr_available = False
+        return None
+
+
+def _normalize_ocr_tables(raw: Any) -> List[Dict[str, Any]]:
+    """Normaliza a resposta do Gemini em tabelas retangulares (rows do tamanho de headers)."""
+    if isinstance(raw, dict):
+        raw = raw.get("tables", [])
+    if not isinstance(raw, list):
+        return []
+
+    out: List[Dict[str, Any]] = []
+    for t in raw:
+        if not isinstance(t, dict):
+            continue
+        headers = [str(h) if h is not None else "" for h in (t.get("headers") or [])]
+        width = len(headers)
+        if width == 0:
+            continue
+        rows = []
+        for row in (t.get("rows") or []):
+            if not isinstance(row, list):
+                continue
+            cells = [str(c) if c is not None else "" for c in row]
+            # Garante retangularidade (pandas exige len(row) == len(headers))
+            if len(cells) < width:
+                cells += [""] * (width - len(cells))
+            elif len(cells) > width:
+                cells = cells[:width]
+            rows.append(cells)
+        if rows:
+            out.append({"headers": headers, "rows": rows})
+    return out
+
+
+def _ocr_image_to_tables(model, png_bytes: bytes) -> List[Dict[str, Any]]:
+    """Manda a imagem da página pro Gemini e devolve as tabelas estruturadas."""
+    try:
+        response = model.generate_content(
+            [_OCR_PROMPT, {"mime_type": "image/png", "data": png_bytes}],
+            generation_config={
+                "temperature": 0,
+                "response_mime_type": "application/json",
+            },
+        )
+        text = (response.text or "").strip()
+        if not text:
+            return []
+        return _normalize_ocr_tables(json.loads(text))
+    except Exception:
+        logger.exception("Falha no OCR de uma página via Gemini")
+        return []
 
 
 class PdfExtractService:
@@ -13,10 +121,11 @@ class PdfExtractService:
         """
         tables_data = []
         total_pages = 0
+        scanned_pages: List[tuple[int, int]] = []  # (page_num_1based, page_idx_0based)
 
         with pdfplumber.open(pdf_path) as pdf:
             total_pages = len(pdf.pages)
-            
+
             # Determinar quais páginas processar
             if page_indices is None:
                 pages_to_process = [(i, p) for i, p in enumerate(pdf.pages)]
@@ -29,6 +138,12 @@ class PdfExtractService:
             for page_idx, page in pages_to_process:
                 # page_num é 1-based para exibição
                 page_num = page.page_number
+
+                # Página escaneada (sem texto embutido) → vai pro OCR via Gemini.
+                if not page.chars:
+                    scanned_pages.append((page_num, page_idx))
+                    continue
+
                 tables = page.extract_tables()
 
                 for table_idx, table in enumerate(tables):
@@ -79,11 +194,63 @@ class PdfExtractService:
                         }
                     )
 
+        # OCR das páginas escaneadas (via Gemini) e merge no resultado.
+        if scanned_pages:
+            tables_data.extend(self._ocr_scanned_pages(pdf_path, scanned_pages))
+
+        # Ordena por página e índice para preview/Excel consistentes.
+        tables_data.sort(key=lambda t: (t["page"], t["table_index"]))
+
         return {
             "total_pages": total_pages,
             "tables_found": len(tables_data),
             "tables": tables_data,
         }
+
+    def _ocr_scanned_pages(
+        self, pdf_path: str, scanned_pages: List[tuple[int, int]]
+    ) -> List[Dict[str, Any]]:
+        """Renderiza páginas sem texto e extrai tabelas delas via Gemini (em paralelo)."""
+        model = _get_ocr_model()
+        if model is None:
+            logger.warning(
+                "%d página(s) escaneada(s) ignorada(s): Gemini OCR indisponível "
+                "(GOOGLE_API_KEY ausente?)",
+                len(scanned_pages),
+            )
+            return []
+
+        # Renderiza sequencialmente (PyMuPDF não é thread-safe no mesmo documento);
+        # o OCR — que é a parte lenta — roda em paralelo.
+        import fitz  # PyMuPDF
+
+        rendered: List[tuple[int, bytes]] = []
+        doc = fitz.open(pdf_path)
+        try:
+            for page_num, page_idx in scanned_pages:
+                pix = doc[page_idx].get_pixmap(dpi=OCR_RENDER_DPI)
+                rendered.append((page_num, pix.tobytes("png")))
+        finally:
+            doc.close()
+
+        def _task(item: tuple[int, bytes]) -> List[Dict[str, Any]]:
+            page_num, png = item
+            tables = _ocr_image_to_tables(model, png)
+            return [
+                {
+                    "page": page_num,
+                    "table_index": ti,
+                    "headers": t["headers"],
+                    "rows": t["rows"],
+                }
+                for ti, t in enumerate(tables)
+            ]
+
+        out: List[Dict[str, Any]] = []
+        with ThreadPoolExecutor(max_workers=OCR_MAX_WORKERS) as executor:
+            for res in executor.map(_task, rendered):
+                out.extend(res)
+        return out
 
     def extract_to_excel(self, pdf_path: str, output_path: str, page_indices: List[int] = None) -> str:
         """

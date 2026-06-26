@@ -58,6 +58,16 @@ Browser (JSON: {filename, tables}) → POST /api/pdf/extract/excel → Backend �
 - O download re-envia o PDF para o backend (não cacheia o resultado do preview)
 - Aceita apenas arquivos `.pdf`
 
+## OCR de PDFs escaneados (Gemini)
+
+PDFs escaneados (páginas só com imagem, 0 texto embutido) não têm tabela extraível por texto. O backend detecta isso e usa OCR via Gemini:
+
+- Em `extract_tables`, para cada página: se `page.chars` está vazio (scan) → vai pro caminho de OCR; senão usa pdfplumber normalmente. Caminho híbrido.
+- `_ocr_scanned_pages` renderiza as páginas com PyMuPDF (`OCR_RENDER_DPI = 150`) e manda cada imagem pro `gemini-3.5-flash` (`_get_ocr_model`, mesmo padrão do `pdf_comments_service`) com prompt pedindo JSON `{tables:[{headers,rows}]}`. OCR roda em paralelo (`ThreadPoolExecutor`, `OCR_MAX_WORKERS=5`).
+- Depende de `GOOGLE_API_KEY` válida no Railway (a mesma do Translate/PATEC). Sem chave válida, páginas escaneadas retornam 0 tabelas (degrada sem quebrar).
+- **Latência:** cada página OCR'd leva ~35–45s (Gemini). Por isso o frontend limita cada parte a `MAX_PAGES_PER_CHUNK = 4` páginas e a rota `/api/pdf/extract` declara `maxDuration = 60` (teto do Hobby). Um doc de 80 páginas escaneadas ≈ 20 partes ≈ ~15 min, com barra de progresso.
+- Não confundir com a busca do PDFgear/Adobe: esses viewers fazem OCR ao vivo, o que dá a falsa impressão de que o PDF "tem texto".
+
 ## Limite de arquivo e auto-split
 
 O Vercel rejeita request com corpo > ~4,5 MB na borda (HTTP 413 `FUNCTION_PAYLOAD_TOO_LARGE`), antes de a função rodar. Para contornar **sem o usuário precisar dividir o PDF na mão**:

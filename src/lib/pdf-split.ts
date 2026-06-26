@@ -27,6 +27,13 @@ export class PageTooLargeError extends Error {
 // Aim below the hard limit to leave room for multipart/form-data overhead.
 const SAFETY_MARGIN = 0.85;
 
+/** Conta as páginas de um PDF (carregamento rápido, sem re-serializar). */
+export async function getPdfPageCount(file: File): Promise<number> {
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const doc = await PDFDocument.load(bytes, { ignoreEncryption: true });
+  return doc.getPageCount();
+}
+
 /** Wraps bytes in a PDF Blob backed by a plain ArrayBuffer (satisfies BlobPart typing). */
 function toPdfBlob(bytes: Uint8Array): Blob {
   const buffer = new ArrayBuffer(bytes.byteLength);
@@ -51,11 +58,17 @@ async function buildSubDoc(
  * stays under `maxBytes`. The split runs entirely in the browser so the original
  * (oversized) file never has to be uploaded.
  *
+ * `maxPages` caps how many pages a chunk may contain regardless of size. This
+ * bounds the per-request work on the backend — important for scanned PDFs, where
+ * each page is OCR'd via an LLM and a request must finish within the Vercel
+ * function timeout (~60s).
+ *
  * Throws {@link PageTooLargeError} if a single page can't fit under the limit.
  */
 export async function splitPdfBySize(
   file: File,
-  maxBytes: number
+  maxBytes: number,
+  maxPages = Infinity
 ): Promise<PdfChunk[]> {
   const bytes = new Uint8Array(await file.arrayBuffer());
   const src = await PDFDocument.load(bytes, { ignoreEncryption: true });
@@ -66,10 +79,10 @@ export async function splitPdfBySize(
   let start = 0; // 0-based index of the next page to place
 
   while (start < total) {
-    // Binary-search the largest run of pages from `start` that fits in `target`.
-    // Size is monotonic in page count, so this is well-defined.
+    // Binary-search the largest run of pages from `start` that fits in `target`,
+    // never exceeding `maxPages`. Size is monotonic in page count.
     let lo = 1;
-    let hi = total - start;
+    let hi = Math.min(total - start, maxPages);
     let best = 0;
     let bestBytes: Uint8Array | null = null;
 

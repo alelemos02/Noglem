@@ -5,7 +5,7 @@ import { Table, Upload, FileText, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { splitPdfBySize } from "@/lib/pdf-split";
+import { splitPdfBySize, getPdfPageCount } from "@/lib/pdf-split";
 
 interface TableData {
   page: number;
@@ -22,6 +22,10 @@ interface ExtractResult {
 }
 
 const SIZE_LIMIT = 4 * 1024 * 1024; // 4 MB — limite hard do Vercel por request
+// Limita páginas por parte. Páginas escaneadas viram OCR (1 chamada de IA por
+// página, ~40s cada); manter poucas páginas por request evita estourar o timeout
+// (~60s) do Vercel quando elas são processadas em paralelo no backend.
+const MAX_PAGES_PER_CHUNK = 4;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -100,15 +104,20 @@ export default function PdfExtractorPage() {
     setError("");
     setProgress(null);
     try {
-      // Arquivo dentro do limite: envia direto.
+      // Arquivo pequeno E com poucas páginas: envia direto (caminho rápido).
+      // Mesmo abaixo do limite de tamanho, um PDF escaneado com muitas páginas
+      // precisa ser dividido para o OCR caber no timeout do backend.
       if (file.size <= SIZE_LIMIT) {
-        const data = await extractTablesFromFile(file);
-        setResult({ ...data, filename: file.name });
-        return;
+        const pageCount = await getPdfPageCount(file);
+        if (pageCount <= MAX_PAGES_PER_CHUNK) {
+          const data = await extractTablesFromFile(file);
+          setResult({ ...data, filename: file.name });
+          return;
+        }
       }
 
-      // Arquivo grande: divide no navegador e processa parte por parte.
-      const chunks = await splitPdfBySize(file, SIZE_LIMIT);
+      // Arquivo grande ou com muitas páginas: divide no navegador e processa parte por parte.
+      const chunks = await splitPdfBySize(file, SIZE_LIMIT, MAX_PAGES_PER_CHUNK);
       const mergedTables: TableData[] = [];
       let totalPages = 0;
 
@@ -300,6 +309,14 @@ export default function PdfExtractorPage() {
             )}
           </Button>
         </div>
+      )}
+
+      {/* Progress hint for multi-part / OCR runs */}
+      {isProcessing && progress && (
+        <p className="text-center text-xs text-muted-foreground">
+          Páginas escaneadas são lidas por OCR (IA) — documentos grandes podem
+          levar alguns minutos. Não feche a aba.
+        </p>
       )}
 
       {/* Results */}

@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { API_URL, buildBackendAuthHeaders } from "@/lib/backend";
 
+// Páginas escaneadas viram OCR via Gemini no backend (~40s para um chunk de 4
+// páginas em paralelo). 60s é o teto do plano Hobby do Vercel — declarar mais
+// que isso invalida a função (foi o que quebrou no passado com maxDuration=300).
+export const maxDuration = 60;
+
 export async function POST(request: NextRequest) {
   try {
     const { userId } = await auth();
