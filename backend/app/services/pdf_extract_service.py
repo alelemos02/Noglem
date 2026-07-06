@@ -15,6 +15,10 @@ OCR_RENDER_DPI = 150
 # As páginas de um chunk são OCR'd em paralelo. O frontend limita o chunk a poucas
 # páginas para o request caber no timeout do Vercel (~60s); 5 workers cobrem isso.
 OCR_MAX_WORKERS = 5
+# Fração mínima da página coberta por uma imagem para tratá-la como scan. Scans
+# "pesquisáveis" (imagem da tabela + camada de texto de OCR por cima) têm a imagem
+# cobrindo a página inteira e nenhuma linha vetorial de grade.
+IMAGE_PAGE_MIN_COVERAGE = 0.5
 
 _OCR_PROMPT = (
     "Você está extraindo dados tabulares da imagem de UMA página de um documento "
@@ -59,6 +63,26 @@ def _get_ocr_model():
         logger.exception("Falha ao inicializar o modelo Gemini para OCR")
         _ocr_available = False
         return None
+
+
+def _is_image_page(page) -> bool:
+    """True se a tabela da página está numa imagem (scan), não em texto/grade vetorial.
+
+    pdfplumber só extrai tabela a partir de linhas vetoriais (``lines``/``rects``) ou do
+    alinhamento do texto. Num scan "pesquisável" não há grade vetorial e o texto é uma
+    camada de OCR ruidosa — ``extract_tables`` retorna vazio. Detectamos esse caso
+    (imagem cobrindo a página + sem grade) para mandar a página pro OCR via Gemini, em
+    vez de descartá-la silenciosamente só porque ela tem uma camada de texto embutida.
+    """
+    if page.lines or page.rects:  # PDF digital de verdade desenha a grade com vetores
+        return False
+    if not page.images:
+        return False
+    area = (page.width or 0) * (page.height or 0)
+    if area <= 0:
+        return False
+    coverage = max(img["width"] * img["height"] for img in page.images) / area
+    return coverage >= IMAGE_PAGE_MIN_COVERAGE
 
 
 def _normalize_ocr_tables(raw: Any) -> List[Dict[str, Any]]:
@@ -139,8 +163,11 @@ class PdfExtractService:
                 # page_num é 1-based para exibição
                 page_num = page.page_number
 
-                # Página escaneada (sem texto embutido) → vai pro OCR via Gemini.
-                if not page.chars:
+                # Página escaneada → OCR via Gemini. Cobre tanto o scan puro (sem
+                # texto embutido) quanto o scan "pesquisável" (imagem da tabela com
+                # camada de OCR por cima): nos dois casos a tabela está na imagem e o
+                # pdfplumber não consegue extrair dela.
+                if not page.chars or _is_image_page(page):
                     scanned_pages.append((page_num, page_idx))
                     continue
 
