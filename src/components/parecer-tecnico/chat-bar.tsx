@@ -13,25 +13,25 @@ export function ChatBar() {
   if (!parecer) return null;
 
   return (
-    <div className="border-t-2 border-border bg-bg-secondary">
+    <div className="border-t-2 border-edge bg-surface-1">
       {/* Header strip */}
       <div className="flex items-center justify-between px-4 py-2.5">
         <div className="flex min-w-0 items-center gap-2">
           <MessageSquare className="h-4 w-4 shrink-0 text-accent" />
-          <span className="text-sm font-semibold text-text-primary">Chat IA</span>
+          <span className="text-sm font-semibold text-fg">Chat IA</span>
           {selectedItem ? (
-            <span className="truncate text-xs text-text-tertiary">
+            <span className="truncate text-xs text-fg-subtle">
               — Item {selectedItem.numero}: {selectedItem.descricao_requisito}
             </span>
           ) : (
-            <span className="text-xs text-text-tertiary">
+            <span className="text-xs text-fg-subtle">
               — Especialista de IA para este parecer
             </span>
           )}
         </div>
         <button
           onClick={() => setExpanded((v) => !v)}
-          className="ml-4 flex shrink-0 items-center gap-1 rounded px-2 py-1 text-xs text-text-tertiary transition-colors hover:bg-surface-hover hover:text-text-primary"
+          className="ml-4 flex shrink-0 items-center gap-1 rounded px-2 py-1 text-xs text-fg-subtle transition-colors hover:bg-surface-2 hover:text-fg"
         >
           {expanded ? (
             <>
@@ -53,7 +53,7 @@ export function ChatBar() {
        * ChatPanel's own header (we have one above). fillHeight only applies
        * when expanded so the messages area fills the fixed-height container.
        */}
-      <div className={`border-t border-border ${expanded ? "h-[340px]" : ""}`}>
+      <div className={`border-t border-edge ${expanded ? "h-[340px]" : ""}`}>
         <ChatPanel
           ref={chatInputRef}
           parecerId={parecer.id}

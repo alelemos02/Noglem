@@ -3,7 +3,6 @@
 import { useState, useCallback } from "react";
 import {
   Gauge,
-  Upload,
   FileText,
   Download,
   Circle,
@@ -14,10 +13,17 @@ import {
   XCircle,
   Info,
   X,
+  SearchX,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { PageHeader } from "@/components/ui/page-header";
+import { Dropzone } from "@/components/ui/dropzone";
+import { Alert } from "@/components/ui/alert";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Spinner } from "@/components/ui/spinner";
+import { toast } from "@/components/ui/toast";
 
 /* ─── Types ─── */
 
@@ -144,7 +150,6 @@ export default function PidExtractorPage() {
   const [isDownloading, setIsDownloading] = useState(false);
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
   const [result, setResult] = useState<ExtractResult | null>(null);
-  const [isDragging, setIsDragging] = useState(false);
   const [error, setError] = useState("");
   const [activeTab, setActiveTab] = useState<ResultTab>("instruments");
 
@@ -166,20 +171,6 @@ export default function PidExtractorPage() {
     setFiles((prev) => prev.filter((_, i) => i !== index));
     setResult(null);
     setError("");
-  };
-
-  const handleDrop = useCallback(
-    (e: React.DragEvent) => {
-      e.preventDefault();
-      setIsDragging(false);
-      addFiles(e.dataTransfer.files);
-    },
-    [addFiles]
-  );
-
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) addFiles(e.target.files);
-    e.target.value = "";
   };
 
   const buildFormData = (file: File) => {
@@ -302,8 +293,12 @@ export default function PidExtractorPage() {
         if (i > 0) await new Promise((r) => setTimeout(r, 400));
         allResults.push(await extractOne(files[i]));
       }
-      setResult(mergeResults(allResults));
+      const merged = mergeResults(allResults);
+      setResult(merged);
       setActiveTab("instruments");
+      toast.success("Extração concluída", {
+        description: `${merged.total_instruments} instrumento(s) em ${files.length} arquivo(s).`,
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro desconhecido");
     } finally {
@@ -369,141 +364,95 @@ export default function PidExtractorPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center gap-4">
-        <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-warning-muted">
-          <Gauge className="h-6 w-6 text-warning" />
-        </div>
-        <div>
-          <h1 className="text-2xl font-bold">Extrator de P&ID</h1>
-          <p className="text-muted-foreground">
-            Extraia instrumentos de P&IDs vetoriais e gere o Instrument Index
-          </p>
-        </div>
-        <Badge variant="secondary" className="ml-auto">Beta</Badge>
-      </div>
+      <PageHeader tool="pid-extractor" />
 
       {/* Upload Area */}
-      <Card>
+      <Card className="gap-3 py-4">
         <CardHeader>
-          <CardTitle>Upload de P&ID</CardTitle>
+          <CardTitle className="text-sm">Upload de P&ID</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div
-            onDrop={handleDrop}
-            onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-            onDragLeave={() => setIsDragging(false)}
-            className={`rounded-lg border-2 border-dashed transition-colors ${
-              isDragging
-                ? "border-primary bg-primary/5"
-                : "border-muted-foreground/25 hover:border-primary/50"
-            }`}
-          >
-            {files.length > 0 ? (
-              <div className="space-y-1 p-3">
-                {files.map((f, i) => {
-                  const isOversized = oversizedFiles.has(f.name);
-                  const isActive = processingIndex === i || exportingIndex === i;
-                  return (
-                    <div
-                      key={f.name}
-                      className={`flex items-center gap-2 rounded border px-3 py-2 text-sm ${
-                        isOversized
-                          ? "border-error/40 bg-error-muted"
-                          : isActive
-                            ? "border-primary/40 bg-primary/5"
-                            : "border-border bg-surface"
-                      }`}
-                    >
-                      <FileText className={`h-4 w-4 shrink-0 ${isOversized ? "text-error" : "text-warning"}`} />
-                      <span className="flex-1 truncate font-medium">{f.name}</span>
-                      {isActive && (
-                        <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-                      )}
-                      <span className={`font-mono tabular-nums text-xs shrink-0 ${isOversized ? "text-error font-semibold" : "text-text-secondary"}`}>
-                        {(f.size / 1024 / 1024).toFixed(2)} MB
-                        {isOversized && " — acima do limite"}
-                      </span>
-                      {!isProcessing && !isDownloading && !isDownloadingPdf && (
-                        <button
-                          onClick={() => removeFile(i)}
-                          className="ml-1 shrink-0 rounded p-0.5 text-text-tertiary hover:text-text-primary"
-                        >
-                          <X className="h-3.5 w-3.5" />
-                        </button>
-                      )}
-                    </div>
-                  );
-                })}
+          <Dropzone
+            onFiles={addFiles}
+            accept=".pdf"
+            multiple
+            compact={files.length > 0}
+            label="Arraste PDFs de P&ID ou clique para selecionar"
+            hint="Múltiplos arquivos · Apenas P&IDs vetoriais"
+            disabled={isProcessing || isDownloading || isDownloadingPdf}
+          />
 
-                {/* Totals row */}
-                <div className={`flex items-center justify-between rounded px-3 py-1.5 text-xs font-medium ${
-                  oversizedFiles.size > 0 ? "bg-error-muted text-error" : "bg-surface text-text-secondary"
-                }`}>
-                  <span>{files.length} arquivo{files.length > 1 ? "s" : ""}</span>
-                  <span className="font-mono tabular-nums">
-                    Total selecionado: {(totalSize / 1024 / 1024).toFixed(2)} MB
-                  </span>
-                </div>
+          {files.length > 0 && (
+            <div className="space-y-1">
+              {files.map((f, i) => {
+                const isOversized = oversizedFiles.has(f.name);
+                const isActive = processingIndex === i || exportingIndex === i;
+                return (
+                  <div
+                    key={f.name}
+                    className={`flex items-center gap-2.5 rounded-md border px-3 py-2 text-sm ${
+                      isOversized
+                        ? "border-danger/40 bg-danger-subtle"
+                        : isActive
+                          ? "border-accent/40 bg-accent-subtle"
+                          : "border-edge bg-surface-1"
+                    }`}
+                  >
+                    <FileText className={`h-4 w-4 shrink-0 ${isOversized ? "text-danger" : "text-fg-subtle"}`} />
+                    <span className="flex-1 truncate text-[13px] font-medium">{f.name}</span>
+                    {isActive && <Spinner size="xs" className="text-accent" />}
+                    <span className={`shrink-0 font-mono text-xs tabular-nums ${isOversized ? "font-semibold text-danger" : "text-fg-subtle"}`}>
+                      {(f.size / 1024 / 1024).toFixed(2)} MB
+                      {isOversized && " — acima do limite"}
+                    </span>
+                    {!isProcessing && !isDownloading && !isDownloadingPdf && (
+                      <button
+                        onClick={() => removeFile(i)}
+                        className="ml-1 shrink-0 rounded-sm p-0.5 text-fg-subtle transition-colors hover:text-fg"
+                        title="Remover arquivo"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
 
-                {/* Add more */}
-                {!isProcessing && !isDownloading && !isDownloadingPdf && (
-                  <label className="flex cursor-pointer items-center gap-1.5 px-1 pt-1 text-xs text-text-secondary hover:text-text-primary">
-                    <Upload className="h-3.5 w-3.5" />
-                    Adicionar mais arquivos
-                    <input type="file" accept=".pdf" multiple onChange={handleFileSelect} className="hidden" />
-                  </label>
-                )}
+              {/* Totals row */}
+              <div className={`flex items-center justify-between rounded-md px-3 py-1.5 font-mono text-[11px] tabular-nums ${
+                oversizedFiles.size > 0 ? "bg-danger-subtle text-danger" : "bg-surface-1 text-fg-subtle"
+              }`}>
+                <span>{files.length} arquivo{files.length > 1 ? "s" : ""}</span>
+                <span>Total: {(totalSize / 1024 / 1024).toFixed(2)} MB</span>
               </div>
-            ) : (
-              <label className="flex min-h-[180px] cursor-pointer flex-col items-center justify-center gap-2 p-6">
-                <Upload className="h-12 w-12 text-muted-foreground" />
-                <p className="font-medium">Arraste PDFs de P&ID ou clique para selecionar</p>
-                <p className="text-sm text-muted-foreground">Múltiplos arquivos suportados · Apenas P&IDs vetoriais</p>
-                <input type="file" accept=".pdf" multiple onChange={handleFileSelect} className="hidden" />
-              </label>
-            )}
-          </div>
+            </div>
+          )}
 
           {/* Size limit notice */}
-          <div className={`flex items-start gap-2 rounded-lg px-3 py-2.5 text-sm ${
-            oversizedFiles.size > 0
-              ? "bg-error-muted text-error"
-              : "bg-warning-muted text-warning"
-          }`}>
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-            <span>
-              <strong>Limite de 4 MB por arquivo.</strong>{" "}
-              {oversizedFiles.size > 0
-                ? "Um ou mais arquivos excedem o limite — remova-os ou substitua por versões menores antes de extrair."
-                : "Cada arquivo é enviado individualmente. P&IDs com muitas páginas podem exceder esse limite — divida antes de fazer o upload."}
-            </span>
-          </div>
+          <Alert variant={oversizedFiles.size > 0 ? "danger" : "warning"}>
+            <strong className="text-fg">Limite de 4 MB por arquivo.</strong>{" "}
+            {oversizedFiles.size > 0
+              ? "Um ou mais arquivos excedem o limite — remova-os ou substitua por versões menores antes de extrair."
+              : "Cada arquivo é enviado individualmente. P&IDs com muitas páginas podem exceder esse limite — divida antes de fazer o upload."}
+          </Alert>
         </CardContent>
       </Card>
 
       {/* Error */}
-      {error && (
-        <div className="rounded-lg border border-error/50 bg-error-muted p-4 text-center text-sm text-error">
-          {error}
-        </div>
-      )}
+      {error && <Alert variant="danger">{error}</Alert>}
 
       {/* Extract Button */}
       {files.length > 0 && !result && (
         <div className="flex justify-center">
-          <Button size="lg" onClick={handleExtract} disabled={isProcessing || !canExtract} className="gap-2">
+          <Button size="lg" onClick={handleExtract} disabled={!canExtract} loading={isProcessing} className="gap-2">
             {isProcessing ? (
-              <>
-                <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                {files.length > 1
-                  ? `Processando ${processingIndex + 1} de ${files.length}...`
-                  : "Extraindo instrumentos..."}
-              </>
+              files.length > 1
+                ? `Processando ${processingIndex + 1} de ${files.length}...`
+                : "Extraindo instrumentos..."
             ) : (
               <>
                 <Gauge className="h-4 w-4" />
-                {files.length > 1 ? `Extrair ${files.length} arquivos` : "Extrair Instrumentos"}
+                {files.length > 1 ? `Extrair ${files.length} arquivos` : "Extrair instrumentos"}
               </>
             )}
           </Button>
@@ -514,7 +463,7 @@ export default function PidExtractorPage() {
       {result && (
         <>
           {/* Summary Bar */}
-          <div className="flex flex-wrap items-center gap-4 rounded-lg border border-border bg-card p-4">
+          <div className="flex flex-wrap items-center gap-7 rounded-lg border border-edge bg-surface-1 px-5 py-4">
             {[
               { value: result.total_instruments, label: "Instrumentos" },
               { value: result.total_equipment, label: "Equipamentos" },
@@ -522,47 +471,38 @@ export default function PidExtractorPage() {
               { value: result.total_line_numbers ?? 0, label: "Linhas" },
               { value: result.total_warnings, label: "Avisos", className: "text-warning" },
               ...(result.total_errors > 0
-                ? [{ value: result.total_errors, label: "Erros", className: "text-destructive" }]
+                ? [{ value: result.total_errors, label: "Erros", className: "text-danger" }]
                 : []),
-            ].map((item, i) => (
-              <div key={item.label} className="flex items-center gap-4">
-                {i > 0 && <div className="h-8 w-px bg-border" />}
-                <div className="text-center">
-                  <p className={`text-2xl font-bold font-mono tabular-nums ${item.className ?? ""}`}>{item.value}</p>
-                  <p className="text-xs text-muted-foreground">{item.label}</p>
-                </div>
+            ].map((item) => (
+              <div key={item.label}>
+                <p className="microlabel mb-0.5 text-[10px]">{item.label}</p>
+                <p className={`font-mono text-xl font-medium tabular-nums ${item.className ?? "text-fg"}`}>{item.value}</p>
               </div>
             ))}
 
-            <div className="ml-auto flex gap-2">
-              <Button onClick={handleDownload} disabled={isDownloading || isDownloadingPdf} className="gap-2">
+            <div className="ml-auto flex flex-wrap gap-2">
+              <Button onClick={handleDownload} disabled={isDownloadingPdf} loading={isDownloading} className="gap-2">
                 {isDownloading ? (
-                  <>
-                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                    {files.length > 1 ? `Enviando ${exportingIndex + 1 || 1} de ${files.length}...` : "Gerando..."}
-                  </>
+                  files.length > 1 ? `Enviando ${exportingIndex + 1 || 1} de ${files.length}...` : "Gerando..."
                 ) : (
                   <>
                     <Download className="h-4 w-4" />
-                    {files.length > 1 ? "Baixar Excel Consolidado" : "Baixar Excel"}
+                    {files.length > 1 ? "Baixar Excel consolidado" : "Baixar Excel"}
                   </>
                 )}
               </Button>
-              <Button onClick={handleDownloadPdf} disabled={isDownloading || isDownloadingPdf} variant="outline" className="gap-2">
+              <Button onClick={handleDownloadPdf} disabled={isDownloading} loading={isDownloadingPdf} variant="outline" className="gap-2">
                 {isDownloadingPdf ? (
-                  <>
-                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                    {files.length > 1 ? `Enviando ${exportingIndex + 1 || 1} de ${files.length}...` : "Gerando..."}
-                  </>
+                  files.length > 1 ? `Enviando ${exportingIndex + 1 || 1} de ${files.length}...` : "Gerando..."
                 ) : (
                   <>
                     <FileText className="h-4 w-4" />
-                    {files.length > 1 ? "Baixar PDF Anotado Consolidado" : "Baixar PDF Anotado"}
+                    {files.length > 1 ? "Baixar PDF anotado consolidado" : "Baixar PDF anotado"}
                   </>
                 )}
               </Button>
               <Button
-                variant="outline"
+                variant="ghost"
                 onClick={() => { setResult(null); setFiles([]); setError(""); }}
               >
                 Nova extração
@@ -571,21 +511,21 @@ export default function PidExtractorPage() {
           </div>
 
           {/* Tabs */}
-          <div className="flex gap-1 border-b border-border">
+          <div className="flex gap-1 border-b border-edge">
             {tabs.map((tab) => (
               <button
                 key={tab.key}
                 onClick={() => setActiveTab(tab.key)}
-                className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium transition-colors ${
+                className={`-mb-px flex items-center gap-2 border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
                   activeTab === tab.key
-                    ? "border-b-2 border-primary text-primary"
-                    : "text-muted-foreground hover:text-foreground"
+                    ? "border-accent text-fg"
+                    : "border-transparent text-fg-muted hover:text-fg"
                 }`}
               >
                 {tab.label}
                 {tab.count !== undefined && tab.count > 0 && (
-                  <span className={`rounded-full px-1.5 py-0.5 text-xs ${
-                    activeTab === tab.key ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
+                  <span className={`font-mono text-xs tabular-nums ${
+                    activeTab === tab.key ? "text-accent" : "text-fg-subtle"
                   }`}>
                     {tab.count}
                   </span>
@@ -606,7 +546,7 @@ export default function PidExtractorPage() {
                           <tr>
                             {["Tag", "Tipo ISA", "Descrição", "Símbolo", "Classificação", "Equipamento", "Loop", "Folha", "Conf."].map(
                               (header) => (
-                                <th key={header} className="border border-border bg-muted px-3 py-2 text-left font-medium">
+                                <th key={header} className="border border-edge bg-surface-1 px-3 py-2 text-left font-mono text-[10px] font-medium uppercase tracking-[0.08em] text-fg-subtle">
                                   {header}
                                 </th>
                               )
@@ -615,31 +555,31 @@ export default function PidExtractorPage() {
                         </thead>
                         <tbody>
                           {result.instruments.map((inst, i) => (
-                            <tr key={i} className="hover:bg-muted/50">
-                              <td className="border border-border px-3 py-2 font-mono font-medium">
+                            <tr key={i} className="hover:bg-surface-2/50">
+                              <td className="border border-edge px-3 py-2 font-mono font-medium">
                                 {inst.tag}
                                 {inst.furnished_by_package && (
                                   <Badge variant="info" className="ml-1 text-xs">F</Badge>
                                 )}
                               </td>
-                              <td className="border border-border px-3 py-2">{inst.isa_type}</td>
-                              <td className="border border-border px-3 py-2">{inst.description}</td>
-                              <td className="border border-border px-3 py-2">
+                              <td className="border border-edge px-3 py-2">{inst.isa_type}</td>
+                              <td className="border border-edge px-3 py-2">{inst.description}</td>
+                              <td className="border border-edge px-3 py-2">
                                 <div className="flex items-center gap-1.5">
                                   <SymbolIcon symbol={inst.symbol} />
-                                  <span className="text-xs text-muted-foreground capitalize">{inst.symbol}</span>
+                                  <span className="text-xs text-fg-muted capitalize">{inst.symbol}</span>
                                 </div>
                               </td>
-                              <td className="border border-border px-3 py-2">
+                              <td className="border border-edge px-3 py-2">
                                 <ClassificationBadge classification={inst.classification} isPhysical={inst.is_physical} />
                               </td>
-                              <td className="border border-border px-3 py-2">{inst.equipment}</td>
-                              <td className="border border-border px-3 py-2">{inst.loop_id}</td>
-                              <td className="border border-border px-3 py-2">{inst.sheet}</td>
-                              <td className="border border-border px-3 py-2">
+                              <td className="border border-edge px-3 py-2">{inst.equipment}</td>
+                              <td className="border border-edge px-3 py-2">{inst.loop_id}</td>
+                              <td className="border border-edge px-3 py-2">{inst.sheet}</td>
+                              <td className="border border-edge px-3 py-2">
                                 <span className={
                                   inst.confidence < 0.5
-                                    ? "text-destructive font-medium"
+                                    ? "text-danger font-medium"
                                     : inst.confidence < 0.8
                                       ? "text-warning font-medium"
                                       : ""
@@ -655,11 +595,11 @@ export default function PidExtractorPage() {
                   </CardContent>
                 </Card>
               ) : (
-                <div className="rounded-lg border border-border bg-card p-8 text-center">
-                  <p className="text-muted-foreground">
-                    Nenhum instrumento encontrado neste PDF. Verifique se o P&ID é vetorial e se o perfil de tags está correto.
-                  </p>
-                </div>
+                <EmptyState
+                  icon={SearchX}
+                  title="Nenhum instrumento encontrado"
+                  description="Verifique se o P&ID é vetorial e se o perfil de tags está correto — arquivos raster não são suportados."
+                />
               )}
             </>
           )}
@@ -674,7 +614,7 @@ export default function PidExtractorPage() {
                       <thead>
                         <tr>
                           {["Loop ID", "Instrumentos", "Completo?", "Faltantes"].map((header) => (
-                            <th key={header} className="border border-border bg-muted px-3 py-2 text-left font-medium">
+                            <th key={header} className="border border-edge bg-surface-1 px-3 py-2 text-left font-mono text-[10px] font-medium uppercase tracking-[0.08em] text-fg-subtle">
                               {header}
                             </th>
                           ))}
@@ -682,16 +622,16 @@ export default function PidExtractorPage() {
                       </thead>
                       <tbody>
                         {result.loops.map((loop, i) => (
-                          <tr key={i} className="hover:bg-muted/50">
-                            <td className="border border-border px-3 py-2 font-mono font-medium">{loop.loop_id}</td>
-                            <td className="border border-border px-3 py-2">
+                          <tr key={i} className="hover:bg-surface-2/50">
+                            <td className="border border-edge px-3 py-2 font-mono font-medium">{loop.loop_id}</td>
+                            <td className="border border-edge px-3 py-2">
                               <div className="flex flex-wrap gap-1">
                                 {loop.instruments.map((tag, j) => (
                                   <Badge key={j} variant="secondary" className="text-xs">{tag}</Badge>
                                 ))}
                               </div>
                             </td>
-                            <td className="border border-border px-3 py-2">
+                            <td className="border border-edge px-3 py-2">
                               {loop.is_complete ? (
                                 <Badge variant="success" className="gap-1">
                                   <CheckCircle2 className="h-3 w-3" /> Sim
@@ -702,7 +642,7 @@ export default function PidExtractorPage() {
                                 </Badge>
                               )}
                             </td>
-                            <td className="border border-border px-3 py-2 text-muted-foreground">
+                            <td className="border border-edge px-3 py-2 text-fg-muted">
                               {loop.missing.join(", ")}
                             </td>
                           </tr>
@@ -711,7 +651,7 @@ export default function PidExtractorPage() {
                     </table>
                   </div>
                 ) : (
-                  <p className="py-8 text-center text-muted-foreground">Nenhum loop detectado.</p>
+                  <p className="py-8 text-center text-fg-muted">Nenhum loop detectado.</p>
                 )}
               </CardContent>
             </Card>
@@ -723,7 +663,7 @@ export default function PidExtractorPage() {
               {result.errors.length > 0 && (
                 <Card>
                   <CardHeader>
-                    <CardTitle className="flex items-center gap-2 text-base text-destructive">
+                    <CardTitle className="flex items-center gap-2 text-base text-danger">
                       <XCircle className="h-4 w-4" />
                       Erros ({result.errors.length})
                     </CardTitle>
@@ -731,7 +671,7 @@ export default function PidExtractorPage() {
                   <CardContent>
                     <ul className="space-y-1.5 text-sm">
                       {result.errors.map((e, i) => (
-                        <li key={i} className="rounded border border-error/30 bg-error-muted px-3 py-2">{e}</li>
+                        <li key={i} className="rounded border border-danger/30 bg-danger-subtle px-3 py-2">{e}</li>
                       ))}
                     </ul>
                   </CardContent>
@@ -749,7 +689,7 @@ export default function PidExtractorPage() {
                   <CardContent>
                     <ul className="space-y-1.5 text-sm">
                       {result.warnings.map((w, i) => (
-                        <li key={i} className="rounded border border-warning/30 bg-warning-muted px-3 py-2">{w}</li>
+                        <li key={i} className="rounded border border-warning/30 bg-warning-subtle px-3 py-2">{w}</li>
                       ))}
                     </ul>
                   </CardContent>
@@ -757,10 +697,11 @@ export default function PidExtractorPage() {
               )}
 
               {result.errors.length === 0 && result.warnings.length === 0 && (
-                <div className="rounded-lg border border-border bg-card p-8 text-center">
-                  <CheckCircle2 className="mx-auto h-8 w-8 text-success mb-2" />
-                  <p className="text-muted-foreground">Nenhum problema de validação encontrado.</p>
-                </div>
+                <EmptyState
+                  icon={CheckCircle2}
+                  title="Nenhum problema de validação"
+                  description="Todos os instrumentos e loops passaram nas verificações."
+                />
               )}
             </div>
           )}
@@ -775,7 +716,7 @@ export default function PidExtractorPage() {
                       <thead>
                         <tr>
                           {["Doc. Number", "Revisão", "Título", "Área", "Folha", "Data"].map((header) => (
-                            <th key={header} className="border border-border bg-muted px-3 py-2 text-left font-medium">
+                            <th key={header} className="border border-edge bg-surface-1 px-3 py-2 text-left font-mono text-[10px] font-medium uppercase tracking-[0.08em] text-fg-subtle">
                               {header}
                             </th>
                           ))}
@@ -783,20 +724,20 @@ export default function PidExtractorPage() {
                       </thead>
                       <tbody>
                         {result.metadata.map((meta, i) => (
-                          <tr key={i} className="hover:bg-muted/50">
-                            <td className="border border-border px-3 py-2 font-mono">{meta.document_number}</td>
-                            <td className="border border-border px-3 py-2">{meta.revision}</td>
-                            <td className="border border-border px-3 py-2">{meta.title}</td>
-                            <td className="border border-border px-3 py-2">{meta.area}</td>
-                            <td className="border border-border px-3 py-2">{meta.sheet_number}</td>
-                            <td className="border border-border px-3 py-2">{meta.date}</td>
+                          <tr key={i} className="hover:bg-surface-2/50">
+                            <td className="border border-edge px-3 py-2 font-mono">{meta.document_number}</td>
+                            <td className="border border-edge px-3 py-2">{meta.revision}</td>
+                            <td className="border border-edge px-3 py-2">{meta.title}</td>
+                            <td className="border border-edge px-3 py-2">{meta.area}</td>
+                            <td className="border border-edge px-3 py-2">{meta.sheet_number}</td>
+                            <td className="border border-edge px-3 py-2">{meta.date}</td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
                   </div>
                 ) : (
-                  <p className="py-8 text-center text-muted-foreground">
+                  <p className="py-8 text-center text-fg-muted">
                     Nenhuma informação de título/carimbo extraída.
                   </p>
                 )}
@@ -809,7 +750,7 @@ export default function PidExtractorPage() {
                     </h3>
                     <ul className="space-y-1.5 text-sm">
                       {result.notes.map((note, i) => (
-                        <li key={i} className="rounded border border-border bg-muted/50 px-3 py-2">
+                        <li key={i} className="rounded border border-edge bg-surface-2/50 px-3 py-2">
                           <span className="font-medium">Nota {note.number}:</span> {note.text}
                           {note.affects_instruments && (
                             <Badge variant="warning" className="ml-2 text-xs">Afeta instrumentos</Badge>

@@ -10,55 +10,55 @@ const features = [
     title: "Tradutor AI",
     description: "Traduza textos técnicos com precisão usando inteligência artificial",
     icon: Languages,
-    color: "bg-info-muted text-info",
+    color: "bg-info-subtle text-info",
   },
   {
     title: "Extrator de Tabelas",
     description: "Extraia tabelas de PDFs e exporte para Excel automaticamente",
     icon: Table,
-    color: "bg-success-muted text-success",
+    color: "bg-success-subtle text-success",
   },
   {
     title: "PDF para Word",
     description: "Converta seus PDFs para documentos Word editáveis",
     icon: FileText,
-    color: "bg-warning-muted text-warning",
+    color: "bg-warning-subtle text-warning",
   },
   {
     title: "Parecer Técnico",
     description: "Análise e comparação de documentação da engenharia versus documentos dos fornecedores",
     icon: FileCheck,
-    color: "bg-info-muted text-info",
+    color: "bg-info-subtle text-info",
   },
   {
     title: "Responder Comentários",
     description: "Analise, associe e responda aos comentários do cliente usando classificação e IA",
     icon: MessageSquare,
-    color: "bg-accent-muted text-accent",
+    color: "bg-accent-subtle text-accent",
   },
   {
     title: "Resumo de Reunião",
     description: "Faça o resumo completo, crie a ata e organize os responsáveis a partir da transcrição",
     icon: Users,
-    color: "bg-success-muted text-success",
+    color: "bg-success-subtle text-success",
   },
   {
     title: "Consistência de Projeto",
     description: "Análise de consistência para levantar problemas conceituais e sugerir melhorias",
     icon: ShieldCheck,
-    color: "bg-warning-muted text-warning",
+    color: "bg-warning-subtle text-warning",
   },
   {
     title: "Comparar Projetos",
     description: "A IA analisa todos os documentos referência para sugerir melhorias em novos projetos",
     icon: GitCompare,
-    color: "bg-info-muted text-info",
+    color: "bg-info-subtle text-info",
   },
   {
     title: "Folha de Dados",
     description: "A partir de documentos de referência, elabore rapidamente a folha de dados do projeto",
     icon: FileSpreadsheet,
-    color: "bg-accent-muted text-accent",
+    color: "bg-accent-subtle text-accent",
   },
 ];
 
@@ -70,9 +70,9 @@ export default async function HomePage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-background">
+    <div className="flex min-h-screen flex-col bg-canvas">
       {/* Header */}
-      <header className="border-b border-border">
+      <header className="border-b border-edge">
         <div className="container mx-auto flex h-16 items-center justify-between px-4">
           <Logo variant="full" size="sm" />
           <div className="flex items-center gap-4">
@@ -88,14 +88,14 @@ export default async function HomePage() {
 
       {/* Hero */}
       <section className="flex flex-1 flex-col items-center justify-center px-4 py-20 text-center">
-        <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-accent/30 bg-accent-muted px-4 py-1.5">
+        <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-accent/30 bg-accent-subtle px-4 py-1.5">
           <span className="h-1.5 w-1.5 rounded-full bg-accent" />
           <span className="font-mono text-xs font-medium text-accent tracking-wide">Agentes Especializados de IA</span>
         </div>
         <h1 className="max-w-3xl text-4xl font-bold tracking-tight sm:text-5xl md:text-6xl">
           Agentes de IA para Engenharia em um só lugar
         </h1>
-        <p className="mt-6 max-w-2xl text-lg text-muted-foreground">
+        <p className="mt-6 max-w-2xl text-lg text-fg-muted">
           Jul/IA é sua plataforma centralizada de agentes de engenharia.
           Cada agente é treinado para uma tarefa específica — tradução, extração, análise e muito mais.
         </p>
@@ -115,7 +115,7 @@ export default async function HomePage() {
       </section>
 
       {/* Features */}
-      <section className="border-t border-border bg-muted/30 py-20">
+      <section className="border-t border-edge bg-surface-2/30 py-20">
         <div className="container mx-auto px-4">
           <h2 className="mb-12 text-center text-3xl font-bold">
             Nossos Agentes
@@ -124,13 +124,13 @@ export default async function HomePage() {
             {features.map((feature) => (
               <div
                 key={feature.title}
-                className="rounded-lg border border-border bg-card p-6 transition-colors hover:border-accent/50"
+                className="rounded-lg border border-edge bg-card p-6 transition-colors hover:border-accent/50"
               >
                 <div className={`mb-4 flex h-12 w-12 items-center justify-center rounded-lg ${feature.color}`}>
                   <feature.icon className="h-6 w-6" />
                 </div>
                 <h3 className="mb-2 text-lg font-semibold">{feature.title}</h3>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-sm text-fg-muted">
                   {feature.description}
                 </p>
               </div>
@@ -140,8 +140,8 @@ export default async function HomePage() {
       </section>
 
       {/* Footer */}
-      <footer className="border-t border-border py-8">
-        <div className="container mx-auto px-4 text-center text-sm text-muted-foreground">
+      <footer className="border-t border-edge py-8">
+        <div className="container mx-auto px-4 text-center text-sm text-fg-muted">
           <p>&copy; {new Date().getFullYear()} Jul/IA. Todos os direitos reservados.</p>
         </div>
       </footer>

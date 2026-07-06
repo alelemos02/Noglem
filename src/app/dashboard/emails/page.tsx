@@ -8,14 +8,17 @@ import {
   MessageSquare,
   Link2,
   Unlink,
-  Loader2,
   CheckCircle2,
-  AlertCircle,
   ShieldCheck,
   Send,
   Bot,
   User,
 } from "lucide-react";
+import { PageHeader } from "@/components/ui/page-header";
+import { Spinner, LoadingBlock } from "@/components/ui/spinner";
+import { Alert } from "@/components/ui/alert";
+import { toast } from "@/components/ui/toast";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -80,13 +83,7 @@ type PageState =
 
 export default function EmailDashboardPage() {
   return (
-    <Suspense
-      fallback={
-        <div className="flex h-64 items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-accent" />
-        </div>
-      }
-    >
+    <Suspense fallback={<LoadingBlock />}>
       <EmailDashboard />
     </Suspense>
   );
@@ -94,6 +91,7 @@ export default function EmailDashboardPage() {
 
 function EmailDashboard() {
   const searchParams = useSearchParams();
+  const confirm = useConfirm();
 
   const [pageState, setPageState] = useState<PageState>("loading");
   const [account, setAccount] = useState<EmailAccount | null>(null);
@@ -214,7 +212,13 @@ function EmailDashboard() {
   };
 
   const handleDisconnect = async () => {
-    if (!confirm("Desconectar conta e apagar todos os emails indexados?")) return;
+    const ok = await confirm({
+      title: "Desconectar conta?",
+      description: "Todos os emails indexados serão apagados permanentemente.",
+      confirmLabel: "Desconectar",
+      variant: "danger",
+    });
+    if (!ok) return;
     try {
       await fetch("/api/email/account", { method: "DELETE" });
       setAccount(null);
@@ -223,6 +227,7 @@ function EmailDashboard() {
       setMessages([]);
       setChatSessionId(null);
       setPageState("disconnected");
+      toast.success("Conta desconectada");
     } catch {
       setError("Erro ao desconectar");
     }
@@ -384,11 +389,11 @@ function EmailDashboard() {
     <Card className="max-w-2xl mx-auto animate-fade-in-up">
       <CardHeader>
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent-muted">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent-subtle">
             <ShieldCheck className="h-5 w-5 text-accent" />
           </div>
           <div>
-            <CardTitle className="font-heading">Termos de Uso — Email RAG</CardTitle>
+            <CardTitle>Termos de Uso — Email RAG</CardTitle>
             <CardDescription>
               Leia antes de conectar sua conta Microsoft
             </CardDescription>
@@ -396,21 +401,21 @@ function EmailDashboard() {
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="rounded-lg bg-bg-secondary p-4 space-y-3 text-sm text-text-secondary">
+        <div className="rounded-lg bg-surface-1 p-4 space-y-3 text-sm text-fg-muted">
           <p>
-            <strong className="text-text-primary">1. Indexação local:</strong>{" "}
+            <strong className="text-fg">1. Indexação local:</strong>{" "}
             Seus emails são processados e indexados usando um modelo de IA que
             roda localmente no servidor. Nenhum conteúdo de email é enviado para
             serviços externos durante a indexação.
           </p>
           <p>
-            <strong className="text-text-primary">2. Consultas com IA:</strong>{" "}
+            <strong className="text-fg">2. Consultas com IA:</strong>{" "}
             Ao fazer perguntas, trechos relevantes dos seus emails (5-7 trechos
             por consulta) são enviados ao modelo GPT-4o-mini da OpenAI para
             gerar a resposta.
           </p>
           <p>
-            <strong className="text-text-primary">
+            <strong className="text-fg">
               3. Tokens de acesso:
             </strong>{" "}
             Tokens de autenticação do Microsoft são armazenados no servidor para
@@ -418,7 +423,7 @@ function EmailDashboard() {
             solicitada.
           </p>
           <p>
-            <strong className="text-text-primary">
+            <strong className="text-fg">
               4. Controle total:
             </strong>{" "}
             Você pode desconectar sua conta e apagar todos os dados indexados a
@@ -430,9 +435,9 @@ function EmailDashboard() {
             type="checkbox"
             checked={consentChecked}
             onChange={(e) => setConsentChecked(e.target.checked)}
-            className="mt-1 h-4 w-4 rounded border-border accent-accent"
+            className="mt-1 h-4 w-4 rounded border-edge accent-accent"
           />
-          <span className="text-sm text-text-secondary">
+          <span className="text-sm text-fg-muted">
             Li e compreendo como meus dados de email serão processados.
           </span>
         </label>
@@ -453,11 +458,11 @@ function EmailDashboard() {
     <Card className="max-w-lg mx-auto animate-fade-in-up">
       <CardHeader>
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-info-muted">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-info-subtle">
             <Mail className="h-5 w-5 text-info" />
           </div>
           <div>
-            <CardTitle className="font-heading">Conectar Microsoft 365</CardTitle>
+            <CardTitle>Conectar Microsoft 365</CardTitle>
             <CardDescription>
               Vincule sua conta para indexar e consultar seus emails
             </CardDescription>
@@ -465,7 +470,7 @@ function EmailDashboard() {
         </div>
       </CardHeader>
       <CardContent>
-        <p className="text-sm text-text-secondary mb-4">
+        <p className="text-sm text-fg-muted mb-4">
           Ao conectar, solicitaremos apenas permissão de leitura dos seus
           emails. Nenhum email será enviado ou modificado.
         </p>
@@ -484,11 +489,11 @@ function EmailDashboard() {
         <CardHeader>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-success-muted">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-success-subtle">
                 <CheckCircle2 className="h-5 w-5 text-success" />
               </div>
               <div>
-                <CardTitle className="font-heading text-lg">
+                <CardTitle className="text-lg">
                   {account?.display_name || "Conta Conectada"}
                 </CardTitle>
                 <CardDescription>{account?.email_address}</CardDescription>
@@ -505,7 +510,7 @@ function EmailDashboard() {
       {/* Sync controls */}
       <Card>
         <CardHeader>
-          <CardTitle className="font-heading text-lg">Sincronizar Emails</CardTitle>
+          <CardTitle className="text-lg">Sincronizar Emails</CardTitle>
           <CardDescription>
             Selecione o período e inicie a sincronização
           </CardDescription>
@@ -524,8 +529,8 @@ function EmailDashboard() {
                 className={cn(
                   "rounded-lg border px-3 py-2 text-sm font-mono tabular-nums transition-colors",
                   periodMonths === opt.value
-                    ? "border-accent bg-accent-muted text-accent"
-                    : "border-border bg-surface text-text-secondary hover:bg-surface-hover"
+                    ? "border-accent bg-accent-subtle text-accent"
+                    : "border-edge bg-surface-1 text-fg-muted hover:bg-surface-2"
                 )}
               >
                 {opt.label}
@@ -545,9 +550,9 @@ function EmailDashboard() {
     <Card className="max-w-lg mx-auto animate-fade-in-up">
       <CardHeader>
         <div className="flex items-center gap-3">
-          <Loader2 className="h-5 w-5 animate-spin text-accent" />
+          <Spinner size="md" className="text-accent" />
           <div>
-            <CardTitle className="font-heading">Sincronizando Emails</CardTitle>
+            <CardTitle>Sincronizando emails</CardTitle>
             <CardDescription>Isso pode levar alguns minutos...</CardDescription>
           </div>
         </div>
@@ -555,7 +560,7 @@ function EmailDashboard() {
       <CardContent className="space-y-4">
         {syncJob && (
           <>
-            <div className="w-full bg-bg-tertiary rounded-lg h-2 overflow-hidden">
+            <div className="w-full bg-surface-2 rounded-lg h-2 overflow-hidden">
               <div
                 className="bg-accent h-full rounded-lg transition-all duration-500"
                 style={{
@@ -563,7 +568,7 @@ function EmailDashboard() {
                 }}
               />
             </div>
-            <div className="flex justify-between text-sm text-text-secondary">
+            <div className="flex justify-between text-sm text-fg-muted">
               <span>
                 <span className="font-mono tabular-nums">
                   {syncJob.processed_emails}
@@ -590,18 +595,18 @@ function EmailDashboard() {
   const renderReady = () => (
     <div className="flex flex-col h-full max-h-[calc(100vh-120px)] animate-fade-in-up">
       {/* Stats bar */}
-      <div className="flex items-center justify-between pb-4 border-b border-border shrink-0">
+      <div className="flex items-center justify-between pb-4 border-b border-edge shrink-0">
         <div className="flex items-center gap-4">
           <Badge variant="success" dot>
             Conectado
           </Badge>
-          <span className="text-sm text-text-secondary">
+          <span className="text-sm text-fg-muted">
             {account?.email_address}
           </span>
           {stats && (
             <>
-              <span className="text-sm text-text-tertiary">|</span>
-              <span className="text-sm text-text-secondary">
+              <span className="text-sm text-fg-subtle">|</span>
+              <span className="text-sm text-fg-muted">
                 <span className="font-mono tabular-nums">
                   {stats.indexed_emails}
                 </span>{" "}
@@ -609,8 +614,8 @@ function EmailDashboard() {
               </span>
               {stats.last_sync && (
                 <>
-                  <span className="text-sm text-text-tertiary">|</span>
-                  <span className="text-sm text-text-tertiary">
+                  <span className="text-sm text-fg-subtle">|</span>
+                  <span className="text-sm text-fg-subtle">
                     Último sync:{" "}
                     {new Date(stats.last_sync).toLocaleDateString("pt-BR")}
                   </span>
@@ -634,13 +639,13 @@ function EmailDashboard() {
       <div className="flex-1 overflow-y-auto py-4 space-y-4 min-h-0">
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-center">
-            <div className="flex h-16 w-16 items-center justify-center rounded-lg bg-accent-muted mb-4">
+            <div className="flex h-16 w-16 items-center justify-center rounded-lg bg-accent-subtle mb-4">
               <MessageSquare className="h-8 w-8 text-accent" />
             </div>
-            <h3 className="text-lg font-heading font-semibold text-text-primary">
+            <h3 className="text-lg font-semibold tracking-tight text-fg">
               Consulte seus emails com IA
             </h3>
-            <p className="text-sm text-text-secondary max-w-md mt-2">
+            <p className="text-sm text-fg-muted max-w-md mt-2">
               Faça perguntas sobre qualquer assunto dos seus emails. A IA
               buscará nos emails indexados e responderá com citações.
             </p>
@@ -653,7 +658,7 @@ function EmailDashboard() {
                 <button
                   key={suggestion}
                   onClick={() => setChatInput(suggestion)}
-                  className="text-xs px-3 py-1.5 rounded-lg border border-border bg-surface hover:bg-surface-hover text-text-secondary transition-colors"
+                  className="text-xs px-3 py-1.5 rounded-lg border border-edge bg-surface-1 hover:bg-surface-2 text-fg-muted transition-colors"
                 >
                   {suggestion}
                 </button>
@@ -674,8 +679,8 @@ function EmailDashboard() {
               className={cn(
                 "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg",
                 msg.role === "user"
-                  ? "bg-accent-muted"
-                  : "bg-info-muted"
+                  ? "bg-accent-subtle"
+                  : "bg-info-subtle"
               )}
             >
               {msg.role === "user" ? (
@@ -688,8 +693,8 @@ function EmailDashboard() {
               className={cn(
                 "rounded-lg px-4 py-3 text-sm leading-relaxed",
                 msg.role === "user"
-                  ? "bg-accent-muted text-text-primary"
-                  : "bg-surface text-text-primary"
+                  ? "bg-accent-subtle text-fg"
+                  : "bg-surface-1 text-fg"
               )}
             >
               <div className="whitespace-pre-wrap">{msg.content}</div>
@@ -705,7 +710,7 @@ function EmailDashboard() {
       </div>
 
       {/* Chat input */}
-      <div className="border-t border-border pt-4 shrink-0">
+      <div className="border-t border-edge pt-4 shrink-0">
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -722,7 +727,7 @@ function EmailDashboard() {
           />
           <Button type="submit" disabled={!chatInput.trim() || isStreaming} size="icon">
             {isStreaming ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
+              <Spinner size="sm" />
             ) : (
               <Send className="h-4 w-4" />
             )}
@@ -735,38 +740,27 @@ function EmailDashboard() {
   // --- Main Render ---
 
   return (
-    <div className="flex flex-col h-full p-8">
-      {/* Header */}
-      <div className="mb-8 shrink-0">
-        <h1 className="text-3xl font-bold tracking-tight font-heading">
-          Email RAG
-        </h1>
-        <p className="text-text-secondary mt-2">
-          Conecte seu Microsoft 365 e consulte seus emails usando IA.
-        </p>
-      </div>
+    <div className="flex h-full flex-col">
+      <PageHeader tool="emails" className="shrink-0" />
 
       {/* Error banner */}
       {error && (
-        <div className="mb-6 flex items-center gap-2 rounded-lg bg-error-muted p-3 text-sm text-error shrink-0">
-          <AlertCircle className="h-4 w-4 shrink-0" />
-          {error}
-          <button
-            onClick={() => setError(null)}
-            className="ml-auto text-error hover:text-error/80"
-          >
-            Fechar
-          </button>
-        </div>
+        <Alert variant="danger" className="mb-6 shrink-0">
+          <div className="flex items-start justify-between gap-4">
+            <span>{error}</span>
+            <button
+              onClick={() => setError(null)}
+              className="shrink-0 font-medium text-fg-muted transition-colors hover:text-fg"
+            >
+              Fechar
+            </button>
+          </div>
+        </Alert>
       )}
 
       {/* Content */}
       <div className="flex-1 min-h-0">
-        {pageState === "loading" && (
-          <div className="flex h-64 items-center justify-center">
-            <Loader2 className="h-8 w-8 animate-spin text-accent" />
-          </div>
-        )}
+        {pageState === "loading" && <LoadingBlock />}
         {pageState === "consent" && renderConsent()}
         {pageState === "disconnected" && renderDisconnected()}
         {pageState === "connected" && renderConnected()}

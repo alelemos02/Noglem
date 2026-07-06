@@ -19,11 +19,11 @@ export function ChatPanelWrapper() {
     <div className="flex h-full flex-col">
       {/* Context header */}
       {selectedItem && (
-        <div className="border-b border-border bg-blue-900/20 px-4 py-2">
-          <p className="text-xs font-medium text-blue-400">
+        <div className="border-b border-edge bg-info-subtle px-4 py-2">
+          <p className="text-xs font-medium text-info">
             Discutindo Item {selectedItem.numero}
           </p>
-          <p className="line-clamp-1 text-xs text-blue-400/70">
+          <p className="line-clamp-1 text-xs text-info-text">
             {selectedItem.descricao_requisito}
           </p>
         </div>

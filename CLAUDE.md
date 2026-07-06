@@ -72,11 +72,11 @@ Nunca porte arquivo por arquivo de forma incremental sem ter lido a aplicacao in
 - **RAG microservice**: Railway (diretorio raiz: `services/rag-backend/`)
 - **PATEC microservice**: Railway (diretorio raiz: `services/patec-backend/`)
 
-**Fluxo de deploy:**
-- **DEPLOY / GITHUB:** Toda alteracao finalizada deve sempre ser comitada (`git commit`) e subida para o GitHub (`git push origin main`), para garantir que reflita no site. A Vercel e o Railway fazem o deploy automaticamente.
-- **REGRA OBRIGATORIA:** Sempre que finalizar uma alteracao (feature, fix, refactor), faca `git commit` e `git push origin main` automaticamente — nunca espere o usuario pedir.
-
-Correcoes de bug devem seguir a mesma regra: devem ser commitadas e enviadas ao GitHub — nao basta rodar localmente.
+**Deploy NAO e automatico.** Terminar uma feature/fix/refactor **nao** dispara
+deploy — apenas finalize o trabalho e pare. O deploy so acontece quando o
+usuario chamar explicitamente a skill **`/deploy`** (`.claude/skills/deploy/`),
+que cuida do bump de versao, commit, push (push-to-deploy Vercel/Railway) e
+validacao ao vivo.
 
 Para verificar logs de producao: acesse o painel do Railway ou Vercel.
 
@@ -131,7 +131,7 @@ Key routing rules:
 - QA/testing site behavior → invoke /qa or /qa-only
 - Code review/diff check → invoke /review
 - Visual polish → invoke /design-review
-- Ship/deploy/PR → invoke /ship or /land-and-deploy
+- Deploy/shippar/subir pra producao → invoke /deploy (manual, so com pedido explicito)
 - Save progress → invoke /context-save
 - Resume context → invoke /context-restore
 - PATEC analysis review/optimization → invoke /patec-otimizar

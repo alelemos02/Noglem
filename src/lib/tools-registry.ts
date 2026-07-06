@@ -32,11 +32,11 @@ export interface Category {
 }
 
 export const categories: Category[] = [
-  { id: "documentacao", label: "Documentação", icon: FileText, color: "bg-info-muted text-info", borderColor: "border-info" },
-  { id: "conhecimento", label: "Conhecimento", icon: BookOpen, color: "bg-accent-muted text-accent", borderColor: "border-accent" },
-  { id: "analise", label: "Análise", icon: BarChart3, color: "bg-success-muted text-success", borderColor: "border-success" },
-  { id: "instrumentacao", label: "Instrumentação", icon: Gauge, color: "bg-warning-muted text-warning", borderColor: "border-warning" },
-  { id: "civil", label: "Civil", icon: HardHat, color: "bg-surface text-text-secondary", borderColor: "border-border" },
+  { id: "documentacao", label: "Documentação", icon: FileText, color: "bg-info-subtle text-info", borderColor: "border-info" },
+  { id: "conhecimento", label: "Conhecimento", icon: BookOpen, color: "bg-accent-subtle text-accent", borderColor: "border-accent" },
+  { id: "analise", label: "Análise", icon: BarChart3, color: "bg-success-subtle text-success", borderColor: "border-success" },
+  { id: "instrumentacao", label: "Instrumentação", icon: Gauge, color: "bg-warning-subtle text-warning", borderColor: "border-warning" },
+  { id: "civil", label: "Civil", icon: HardHat, color: "bg-surface-2 text-fg-muted", borderColor: "border-edge" },
 ];
 
 // ── Tool definitions ──────────────────────────────────────────────────

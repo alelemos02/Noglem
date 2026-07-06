@@ -11,6 +11,7 @@ import {
   type RodadaAvaliacaoResponse,
 } from "@/lib/patec-api";
 import { useWorkspace } from "./workspace-context";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -73,12 +74,12 @@ function HistoricoTimeline({ parecerId, itemId, onClose }: {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-      <div className="flex max-h-[80vh] w-full max-w-2xl flex-col rounded-lg border border-border bg-bg-secondary shadow-xl">
-        <div className="flex items-center justify-between border-b border-border px-5 py-3">
-          <h3 className="text-sm font-bold text-text-primary">Histórico de Rodadas</h3>
+      <div className="flex max-h-[80vh] w-full max-w-2xl flex-col rounded-lg border border-edge bg-surface-1 shadow-xl">
+        <div className="flex items-center justify-between border-b border-edge px-5 py-3">
+          <h3 className="text-sm font-bold text-fg">Histórico de Rodadas</h3>
           <button
             onClick={onClose}
-            className="text-xs text-text-tertiary hover:text-text-primary"
+            className="text-xs text-fg-subtle hover:text-fg"
           >
             Fechar
           </button>
@@ -89,15 +90,15 @@ function HistoricoTimeline({ parecerId, itemId, onClose }: {
               {[1, 2, 3].map((i) => <Skeleton key={i} className="h-16 w-full" />)}
             </div>
           ) : rodadas.length === 0 ? (
-            <p className="text-sm text-text-tertiary">Nenhuma rodada registrada.</p>
+            <p className="text-sm text-fg-subtle">Nenhuma rodada registrada.</p>
           ) : (
-            <ol className="relative border-l border-border pl-6 space-y-6">
+            <ol className="relative border-l border-edge pl-6 space-y-6">
               {rodadas.map((r) => (
                 <li key={r.id} className="relative">
-                  <span className="absolute -left-[1.35rem] top-1 h-3 w-3 rounded-full border-2 border-accent bg-bg-secondary" />
+                  <span className="absolute -left-[1.35rem] top-1 h-3 w-3 rounded-full border-2 border-accent bg-surface-1" />
                   <div className="space-y-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-xs font-bold text-text-primary">
+                      <span className="text-xs font-bold text-fg">
                         Rodada {r.numero_rodada} — {origem_label(r.origem)}
                       </span>
                       {r.classificacao_ia && (
@@ -116,14 +117,14 @@ function HistoricoTimeline({ parecerId, itemId, onClose }: {
                         </Badge>
                       )}
                     </div>
-                    <p className="text-[11px] text-text-tertiary">{fmt_date(r.criado_em)}</p>
+                    <p className="text-[11px] text-fg-subtle">{fmt_date(r.criado_em)}</p>
                     {r.conteudo && (
-                      <p className="rounded bg-bg-primary px-2 py-1 text-xs text-text-secondary">
+                      <p className="rounded bg-canvas px-2 py-1 text-xs text-fg-muted">
                         {r.conteudo}
                       </p>
                     )}
                     {r.justificativa_ia && (
-                      <p className="text-xs text-text-secondary">
+                      <p className="text-xs text-fg-muted">
                         <span className="font-semibold">Justificativa IA: </span>
                         {r.justificativa_ia}
                       </p>
@@ -154,6 +155,7 @@ function ItemRevisaoCard({
   parecerId: string;
   onDecidido: () => void;
 }) {
+  const confirmDialog = useConfirm();
   const [deciding, setDeciding] = useState(false);
   const [escalando, setEscalando] = useState(false);
   const [showHistorico, setShowHistorico] = useState(false);
@@ -174,7 +176,12 @@ function ItemRevisaoCard({
   };
 
   const escalonar = async () => {
-    if (!confirm(`Escalonar item ${item.numero}? Esta ação retira o item do ciclo de pendências.`)) return;
+    const ok = await confirmDialog({
+      title: `Escalonar item ${item.numero}?`,
+      description: "Esta ação retira o item do ciclo de pendências.",
+      confirmLabel: "Escalonar",
+    });
+    if (!ok) return;
     setEscalando(true);
     setError("");
     try {
@@ -196,11 +203,11 @@ function ItemRevisaoCard({
           onClose={() => setShowHistorico(false)}
         />
       )}
-      <div className="rounded-lg border border-border bg-surface p-4 space-y-3">
+      <div className="rounded-lg border border-edge bg-surface-1 p-4 space-y-3">
         {/* Header */}
         <div className="flex items-start justify-between gap-2">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="font-mono text-xs font-bold text-text-tertiary">
+            <span className="font-mono text-xs font-bold text-fg-subtle">
               #{item.numero}
             </span>
             {item.categoria && (
@@ -225,12 +232,12 @@ function ItemRevisaoCard({
 
         {/* Requisito */}
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-text-tertiary">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-fg-subtle">
             Requisito
           </p>
-          <p className="text-xs text-text-primary">{item.descricao_requisito}</p>
+          <p className="text-xs text-fg">{item.descricao_requisito}</p>
           {item.valor_requerido && (
-            <p className="mt-0.5 text-[11px] text-text-secondary">
+            <p className="mt-0.5 text-[11px] text-fg-muted">
               Valor requerido: {item.valor_requerido}
             </p>
           )}
@@ -240,21 +247,21 @@ function ItemRevisaoCard({
           <>
             {/* Pendência */}
             {r.acao_requerida && (
-              <div className="rounded border border-warning/30 bg-warning-muted px-3 py-2">
+              <div className="rounded border border-warning/30 bg-warning-subtle px-3 py-2">
                 <p className="text-[10px] font-semibold uppercase tracking-wide text-warning">
                   Pendência apontada
                 </p>
-                <p className="text-xs text-text-primary">{r.acao_requerida}</p>
+                <p className="text-xs text-fg">{r.acao_requerida}</p>
               </div>
             )}
 
             {/* Resposta do fornecedor */}
             {r.conteudo && (
               <div>
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-text-tertiary">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-fg-subtle">
                   Resposta do Fornecedor
                 </p>
-                <p className="rounded bg-bg-primary px-3 py-2 text-xs text-text-primary">
+                <p className="rounded bg-canvas px-3 py-2 text-xs text-fg">
                   {r.conteudo}
                 </p>
               </div>
@@ -262,9 +269,9 @@ function ItemRevisaoCard({
 
             {/* Veredito IA */}
             {r.veredito_ia && (
-              <div className="rounded border border-border bg-bg-secondary px-3 py-2 space-y-1">
+              <div className="rounded border border-edge bg-surface-1 px-3 py-2 space-y-1">
                 <div className="flex items-center gap-2">
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-text-tertiary">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-fg-subtle">
                     Veredito da IA
                   </p>
                   <Badge variant={veredito_variant(r.veredito_ia)} className="text-[10px]">
@@ -272,7 +279,7 @@ function ItemRevisaoCard({
                   </Badge>
                 </div>
                 {r.justificativa_ia && (
-                  <p className="text-xs text-text-secondary">{r.justificativa_ia}</p>
+                  <p className="text-xs text-fg-muted">{r.justificativa_ia}</p>
                 )}
               </div>
             )}
@@ -281,7 +288,7 @@ function ItemRevisaoCard({
 
         {/* Decision buttons */}
         {error && (
-          <p className="text-xs text-error">{error}</p>
+          <p className="text-xs text-danger">{error}</p>
         )}
         <div className="flex flex-wrap gap-2 pt-1">
           <Button
@@ -305,7 +312,7 @@ function ItemRevisaoCard({
           <Button
             size="sm"
             variant="secondary"
-            className="text-xs border-error/50 text-error hover:bg-error/10"
+            className="text-xs border-danger/50 text-danger hover:bg-danger/10"
             onClick={() => decidir("NAO_ATENDE")}
             disabled={deciding || escalando}
           >
@@ -314,7 +321,7 @@ function ItemRevisaoCard({
           <Button
             size="sm"
             variant="ghost"
-            className="ml-auto text-xs text-text-tertiary"
+            className="ml-auto text-xs text-fg-subtle"
             onClick={escalonar}
             disabled={deciding || escalando}
           >
@@ -385,8 +392,8 @@ export function CicloAvaliacaoPanel() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-bold text-text-primary">Ciclo de Avaliação</h2>
-          <p className="text-xs text-text-tertiary">
+          <h2 className="text-lg font-bold text-fg">Ciclo de Avaliação</h2>
+          <p className="text-xs text-fg-subtle">
             Rodada {resumo?.rodada_atual ?? "—"} · Validação das respostas do fornecedor
           </p>
         </div>
@@ -407,17 +414,17 @@ export function CicloAvaliacaoPanel() {
           <Skeleton className="h-16 w-full" />
         </div>
       ) : error ? (
-        <p className="text-sm text-error">{error}</p>
+        <p className="text-sm text-danger">{error}</p>
       ) : resumo && (
         <>
-          <div className="rounded-lg border border-border bg-surface p-4">
+          <div className="rounded-lg border border-edge bg-surface-1 p-4">
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
               {(["ABERTO", "PENDENTE_FORNECEDOR", "EM_REAVALIACAO", "RESOLVIDO", "ESCALONADO"] as const).map((estado) => {
                 const count = resumo.contagem_por_estado.find((c) => c.estado === estado)?.total ?? 0;
                 return (
                   <div key={estado} className="text-center">
-                    <p className="font-mono text-xl font-bold tabular-nums text-text-primary">{count}</p>
-                    <p className="text-[10px] text-text-tertiary">{ESTADO_LABELS[estado]}</p>
+                    <p className="font-mono text-xl font-bold tabular-nums text-fg">{count}</p>
+                    <p className="text-[10px] text-fg-subtle">{ESTADO_LABELS[estado]}</p>
                   </div>
                 );
               })}
@@ -436,7 +443,7 @@ export function CicloAvaliacaoPanel() {
               </Button>
             )}
             {resumo.status_global === "CONCLUIDO" && (
-              <div className="flex items-center gap-2 rounded-lg border border-success/30 bg-success-muted px-4 py-2">
+              <div className="flex items-center gap-2 rounded-lg border border-success/30 bg-success-subtle px-4 py-2">
                 <span className="text-sm font-semibold text-success">
                   Ciclo concluído — todos os itens resolvidos ou escalados.
                 </span>
@@ -447,7 +454,7 @@ export function CicloAvaliacaoPanel() {
           {/* Itens em reavaliação */}
           {itens.length > 0 ? (
             <div className="space-y-4">
-              <h3 className="text-sm font-bold text-text-primary">
+              <h3 className="text-sm font-bold text-fg">
                 Aguardando sua decisão ({itens.length})
               </h3>
               {itens.map((item) => (
@@ -460,19 +467,19 @@ export function CicloAvaliacaoPanel() {
               ))}
             </div>
           ) : resumo.tem_em_reavaliacao ? (
-            <p className="text-sm text-text-tertiary">Carregando itens...</p>
+            <p className="text-sm text-fg-subtle">Carregando itens...</p>
           ) : resumo.tem_pendentes ? (
-            <div className="rounded-lg border border-border bg-surface p-6 text-center">
-              <p className="text-sm text-text-secondary">
+            <div className="rounded-lg border border-edge bg-surface-1 p-6 text-center">
+              <p className="text-sm text-fg-muted">
                 Nenhum item aguarda decisão agora.
               </p>
-              <p className="mt-1 text-xs text-text-tertiary">
+              <p className="mt-1 text-xs text-fg-subtle">
                 Exporte a carta de pendências e aguarde as respostas do fornecedor.
               </p>
             </div>
           ) : resumo.status_global !== "CONCLUIDO" ? (
-            <div className="rounded-lg border border-border bg-surface p-6 text-center">
-              <p className="text-sm text-text-tertiary">
+            <div className="rounded-lg border border-edge bg-surface-1 p-6 text-center">
+              <p className="text-sm text-fg-subtle">
                 Nenhuma ação pendente neste momento.
               </p>
             </div>

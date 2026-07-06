@@ -31,7 +31,7 @@ function ParecerWorkspaceContent() {
   if (loading) {
     return (
       <div className="flex h-96 items-center justify-center">
-        <p className="text-text-tertiary">Carregando...</p>
+        <p className="text-fg-subtle">Carregando...</p>
       </div>
     );
   }
@@ -39,8 +39,8 @@ function ParecerWorkspaceContent() {
   if (notFound) {
     return (
       <div className="flex h-96 flex-col items-center justify-center gap-4">
-        <p className="text-lg text-text-secondary">Parecer não encontrado</p>
-        <p className="text-sm text-text-tertiary">
+        <p className="text-lg text-fg-muted">Parecer não encontrado</p>
+        <p className="text-sm text-fg-subtle">
           Este parecer pode ter sido excluído ou o link está incorreto.
         </p>
         <Link href="/dashboard/parecer-tecnico">

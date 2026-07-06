@@ -5,6 +5,8 @@ import { Header } from "./header";
 import { Sidebar } from "./sidebar";
 import { AdminNotesWidget } from "./admin-notes-widget";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { Toaster } from "@/components/ui/toast";
+import { ConfirmProvider } from "@/components/ui/confirm-dialog";
 
 interface ShellProps {
   children: React.ReactNode;
@@ -14,30 +16,33 @@ export function Shell({ children }: ShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
-    <div className="flex min-h-screen flex-col">
-      <Header onMenuClick={() => setSidebarOpen(true)} />
+    <ConfirmProvider>
+      <div className="flex min-h-screen flex-col">
+        <Header onMenuClick={() => setSidebarOpen(true)} />
 
-      <div className="flex flex-1">
-        {/* Desktop Sidebar */}
-        <Sidebar className="hidden md:flex" />
+        <div className="flex flex-1">
+          {/* Desktop Sidebar */}
+          <Sidebar className="hidden md:flex" />
 
-        {/* Mobile Sidebar */}
-        <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
-          <SheetContent side="left" className="w-64 p-0">
-            <Sidebar />
-          </SheetContent>
-        </Sheet>
+          {/* Mobile Sidebar */}
+          <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
+            <SheetContent side="left" className="w-64 p-0" showCloseButton={false}>
+              <Sidebar onNavigate={() => setSidebarOpen(false)} />
+            </SheetContent>
+          </Sheet>
 
-        {/* Main Content */}
-        <main className="flex-1 overflow-auto">
-          <div className="container mx-auto p-6">
-            {children}
-          </div>
-        </main>
+          {/* Main Content */}
+          <main className="flex-1 overflow-auto">
+            <div className="container mx-auto p-6">
+              {children}
+            </div>
+          </main>
+        </div>
+
+        {/* Admin-only floating notes widget */}
+        <AdminNotesWidget />
       </div>
-
-      {/* Admin-only floating notes widget */}
-      <AdminNotesWidget />
-    </div>
+      <Toaster />
+    </ConfirmProvider>
   );
 }

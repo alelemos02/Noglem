@@ -11,36 +11,36 @@ const CLASSIFICATION_BUTTONS = [
     status: "A",
     label: "Aprovado",
     color:
-      "border-green-700/50 text-green-400 hover:bg-green-900/30",
-    activeColor: "bg-green-600 text-white border-green-600",
+      "border-success/35 text-success hover:bg-success-subtle",
+    activeColor: "bg-success text-white border-success/35",
   },
   {
     status: "B",
     label: "Aprov. Com.",
     color:
-      "border-yellow-700/50 text-yellow-400 hover:bg-yellow-900/30",
-    activeColor: "bg-yellow-600 text-white border-yellow-600",
+      "border-warning/35 text-warning hover:bg-warning-subtle",
+    activeColor: "bg-warning text-white border-warning/35",
   },
   {
     status: "C",
     label: "Rejeitado",
     color:
-      "border-red-700/50 text-red-400 hover:bg-red-900/30",
-    activeColor: "bg-red-600 text-white border-red-600",
+      "border-danger/35 text-danger hover:bg-danger-subtle",
+    activeColor: "bg-danger text-white border-danger/35",
   },
   {
     status: "D",
     label: "Info Ausente",
     color:
-      "border-gray-600/50 text-gray-400 hover:bg-gray-800/50",
-    activeColor: "bg-gray-600 text-white border-gray-600",
+      "border-edge-strong text-fg-muted hover:bg-surface-2",
+    activeColor: "bg-fg-subtle text-white border-edge-strong",
   },
   {
     status: "E",
     label: "Adicional",
     color:
-      "border-blue-700/50 text-blue-400 hover:bg-blue-900/30",
-    activeColor: "bg-blue-600 text-white border-blue-600",
+      "border-info/35 text-info hover:bg-info-subtle",
+    activeColor: "bg-info text-white border-info/35",
   },
 ];
 
@@ -101,21 +101,21 @@ export function ItemDetailPanel() {
   return (
     <div className="flex h-full flex-col">
       {/* Header */}
-      <div className="border-b border-border bg-surface px-6 py-4">
+      <div className="border-b border-edge bg-surface-1 px-6 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <h2 className="text-lg font-bold text-text-primary">
+            <h2 className="text-lg font-bold text-fg">
               Item {item.numero}
             </h2>
             <StatusBadge status={item.status} />
             {item.prioridade && <PriorityBadge priority={item.prioridade} />}
             {item.categoria && (
-              <span className="rounded bg-white/10 px-2 py-0.5 text-xs text-text-secondary">
+              <span className="rounded bg-white/10 px-2 py-0.5 text-xs text-fg-muted">
                 {item.categoria}
               </span>
             )}
             {item.editado_manualmente && (
-              <span className="rounded bg-purple-900/40 px-2 py-0.5 text-xs text-purple-400">
+              <span className="rounded bg-info-subtle px-2 py-0.5 text-xs text-info">
                 Editado
               </span>
             )}
@@ -139,7 +139,7 @@ export function ItemDetailPanel() {
           >
             ← Anterior
           </Button>
-          <span className="text-xs text-text-tertiary">{positionText}</span>
+          <span className="text-xs text-fg-subtle">{positionText}</span>
           <Button
             variant="ghost"
             size="sm"
@@ -156,45 +156,45 @@ export function ItemDetailPanel() {
         {/* Side-by-side comparison */}
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           {/* Engineering side */}
-          <div className="rounded-lg border border-blue-700/40 bg-blue-900/20">
-            <div className="border-b border-blue-700/40 px-4 py-2">
-              <h3 className="text-sm font-semibold text-blue-400">
+          <div className="rounded-lg border border-info/35 bg-info-subtle">
+            <div className="border-b border-info/35 px-4 py-2">
+              <h3 className="text-sm font-semibold text-info">
                 Solicitacao da Engenharia
               </h3>
             </div>
             <div className="space-y-3 p-4">
               <div>
-                <p className="text-xs font-medium text-blue-400/80">
+                <p className="text-xs font-medium text-info-text">
                   Requisito
                 </p>
-                <p className="mt-1 whitespace-pre-line text-sm text-text-primary">
+                <p className="mt-1 whitespace-pre-line text-sm text-fg">
                   {item.descricao_requisito}
                 </p>
               </div>
               {item.valor_requerido && (
                 <div>
-                  <p className="text-xs font-medium text-blue-400/80">
+                  <p className="text-xs font-medium text-info-text">
                     Valor Requerido
                   </p>
-                  <p className="mt-1 text-sm text-text-primary">
+                  <p className="mt-1 text-sm text-fg">
                     {item.valor_requerido}
                   </p>
                 </div>
               )}
               {item.referencia_engenharia && (
                 <div>
-                  <p className="text-xs font-medium text-blue-400/80">
+                  <p className="text-xs font-medium text-info-text">
                     Referencia
                   </p>
-                  <p className="mt-1 text-sm text-text-primary">
+                  <p className="mt-1 text-sm text-fg">
                     {item.referencia_engenharia}
                   </p>
                 </div>
               )}
               {item.norma_referencia && (
                 <div>
-                  <p className="text-xs font-medium text-blue-400/80">Norma</p>
-                  <p className="mt-1 text-sm text-text-primary">
+                  <p className="text-xs font-medium text-info-text">Norma</p>
+                  <p className="mt-1 text-sm text-fg">
                     {item.norma_referencia}
                   </p>
                 </div>
@@ -203,33 +203,33 @@ export function ItemDetailPanel() {
           </div>
 
           {/* Supplier side */}
-          <div className="rounded-lg border border-amber-700/40 bg-amber-900/20">
-            <div className="border-b border-amber-700/40 px-4 py-2">
-              <h3 className="text-sm font-semibold text-amber-400">
+          <div className="rounded-lg border border-warning/35 bg-warning-subtle">
+            <div className="border-b border-warning/35 px-4 py-2">
+              <h3 className="text-sm font-semibold text-warning">
                 Proposta do Fornecedor
               </h3>
             </div>
             <div className="space-y-3 p-4">
               {item.valor_fornecedor ? (
                 <div>
-                  <p className="text-xs font-medium text-amber-400/80">
+                  <p className="text-xs font-medium text-warning-text">
                     Valor Proposto
                   </p>
-                  <p className="mt-1 whitespace-pre-line text-sm text-text-primary">
+                  <p className="mt-1 whitespace-pre-line text-sm text-fg">
                     {item.valor_fornecedor}
                   </p>
                 </div>
               ) : (
-                <p className="text-sm italic text-text-tertiary">
+                <p className="text-sm italic text-fg-subtle">
                   Nao informado pelo fornecedor
                 </p>
               )}
               {item.referencia_fornecedor && (
                 <div>
-                  <p className="text-xs font-medium text-amber-400/80">
+                  <p className="text-xs font-medium text-warning-text">
                     Referencia
                   </p>
-                  <p className="mt-1 text-sm text-text-primary">
+                  <p className="mt-1 text-sm text-fg">
                     {item.referencia_fornecedor}
                   </p>
                 </div>
@@ -239,38 +239,38 @@ export function ItemDetailPanel() {
         </div>
 
         {/* Justification */}
-        <div className="space-y-4 rounded-lg border border-border bg-surface p-4">
+        <div className="space-y-4 rounded-lg border border-edge bg-surface-1 p-4">
           <div>
-            <p className="text-xs font-semibold text-text-secondary">
+            <p className="text-xs font-semibold text-fg-muted">
               Justificativa Tecnica
             </p>
             {editing ? (
               <textarea
-                className="mt-1 w-full rounded-md border border-border bg-bg-primary p-2 text-sm text-text-primary outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+                className="mt-1 w-full rounded-md border border-edge bg-canvas p-2 text-sm text-fg outline-none focus:border-accent focus:ring-1 focus:ring-accent"
                 rows={4}
                 value={editJustificativa}
                 onChange={(e) => setEditJustificativa(e.target.value)}
               />
             ) : (
-              <p className="mt-1 whitespace-pre-line text-sm text-text-primary">
+              <p className="mt-1 whitespace-pre-line text-sm text-fg">
                 {item.justificativa_tecnica || "—"}
               </p>
             )}
           </div>
 
           <div>
-            <p className="text-xs font-semibold text-text-secondary">
+            <p className="text-xs font-semibold text-fg-muted">
               Acao Requerida
             </p>
             {editing ? (
               <textarea
-                className="mt-1 w-full rounded-md border border-border bg-bg-primary p-2 text-sm text-text-primary outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+                className="mt-1 w-full rounded-md border border-edge bg-canvas p-2 text-sm text-fg outline-none focus:border-accent focus:ring-1 focus:ring-accent"
                 rows={3}
                 value={editAcao}
                 onChange={(e) => setEditAcao(e.target.value)}
               />
             ) : (
-              <p className="mt-1 whitespace-pre-line text-sm text-text-primary">
+              <p className="mt-1 whitespace-pre-line text-sm text-fg">
                 {item.acao_requerida || "Nenhuma"}
               </p>
             )}
@@ -294,10 +294,10 @@ export function ItemDetailPanel() {
         </div>
 
         {/* Classification bar */}
-        <div className="rounded-lg border border-border bg-surface p-4">
-          <p className="mb-3 text-xs font-semibold text-text-secondary">
+        <div className="rounded-lg border border-edge bg-surface-1 p-4">
+          <p className="mb-3 text-xs font-semibold text-fg-muted">
             Classificacao Rapida
-            <span className="ml-2 font-normal text-text-tertiary">
+            <span className="ml-2 font-normal text-fg-subtle">
               (teclas 1-5)
             </span>
           </p>

@@ -30,7 +30,7 @@ export function ExportButton({ parecerId }: { parecerId: string }) {
       <select
         value={formato}
         onChange={(e) => setFormato(e.target.value as ExportFormat)}
-        className="h-8 rounded-md border border-border bg-surface px-2 text-xs text-text-secondary focus:border-border-focus outline-none"
+        className="h-8 rounded-md border border-edge bg-surface-1 px-2 text-xs text-fg-muted focus:border-accent outline-none"
       >
         <option value="pdf">PDF</option>
         <option value="xlsx">XLSX</option>

@@ -13,8 +13,8 @@ export function OverviewPanel() {
   return (
     <div className="space-y-6 p-6">
       {/* Summary */}
-      <div className="rounded-lg border border-border bg-surface p-6">
-        <h2 className="mb-4 text-lg font-bold text-text-primary">
+      <div className="rounded-lg border border-edge bg-surface-1 p-6">
+        <h2 className="mb-4 text-lg font-bold text-fg">
           Resumo Executivo
         </h2>
 
@@ -23,40 +23,40 @@ export function OverviewPanel() {
           <div className="shrink-0 space-y-4">
             <div className="grid grid-cols-3 gap-x-6 gap-y-3">
               <div className="text-center">
-                <p className="text-2xl font-bold font-mono tabular-nums text-text-primary">
+                <p className="text-2xl font-bold font-mono tabular-nums text-fg">
                   {parecer.total_itens}
                 </p>
-                <p className="text-xs text-text-secondary">Total</p>
+                <p className="text-xs text-fg-muted">Total</p>
               </div>
               <div className="text-center">
                 <p className="text-2xl font-bold font-mono tabular-nums text-success">
                   {parecer.total_aprovados}
                 </p>
-                <p className="text-xs text-text-secondary">Aprovados</p>
+                <p className="text-xs text-fg-muted">Aprovados</p>
               </div>
               <div className="text-center">
                 <p className="text-2xl font-bold font-mono tabular-nums text-warning">
                   {parecer.total_aprovados_comentarios}
                 </p>
-                <p className="text-xs text-text-secondary">Aprov. c/ Com.</p>
+                <p className="text-xs text-fg-muted">Aprov. c/ Com.</p>
               </div>
               <div className="text-center">
-                <p className="text-2xl font-bold font-mono tabular-nums text-error">
+                <p className="text-2xl font-bold font-mono tabular-nums text-danger">
                   {parecer.total_rejeitados}
                 </p>
-                <p className="text-xs text-text-secondary">Rejeitados</p>
+                <p className="text-xs text-fg-muted">Rejeitados</p>
               </div>
               <div className="text-center">
-                <p className="text-2xl font-bold font-mono tabular-nums text-text-tertiary">
+                <p className="text-2xl font-bold font-mono tabular-nums text-fg-subtle">
                   {parecer.total_info_ausente}
                 </p>
-                <p className="text-xs text-text-secondary">Info Ausente</p>
+                <p className="text-xs text-fg-muted">Info Ausente</p>
               </div>
               <div className="text-center">
                 <p className="text-2xl font-bold font-mono tabular-nums text-info">
                   {parecer.total_itens_adicionais}
                 </p>
-                <p className="text-xs text-text-secondary">Adicionais</p>
+                <p className="text-xs text-fg-muted">Adicionais</p>
               </div>
             </div>
 
@@ -70,11 +70,11 @@ export function OverviewPanel() {
           </div>
 
           {/* Divider */}
-          <div className="hidden lg:block lg:self-stretch lg:border-l lg:border-border" />
+          <div className="hidden lg:block lg:self-stretch lg:border-l lg:border-edge" />
 
           {/* Right: executive summary text */}
           {parecer.comentario_geral && (
-            <p className="flex-1 text-sm leading-relaxed text-text-primary">
+            <p className="flex-1 text-sm leading-relaxed text-fg">
               {parecer.comentario_geral}
             </p>
           )}
@@ -82,32 +82,32 @@ export function OverviewPanel() {
       </div>
 
       {/* Metadata */}
-      <div className="rounded-lg border border-border bg-surface p-6">
-        <h3 className="mb-3 text-sm font-bold text-text-primary">
+      <div className="rounded-lg border border-edge bg-surface-1 p-6">
+        <h3 className="mb-3 text-sm font-bold text-fg">
           Informacoes do Parecer
         </h3>
         <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
           <div>
-            <p className="text-xs text-text-secondary">Projeto</p>
-            <p className="text-sm font-medium text-text-primary">
+            <p className="text-xs text-fg-muted">Projeto</p>
+            <p className="text-sm font-medium text-fg">
               {parecer.projeto}
             </p>
           </div>
           <div>
-            <p className="text-xs text-text-secondary">Fornecedor</p>
-            <p className="text-sm font-medium text-text-primary">
+            <p className="text-xs text-fg-muted">Fornecedor</p>
+            <p className="text-sm font-medium text-fg">
               {parecer.fornecedor}
             </p>
           </div>
           <div>
-            <p className="text-xs text-text-secondary">Revisao</p>
-            <p className="text-sm font-medium text-text-primary">
+            <p className="text-xs text-fg-muted">Revisao</p>
+            <p className="text-sm font-medium text-fg">
               {parecer.revisao}
             </p>
           </div>
           <div>
-            <p className="text-xs text-text-secondary">Data</p>
-            <p className="text-sm font-medium text-text-primary">
+            <p className="text-xs text-fg-muted">Data</p>
+            <p className="text-sm font-medium text-fg">
               {new Date(parecer.criado_em).toLocaleDateString("pt-BR")}
             </p>
           </div>
@@ -116,28 +116,28 @@ export function OverviewPanel() {
 
       {/* Conclusion & Recommendations */}
       {(parecer.conclusao || recomendacoes.length > 0) && (
-        <div className="space-y-4 rounded-lg border border-border bg-surface p-6">
-          <h3 className="text-sm font-bold text-text-primary">
+        <div className="space-y-4 rounded-lg border border-edge bg-surface-1 p-6">
+          <h3 className="text-sm font-bold text-fg">
             Conclusao e Recomendacoes
           </h3>
           {parecer.conclusao && (
             <div>
-              <p className="mb-1 text-xs font-semibold text-text-secondary">
+              <p className="mb-1 text-xs font-semibold text-fg-muted">
                 Conclusao
               </p>
-              <p className="whitespace-pre-line text-sm text-text-primary">
+              <p className="whitespace-pre-line text-sm text-fg">
                 {parecer.conclusao}
               </p>
             </div>
           )}
           {recomendacoes.length > 0 && (
             <div>
-              <p className="mb-2 text-xs font-semibold text-text-secondary">
+              <p className="mb-2 text-xs font-semibold text-fg-muted">
                 Recomendacoes
               </p>
               <ul className="list-inside list-disc space-y-1">
                 {recomendacoes.map((rec) => (
-                  <li key={rec.id} className="text-sm text-text-primary">
+                  <li key={rec.id} className="text-sm text-fg">
                     {rec.texto}
                   </li>
                 ))}
@@ -149,13 +149,13 @@ export function OverviewPanel() {
 
       {/* Document Numbers Reference */}
       {documentos.length > 0 && (
-        <div className="rounded-lg border border-border bg-surface p-6">
-          <h3 className="mb-3 text-sm font-bold text-text-primary">
+        <div className="rounded-lg border border-edge bg-surface-1 p-6">
+          <h3 className="mb-3 text-sm font-bold text-fg">
             Documentos Carregados
           </h3>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div>
-              <p className="mb-2 text-xs font-semibold text-text-secondary">
+              <p className="mb-2 text-xs font-semibold text-fg-muted">
                 Engenharia ({documentos.filter((d) => d.tipo === "engenharia").length})
               </p>
               {documentos.filter((d) => d.tipo === "engenharia").length > 0 ? (
@@ -164,11 +164,11 @@ export function OverviewPanel() {
                     .filter((d) => d.tipo === "engenharia")
                     .map((doc) => (
                       <li key={doc.id} className="flex items-center gap-2 text-sm">
-                        <span className="font-mono text-xs text-text-primary">
+                        <span className="font-mono text-xs text-fg">
                           {doc.nome_arquivo}
                         </span>
                         {doc.tamanho_bytes && (
-                          <span className="text-xs text-text-tertiary">
+                          <span className="text-xs text-fg-subtle">
                             ({(doc.tamanho_bytes / 1024).toFixed(0)} KB)
                           </span>
                         )}
@@ -176,11 +176,11 @@ export function OverviewPanel() {
                     ))}
                 </ul>
               ) : (
-                <p className="text-xs text-text-tertiary">Nenhum documento</p>
+                <p className="text-xs text-fg-subtle">Nenhum documento</p>
               )}
             </div>
             <div>
-              <p className="mb-2 text-xs font-semibold text-text-secondary">
+              <p className="mb-2 text-xs font-semibold text-fg-muted">
                 Fornecedor ({documentos.filter((d) => d.tipo === "fornecedor").length})
               </p>
               {documentos.filter((d) => d.tipo === "fornecedor").length > 0 ? (
@@ -189,11 +189,11 @@ export function OverviewPanel() {
                     .filter((d) => d.tipo === "fornecedor")
                     .map((doc) => (
                       <li key={doc.id} className="flex items-center gap-2 text-sm">
-                        <span className="font-mono text-xs text-text-primary">
+                        <span className="font-mono text-xs text-fg">
                           {doc.nome_arquivo}
                         </span>
                         {doc.tamanho_bytes && (
-                          <span className="text-xs text-text-tertiary">
+                          <span className="text-xs text-fg-subtle">
                             ({(doc.tamanho_bytes / 1024).toFixed(0)} KB)
                           </span>
                         )}
@@ -201,7 +201,7 @@ export function OverviewPanel() {
                     ))}
                 </ul>
               ) : (
-                <p className="text-xs text-text-tertiary">Nenhum documento</p>
+                <p className="text-xs text-fg-subtle">Nenhum documento</p>
               )}
             </div>
           </div>
@@ -209,8 +209,8 @@ export function OverviewPanel() {
       )}
 
       {/* Document Upload */}
-      <div className="rounded-lg border border-border bg-surface p-6">
-        <h3 className="mb-3 text-sm font-bold text-text-primary">
+      <div className="rounded-lg border border-edge bg-surface-1 p-6">
+        <h3 className="mb-3 text-sm font-bold text-fg">
           Upload de Documentos
         </h3>
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
@@ -232,8 +232,8 @@ export function OverviewPanel() {
       </div>
 
       {/* Revision history */}
-      <div className="rounded-lg border border-border bg-surface p-6">
-        <h3 className="mb-3 text-sm font-bold text-text-primary">
+      <div className="rounded-lg border border-edge bg-surface-1 p-6">
+        <h3 className="mb-3 text-sm font-bold text-fg">
           Historico de Revisoes
         </h3>
         <RevisoesPanel parecerId={parecer.id} />

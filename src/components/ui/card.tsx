@@ -1,7 +1,7 @@
 import * as React from "react"
 import { cn } from "@/lib/utils"
 
-/* ---------- Card Root (JulIA Design System) ---------- */
+/* ---------- Card Root (JulIA Design System v3) ---------- */
 
 export interface CardProps extends React.ComponentProps<"div"> {
   interactive?: boolean
@@ -12,12 +12,12 @@ function Card({ interactive = false, className, ...props }: CardProps) {
     <div
       data-slot="card"
       className={cn(
-        "rounded-lg border border-border bg-card text-card-foreground flex flex-col gap-6 py-6 shadow-sm",
-        "transition-all duration-200",
+        "rounded-lg border border-edge bg-surface-1 text-fg flex flex-col gap-6 py-6",
+        "transition-colors duration-200",
         interactive && [
           "cursor-pointer",
-          "hover:border-border-hover hover:bg-surface-hover hover:-translate-y-0.5 hover:shadow-md",
-          "active:bg-surface-active active:translate-y-0 active:shadow-sm",
+          "hover:border-edge-strong hover:bg-surface-2",
+          "active:bg-surface-3",
         ],
         className
       )}
@@ -43,7 +43,7 @@ function CardTitle({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="card-title"
-      className={cn("leading-none font-heading font-semibold", className)}
+      className={cn("leading-none font-semibold tracking-tight", className)}
       {...props}
     />
   )
@@ -53,7 +53,7 @@ function CardDescription({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="card-description"
-      className={cn("text-muted-foreground text-sm", className)}
+      className={cn("text-fg-muted text-sm", className)}
       {...props}
     />
   )

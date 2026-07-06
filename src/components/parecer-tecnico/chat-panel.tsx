@@ -10,6 +10,7 @@ import {
 } from "react";
 import { Button } from "@/components/ui/button";
 import { ChatMessage, StreamingMessage } from "./chat-message";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import {
   patecApi,
   type ChatMessageResponse,
@@ -34,6 +35,7 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
     { parecerId, onTableUpdated, contextItem, fillHeight, showMessages = true, hideHeader = false },
     ref
   ) {
+    const confirmDialog = useConfirm();
     const [messages, setMessages] = useState<ChatMessageResponse[]>([]);
     const [inputValue, setInputValue] = useState("");
     const [regenerar, setRegenerar] = useState(false);
@@ -177,12 +179,13 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
     };
 
     const handleClearHistory = async () => {
-      if (
-        !confirm(
-          "Tem certeza que deseja limpar todo o historico de conversa?"
-        )
-      )
-        return;
+      const ok = await confirmDialog({
+        title: "Limpar histórico?",
+        description: "Toda a conversa deste parecer será apagada.",
+        confirmLabel: "Limpar histórico",
+        variant: "danger",
+      });
+      if (!ok) return;
       try {
         await patecApi.chat.clearHistory(parecerId);
         setMessages([]);
@@ -203,7 +206,7 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
 
     if (loading) {
       return (
-        <div className="flex items-center justify-center py-8 text-sm text-text-tertiary">
+        <div className="flex items-center justify-center py-8 text-sm text-fg-subtle">
           Carregando historico...
         </div>
       );
@@ -214,14 +217,14 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
         {/* Header */}
         {!hideHeader && (
           <div className="flex items-center justify-between px-4 py-2">
-            <p className="text-xs text-text-tertiary">
+            <p className="text-xs text-fg-subtle">
               Converse com o especialista de IA sobre o parecer tecnico.
             </p>
             {messages.length > 0 && (
               <Button
                 variant="ghost"
                 size="sm"
-                className="text-xs text-text-tertiary hover:text-error"
+                className="text-xs text-fg-subtle hover:text-danger"
                 onClick={handleClearHistory}
               >
                 Limpar
@@ -233,7 +236,7 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
         {/* Messages area */}
         {showMessages && (
         <div
-          className={`overflow-y-auto border-t border-border ${
+          className={`overflow-y-auto border-t border-edge ${
             fillHeight ? "flex-1" : ""
           }`}
           style={
@@ -243,10 +246,10 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
           <div className="p-4">
             {messages.length === 0 && !streamingContent && (
               <div className="py-8 text-center">
-                <p className="mb-2 text-sm text-text-tertiary">
+                <p className="mb-2 text-sm text-fg-subtle">
                   Nenhuma mensagem ainda.
                 </p>
-                <p className="text-xs text-text-disabled">
+                <p className="text-xs text-fg-disabled">
                   Exemplos: &quot;Por que o item 5 foi rejeitado?&quot; ou
                   &quot;A faixa de medicao do transmissor atende ISA-5.1?&quot;
                 </p>
@@ -265,13 +268,13 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
 
         {/* Error display */}
         {error && (
-          <div className="mx-4 my-2 rounded-md bg-red-900/20 p-2 text-xs text-red-400">
+          <div className="mx-4 my-2 rounded-md bg-danger-subtle p-2 text-xs text-danger">
             {error}
           </div>
         )}
 
         {/* Input area */}
-        <div className="space-y-2 border-t border-border p-3">
+        <div className="space-y-2 border-t border-edge p-3">
           <div className="flex items-end gap-2">
             <div className="flex-1">
               <textarea
@@ -282,7 +285,7 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
                 placeholder="Digite sua pergunta..."
                 disabled={sending}
                 rows={1}
-                className="w-full resize-none rounded-md border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary outline-none placeholder:text-text-tertiary focus:border-accent focus:ring-1 focus:ring-accent disabled:opacity-50"
+                className="w-full resize-none rounded-md border border-edge bg-canvas px-3 py-2 text-sm text-fg outline-none placeholder:text-fg-subtle focus:border-accent focus:ring-1 focus:ring-accent disabled:opacity-50"
                 style={{ minHeight: "38px" }}
               />
             </div>
@@ -303,9 +306,9 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
               checked={regenerar}
               onChange={(e) => setRegenerar(e.target.checked)}
               disabled={sending}
-              className="rounded border-border text-accent focus:ring-accent"
+              className="rounded border-edge text-accent focus:ring-accent"
             />
-            <span className="text-xs text-text-secondary">
+            <span className="text-xs text-fg-muted">
               Gerar nova tabela (incorporar alteracoes discutidas)
             </span>
           </label>

@@ -56,11 +56,5 @@ Liste os cenarios que testaria, ordenados por prioridade:
 
 ---
 
-**`qdeploy`**
-```
-Revise todas as mudancas pendentes.
-Faca commit seguindo Conventional Commits (feat/fix/refactor/chore).
-Inclua Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com> no commit.
-Faca push para origin main.
-Confirme quais servicos serao redeploy automaticamente (Vercel / Railway).
-```
+> **Deploy:** nao ha shortcut. Deploy e manual e so acontece quando voce chamar
+> a skill **`/deploy`** explicitamente.

@@ -34,3 +34,12 @@ A infraestrutura de backend já existe mas a ferramenta não está disponível n
 
 - Callback em `/api/email/callback` para tratar o redirect OAuth do Azure AD
 - Requer configuração de `MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET`, `MICROSOFT_TENANT_ID` no Railway
+
+## Redesign v3 (2026-07)
+
+UI migrada para o design system v3 "instrumento de precisão" (ver `.claude/rules/design-system-conventions.md`):
+- Header via `<PageHeader tool="{id}">` — nome/descrição/badge vêm do `tools-registry.ts`
+- Upload via `<Dropzone>` compartilhado; loading via `<Spinner>`/`Button loading`
+- Erros persistentes em `<Alert>`; sucesso/erro transiente via `toast` (sonner); ações destrutivas via `useConfirm()`
+- Tokens novos: canvas/surface-1..3, edge, fg-*, accent azure — zero cores Tailwind literais
+- Endpoints e lógica de negócio inalterados

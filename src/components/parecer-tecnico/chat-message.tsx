@@ -17,22 +17,22 @@ export function ChatMessage({ message, isStreaming }: ChatMessageProps) {
         className={`max-w-[85%] rounded-lg px-4 py-3 ${
           isUser
             ? "bg-accent text-white"
-            : "border border-border bg-surface text-text-primary"
+            : "border border-edge bg-surface-1 text-fg"
         }`}
       >
         <div className="mb-1 flex items-center gap-2">
           <span
-            className={`text-xs font-semibold ${isUser ? "text-white/70" : "text-text-secondary"}`}
+            className={`text-xs font-semibold ${isUser ? "text-white/70" : "text-fg-muted"}`}
           >
             {isUser ? "Voce" : "Especialista IA"}
           </span>
           {message.gerou_nova_tabela && (
-            <span className="rounded-full border border-green-700/50 bg-green-900/40 px-2 py-0.5 text-xs text-green-400">
+            <span className="rounded-full border border-success/35 bg-success-subtle px-2 py-0.5 text-xs text-success">
               Tabela atualizada
             </span>
           )}
           {isStreaming && (
-            <span className="inline-flex items-center gap-1 text-xs text-text-tertiary">
+            <span className="inline-flex items-center gap-1 text-xs text-fg-subtle">
               <span className="animate-pulse">●</span> digitando...
             </span>
           )}
@@ -45,7 +45,7 @@ export function ChatMessage({ message, isStreaming }: ChatMessageProps) {
           </div>
         )}
         <p
-          className={`mt-1 text-xs ${isUser ? "text-white/50" : "text-text-tertiary"}`}
+          className={`mt-1 text-xs ${isUser ? "text-white/50" : "text-fg-subtle"}`}
         >
           {new Date(message.criado_em).toLocaleTimeString("pt-BR", {
             hour: "2-digit",
@@ -64,12 +64,12 @@ interface StreamingMessageProps {
 export function StreamingMessage({ content }: StreamingMessageProps) {
   return (
     <div className="mb-3 flex justify-start">
-      <div className="max-w-[85%] rounded-lg border border-border bg-surface px-4 py-3 text-text-primary">
+      <div className="max-w-[85%] rounded-lg border border-edge bg-surface-1 px-4 py-3 text-fg">
         <div className="mb-1 flex items-center gap-2">
-          <span className="text-xs font-semibold text-text-secondary">
+          <span className="text-xs font-semibold text-fg-muted">
             Especialista IA
           </span>
-          <span className="inline-flex items-center gap-1 text-xs text-text-tertiary">
+          <span className="inline-flex items-center gap-1 text-xs text-fg-subtle">
             <span className="animate-pulse">●</span> digitando...
           </span>
         </div>

@@ -57,11 +57,11 @@ export const STATUS_COLORS: Record<string, string> = {
 };
 
 export const STATUS_BG_COLORS: Record<string, string> = {
-  A: "bg-green-500",
-  B: "bg-yellow-500",
-  C: "bg-red-500",
-  D: "bg-gray-400",
-  E: "bg-blue-500",
+  A: "bg-success",
+  B: "bg-warning",
+  C: "bg-danger",
+  D: "bg-fg-subtle",
+  E: "bg-info",
 };
 
 export const ANALYSIS_PROFILE_OPTIONS: Array<{

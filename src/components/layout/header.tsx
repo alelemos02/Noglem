@@ -17,8 +17,8 @@ interface HeaderProps {
 
 export function Header({ onMenuClick }: HeaderProps) {
   return (
-    <header className="sticky top-0 z-50 flex h-16 items-center justify-between border-b border-border bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="flex items-center gap-4">
+    <header className="sticky top-0 z-(--z-sticky) flex h-14 items-center justify-between border-b border-edge bg-canvas/90 px-4 backdrop-blur supports-[backdrop-filter]:bg-canvas/75">
+      <div className="flex items-center gap-3">
         <Button
           variant="ghost"
           size="icon"
@@ -41,7 +41,7 @@ export function Header({ onMenuClick }: HeaderProps) {
                   afterSignOutUrl="/"
                   appearance={{
                     elements: {
-                      avatarBox: "h-8 w-8",
+                      avatarBox: "h-7 w-7 rounded-md",
                     },
                   }}
                 />

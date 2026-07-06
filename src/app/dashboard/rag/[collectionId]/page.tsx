@@ -1,12 +1,16 @@
 "use client";
 
 import { useState, useRef, useEffect, use } from "react";
-import { MessageSquare, Send, Upload, FileText, Trash2, ArrowLeft, Loader2 } from "lucide-react";
+import { MessageSquare, Send, Upload, FileText, Trash2, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { useRouter } from "next/navigation";
+import { PageHeader } from "@/components/ui/page-header";
+import { Spinner } from "@/components/ui/spinner";
+import { toast } from "@/components/ui/toast";
+import { useConfirm } from "@/components/ui/confirm-dialog";
+import { Input } from "@/components/ui/input";
 
 interface Message {
     id: string;
@@ -34,7 +38,7 @@ interface CollectionData {
 
 export default function RagCollectionPage({ params }: { params: Promise<{ collectionId: string }> }) {
     const { collectionId } = use(params);
-    const router = useRouter();
+    const confirm = useConfirm();
     const [messages, setMessages] = useState<Message[]>([]);
     const [input, setInput] = useState("");
     const [isLoading, setIsLoading] = useState(false);
@@ -87,6 +91,7 @@ export default function RagCollectionPage({ params }: { params: Promise<{ collec
                 if (res.ok) {
                     const newDoc: BackendDocument = await res.json();
                     setDocuments((prev) => [...prev, newDoc]);
+                    toast.success("Documento enviado", { description: file.name });
                 } else {
                     const errorBody = await res.json().catch(() => ({ detail: "Erro ao enviar arquivo" }));
                     console.error("Upload failed:", res.status, errorBody);
@@ -94,11 +99,12 @@ export default function RagCollectionPage({ params }: { params: Promise<{ collec
                     const errorMsg = typeof detail === "string"
                         ? detail
                         : detail ? JSON.stringify(detail) : `HTTP ${res.status}`;
-                    alert(`Erro ao enviar ${file.name}: ${errorMsg}`);
+                    toast.error(`Erro ao enviar ${file.name}`, { description: errorMsg });
                 }
             }
         } catch (error) {
             console.error("Erro no upload:", error);
+            toast.error("Erro de comunicação no upload");
         } finally {
             setIsUploading(false);
             // Reset the input so the same file can be uploaded again
@@ -107,6 +113,14 @@ export default function RagCollectionPage({ params }: { params: Promise<{ collec
     };
 
     const handleRemoveDocument = async (doc: BackendDocument) => {
+        const ok = await confirm({
+            title: "Remover documento?",
+            description: `"${doc.filename}" será removido da coleção.`,
+            confirmLabel: "Remover",
+            variant: "danger",
+        });
+        if (!ok) return;
+
         try {
             const res = await fetch(`/api/rag/collections/${collectionId}/documents/${doc.id}`, {
                 method: "DELETE",
@@ -114,11 +128,13 @@ export default function RagCollectionPage({ params }: { params: Promise<{ collec
 
             if (res.ok || res.status === 204) {
                 setDocuments((prev) => prev.filter((d) => d.id !== doc.id));
+                toast.success("Documento removido");
             } else {
-                console.error("Erro ao remover documento");
+                toast.error("Erro ao remover documento");
             }
         } catch (error) {
             console.error("Erro ao remover documento:", error);
+            toast.error("Erro ao remover documento");
         }
     };
 
@@ -219,37 +235,29 @@ export default function RagCollectionPage({ params }: { params: Promise<{ collec
     const collectionName = collection?.name || collectionId;
 
     return (
-        <div className="flex h-[calc(100vh-8rem)] flex-col space-y-4">
-            {/* Header */}
-            <div className="flex items-center gap-4">
-                <Button variant="ghost" size="icon" onClick={() => router.back()}>
-                    <ArrowLeft className="h-5 w-5" />
-                </Button>
-                <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10">
-                    <MessageSquare className="h-6 w-6 text-primary" />
-                </div>
-                <div>
-                    <h1 className="text-2xl font-bold font-heading">Workspace: {collectionName}</h1>
-                    <p className="text-muted-foreground">
-                        Adicione documentos a esta coleção para começar.
-                    </p>
-                </div>
-            </div>
+        <div className="flex h-[calc(100vh-8rem)] flex-col">
+            <PageHeader
+                title={collectionName}
+                description="Converse com os documentos desta coleção."
+                backHref="/dashboard/rag"
+                backLabel="Coleções"
+                className="mb-4"
+            />
 
             <div className="flex flex-1 gap-4 overflow-hidden">
                 {/* Documents Sidebar */}
-                <Card className="w-64 flex-shrink-0 flex flex-col">
-                    <CardHeader className="pb-3">
-                        <CardTitle className="text-base">Documentos Ativos</CardTitle>
+                <Card className="flex w-64 flex-shrink-0 flex-col gap-3 py-4">
+                    <CardHeader>
+                        <CardTitle className="text-sm">Documentos ativos</CardTitle>
                     </CardHeader>
-                    <CardContent className="flex-1 overflow-hidden flex flex-col space-y-4">
-                        <label className={`flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-muted-foreground/25 p-4 transition-colors hover:border-primary/50 hover:bg-muted/50 ${isUploading ? "pointer-events-none opacity-50" : ""}`}>
+                    <CardContent className="flex flex-1 flex-col space-y-4 overflow-hidden px-4">
+                        <label className={`flex cursor-pointer items-center justify-center gap-2 rounded-md border border-dashed border-edge-strong p-3.5 text-fg-muted transition-colors hover:border-fg-subtle hover:text-fg ${isUploading ? "pointer-events-none opacity-50" : ""}`}>
                             {isUploading ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
+                                <Spinner size="xs" />
                             ) : (
                                 <Upload className="h-4 w-4" />
                             )}
-                            <span className="text-sm">{isUploading ? "Enviando..." : "Adicionar PDF"}</span>
+                            <span className="text-[13px] font-medium">{isUploading ? "Enviando..." : "Adicionar PDF"}</span>
                             <input
                                 type="file"
                                 accept=".pdf"
@@ -261,36 +269,37 @@ export default function RagCollectionPage({ params }: { params: Promise<{ collec
                         </label>
 
                         <ScrollArea className="flex-1">
-                            <div className="space-y-2 pr-4">
+                            <div className="space-y-1.5 pr-3">
                                 {documents.length === 0 ? (
-                                    <p className="text-center text-sm text-muted-foreground py-8">
+                                    <p className="py-8 text-center text-[13px] text-fg-subtle">
                                         Nenhum documento nesta coleção.
                                     </p>
                                 ) : (
                                     documents.map((doc) => (
                                         <div
                                             key={doc.id}
-                                            className="flex items-center gap-2 rounded-lg bg-muted p-2 group"
+                                            className="group flex items-center gap-2 rounded-md border border-edge bg-surface-2 px-2.5 py-2"
                                         >
-                                            <FileText className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
-                                            <div className="flex-1 min-w-0">
-                                                <span className="block truncate text-sm">{doc.filename}</span>
+                                            <FileText className="h-4 w-4 flex-shrink-0 text-fg-subtle" />
+                                            <div className="min-w-0 flex-1">
+                                                <span className="block truncate text-[13px] text-fg">{doc.filename}</span>
                                                 {doc.status === "processing" && (
-                                                    <span className="text-[10px] text-warning">Processando...</span>
+                                                    <span className="font-mono text-[10px] uppercase tracking-wide text-warning">Processando...</span>
                                                 )}
                                                 {doc.status === "failed" && (
-                                                    <span className="text-[10px] text-error" title={doc.error_message || "Erro desconhecido"}>
-                                                        Falhou {doc.error_message ? "⚠" : ""}
+                                                    <span className="flex items-center gap-1 font-mono text-[10px] uppercase tracking-wide text-danger" title={doc.error_message || "Erro desconhecido"}>
+                                                        <AlertTriangle className="h-3 w-3" /> Falhou
                                                     </span>
                                                 )}
                                             </div>
                                             <Button
                                                 variant="ghost"
-                                                size="icon"
-                                                className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                size="icon-xs"
+                                                className="opacity-0 transition-opacity hover:bg-danger-subtle hover:text-danger group-hover:opacity-100"
                                                 onClick={() => handleRemoveDocument(doc)}
+                                                title="Remover documento"
                                             >
-                                                <Trash2 className="h-3 w-3 text-destructive" />
+                                                <Trash2 className="h-3 w-3" />
                                             </Button>
                                         </div>
                                     ))
@@ -301,46 +310,47 @@ export default function RagCollectionPage({ params }: { params: Promise<{ collec
                 </Card>
 
                 {/* Chat Area */}
-                <Card className="flex flex-1 flex-col overflow-hidden">
-                    <CardContent className="flex flex-1 flex-col p-0 overflow-hidden">
+                <Card className="flex flex-1 flex-col gap-0 overflow-hidden py-0">
+                    <CardContent className="flex flex-1 flex-col overflow-hidden p-0">
                         {/* Messages */}
-                        <ScrollArea className="flex-1 min-h-0 p-4">
-                            <div className="space-y-6 max-w-3xl mx-auto">
+                        <ScrollArea className="min-h-0 flex-1 p-4">
+                            <div className="mx-auto max-w-3xl space-y-5">
                                 {messages.length === 0 ? (
-                                    <div className="flex h-full flex-col items-center justify-center py-20 text-center opacity-50">
-                                        <MessageSquare className="h-16 w-16 mb-4" />
-                                        <h3 className="text-lg font-medium font-heading">Chat Vazio</h3>
-                                        <p>Carregue um PDF ao lado e comece a perguntar.</p>
+                                    <div className="flex h-full flex-col items-center justify-center py-20 text-center">
+                                        <MessageSquare className="mb-3 h-8 w-8 text-fg-subtle" />
+                                        <h3 className="text-sm font-semibold text-fg">Comece uma conversa</h3>
+                                        <p className="mt-1 text-[13px] text-fg-muted">Carregue um PDF ao lado e faça uma pergunta.</p>
                                     </div>
                                 ) : (
                                     messages.map((message) => (
                                         <div
                                             key={message.id}
-                                            className={`flex gap-3 ${message.role === "user" ? "flex-row-reverse" : "flex-row"
-                                                }`}
+                                            className={`flex gap-3 ${message.role === "user" ? "flex-row-reverse" : "flex-row"}`}
                                         >
                                             {/* Avatar */}
-                                            <div className={`
-                         h-8 w-8 rounded-full flex items-center justify-center text-xs font-bold
-                         ${message.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted-foreground/20 text-foreground'}
-                      `}>
-                                                {message.role === 'user' ? 'VC' : 'IA'}
+                                            <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md border font-mono text-[10px] font-medium ${
+                                                message.role === "user"
+                                                    ? "border-accent/40 bg-accent-subtle text-accent"
+                                                    : "border-edge-strong bg-surface-3 text-fg-muted"
+                                            }`}>
+                                                {message.role === "user" ? "VC" : "IA"}
                                             </div>
 
                                             {/* Bubble */}
                                             <div
-                                                className={`max-w-[80%] rounded-2xl px-4 py-3 shadow-sm ${message.role === "user"
-                                                        ? "bg-primary text-primary-foreground rounded-tr-sm"
-                                                        : "bg-muted/50 rounded-tl-sm border"
-                                                    }`}
+                                                className={`max-w-[80%] rounded-lg px-4 py-3 ${
+                                                    message.role === "user"
+                                                        ? "border border-accent/25 bg-accent-subtle"
+                                                        : "border border-edge bg-surface-2"
+                                                }`}
                                             >
-                                                <p className="whitespace-pre-wrap text-sm leading-relaxed">
+                                                <p className="whitespace-pre-wrap text-sm leading-relaxed text-fg">
                                                     {message.content}
                                                 </p>
                                                 {message.sources && message.sources.length > 0 && (
-                                                    <div className="mt-3 flex flex-wrap gap-2 pt-2 border-t border-border/10">
+                                                    <div className="mt-3 flex flex-wrap gap-1.5 border-t border-edge pt-2">
                                                         {message.sources.map((src, i) => (
-                                                            <Badge key={i} variant="outline" className="text-[10px] h-5 bg-background/50">
+                                                            <Badge key={i} variant="outline" className="px-1.5 py-0 text-[9px]">
                                                                 {src}
                                                             </Badge>
                                                         ))}
@@ -352,11 +362,10 @@ export default function RagCollectionPage({ params }: { params: Promise<{ collec
                                 )}
                                 {isLoading && (
                                     <div className="flex gap-3">
-                                        <div className="h-8 w-8 rounded-full bg-muted-foreground/20 flex items-center justify-center text-xs">IA</div>
-                                        <div className="bg-muted/50 rounded-2xl rounded-tl-sm px-4 py-3 border flex items-center gap-1">
-                                            <span className="w-1.5 h-1.5 bg-primary/60 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
-                                            <span className="w-1.5 h-1.5 bg-primary/60 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
-                                            <span className="w-1.5 h-1.5 bg-primary/60 rounded-full animate-bounce"></span>
+                                        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-edge-strong bg-surface-3 font-mono text-[10px] text-fg-muted">IA</div>
+                                        <div className="flex items-center gap-2 rounded-lg border border-edge bg-surface-2 px-4 py-3">
+                                            <Spinner size="xs" className="text-accent" />
+                                            <span className="text-[13px] text-fg-muted">Consultando documentos...</span>
                                         </div>
                                     </div>
                                 )}
@@ -365,9 +374,9 @@ export default function RagCollectionPage({ params }: { params: Promise<{ collec
                         </ScrollArea>
 
                         {/* Input */}
-                        <div className="p-4 border-t bg-background/50 backdrop-blur-sm">
-                            <div className="max-w-3xl mx-auto flex gap-2 relative">
-                                <input
+                        <div className="border-t border-edge bg-surface-1 p-4">
+                            <div className="relative mx-auto flex max-w-3xl gap-2">
+                                <Input
                                     type="text"
                                     value={input}
                                     onChange={(e) => setInput(e.target.value)}
@@ -379,20 +388,21 @@ export default function RagCollectionPage({ params }: { params: Promise<{ collec
                                     }}
                                     autoFocus
                                     placeholder="Faça uma pergunta..."
-                                    className="flex-1 rounded-full border border-input bg-background/80 px-6 py-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-ring transition-all pr-12"
+                                    className="h-11 pr-12"
                                     disabled={isLoading}
                                 />
                                 <Button
                                     onClick={handleSend}
                                     disabled={!input.trim() || isLoading}
                                     size="icon"
-                                    className="absolute right-1.5 top-1.5 rounded-full h-9 w-9"
+                                    className="absolute right-1 top-1"
+                                    title="Enviar"
                                 >
                                     <Send className="h-4 w-4" />
                                 </Button>
                             </div>
-                            <div className="text-center mt-2 text-[10px] text-muted-foreground">
-                                O RAG pode cometer erros. Verifique as fontes.
+                            <div className="mt-2 text-center font-mono text-[10px] uppercase tracking-wide text-fg-subtle">
+                                O RAG pode cometer erros — verifique as fontes.
                             </div>
                         </div>
                     </CardContent>

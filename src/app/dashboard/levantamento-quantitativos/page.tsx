@@ -1,10 +1,13 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { HardHat, Upload, Download, FileX, FileText } from "lucide-react";
+import { Download, FileText, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { PageHeader } from "@/components/ui/page-header";
+import { Dropzone } from "@/components/ui/dropzone";
+import { Alert } from "@/components/ui/alert";
+import { toast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -81,14 +84,15 @@ function fmtTotal(v: number | undefined, decimals = 4): string {
 
 export default function LevantamentoQuantitativosPage() {
   const [file, setFile] = useState<File | null>(null);
-  const [isDragging, setIsDragging] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
   const [error, setError] = useState("");
   const [resultado, setResultado] = useState<ResultadoPreview | null>(null);
 
-  const handleFile = useCallback((f: File) => {
-    if (f.type !== "application/pdf") {
+  const handleFiles = useCallback((files: File[]) => {
+    const f = files[0];
+    if (!f) return;
+    if (f.type !== "application/pdf" && !f.name.toLowerCase().endsWith(".pdf")) {
       setError("Apenas arquivos PDF são aceitos.");
       return;
     }
@@ -96,16 +100,6 @@ export default function LevantamentoQuantitativosPage() {
     setError("");
     setResultado(null);
   }, []);
-
-  const handleDrop = useCallback(
-    (e: React.DragEvent) => {
-      e.preventDefault();
-      setIsDragging(false);
-      const dropped = e.dataTransfer.files[0];
-      if (dropped) handleFile(dropped);
-    },
-    [handleFile]
-  );
 
   const handleAnalyze = async () => {
     if (!file) return;
@@ -128,6 +122,9 @@ export default function LevantamentoQuantitativosPage() {
       }
 
       setResultado(data as ResultadoPreview);
+      toast.success("Análise concluída", {
+        description: `${(data as ResultadoPreview).total_tanques} tanque(s) identificado(s).`,
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro desconhecido");
     } finally {
@@ -165,6 +162,7 @@ export default function LevantamentoQuantitativosPage() {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
+      toast.success("Excel gerado");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro desconhecido");
     } finally {
@@ -174,74 +172,45 @@ export default function LevantamentoQuantitativosPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center gap-4">
-        <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-surface border border-border">
-          <HardHat className="h-6 w-6 text-text-secondary" />
-        </div>
-        <div>
-          <h1 className="text-2xl font-heading font-bold text-text-primary">
-            Levantamento de Quantitativos
-          </h1>
-          <p className="text-sm text-text-secondary">
-            Processe desenhos de fundação de tanques PDF e visualize ou exporte os quantitativos
-          </p>
-        </div>
-        <Badge variant="info" className="ml-auto">Beta</Badge>
-      </div>
+      <PageHeader tool="levantamento-quantitativos" />
 
       {/* Upload + actions */}
-      <Card>
+      <Card className="gap-3 py-4">
         <CardHeader>
-          <CardTitle className="text-base">Desenho de Fundação (PDF)</CardTitle>
+          <CardTitle className="text-sm">Desenho de fundação (PDF)</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <label
-            className={cn(
-              "flex min-h-[160px] cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed transition-colors",
-              isDragging
-                ? "border-border-focus bg-surface-hover"
-                : "border-border hover:border-border-hover hover:bg-surface-hover"
-            )}
-            onDrop={handleDrop}
-            onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-            onDragLeave={() => setIsDragging(false)}
-          >
-            <input
-              type="file"
-              accept=".pdf"
-              className="hidden"
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) handleFile(f);
-              }}
-            />
-            {file ? (
-              <div className="flex flex-col items-center gap-2 text-center">
-                <FileText className="h-7 w-7 text-text-secondary" />
-                <p className="text-sm font-medium text-text-primary">{file.name}</p>
-                <p className="text-xs text-text-tertiary">
-                  {(file.size / 1024).toFixed(0)} KB · Clique para trocar
-                </p>
-              </div>
-            ) : (
-              <div className="flex flex-col items-center gap-2 text-center px-4">
-                <Upload className="h-7 w-7 text-text-tertiary" />
-                <p className="text-sm font-medium text-text-secondary">
-                  Arraste o PDF aqui ou clique para selecionar
-                </p>
-                <p className="text-xs text-text-tertiary">
-                  Desenhos de fundação de tanques no formato Petrobras N-381
-                </p>
-              </div>
-            )}
-          </label>
+          <Dropzone
+            onFiles={handleFiles}
+            accept=".pdf"
+            label="Arraste o PDF ou clique para selecionar"
+            hint="Desenhos de fundação de tanques no formato Petrobras N-381"
+            disabled={isAnalyzing || isDownloading}
+          />
+          {file && (
+            <div className="flex items-center gap-3 rounded-md border border-edge bg-surface-2 px-3.5 py-2.5">
+              <FileText className="h-4 w-4 shrink-0 text-fg-subtle" />
+              <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-fg">{file.name}</span>
+              <span className="shrink-0 font-mono text-xs tabular-nums text-fg-subtle">
+                {(file.size / 1024).toFixed(0)} KB
+              </span>
+              <button
+                onClick={() => { setFile(null); setResultado(null); setError(""); }}
+                disabled={isAnalyzing || isDownloading}
+                className="shrink-0 rounded-sm p-1 text-fg-subtle transition-colors hover:bg-surface-3 hover:text-fg"
+                title="Remover arquivo"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          )}
 
           <div className="flex gap-3 justify-center">
             <Button
               size="lg"
               onClick={handleAnalyze}
-              disabled={!file || isAnalyzing || isDownloading}
+              disabled={!file || isDownloading}
+              loading={isAnalyzing}
               className="gap-2 min-w-[180px]"
             >
               {isAnalyzing ? "Analisando..." : "Analisar PDF"}
@@ -251,10 +220,11 @@ export default function LevantamentoQuantitativosPage() {
               size="lg"
               variant="outline"
               onClick={handleDownload}
-              disabled={!file || isAnalyzing || isDownloading}
+              disabled={!file || isAnalyzing}
+              loading={isDownloading}
               className="gap-2"
             >
-              <Download className="h-4 w-4" />
+              {!isDownloading && <Download className="h-4 w-4" />}
               {isDownloading ? "Gerando..." : "Baixar Excel"}
             </Button>
           </div>
@@ -262,31 +232,26 @@ export default function LevantamentoQuantitativosPage() {
       </Card>
 
       {/* Error */}
-      {error && (
-        <div className="flex items-start gap-3 rounded-lg border border-error/30 bg-error-muted p-4">
-          <FileX className="h-5 w-5 shrink-0 text-error mt-0.5" />
-          <p className="text-sm text-error-text">{error}</p>
-        </div>
-      )}
+      {error && <Alert variant="danger">{error}</Alert>}
 
       {/* Results */}
       {resultado && (
         <div className="space-y-4">
           {/* Doc header */}
-          <div className="flex flex-wrap items-center gap-x-6 gap-y-1 rounded-lg border border-border bg-surface px-4 py-3">
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-1 rounded-lg border border-edge bg-surface-1 px-4 py-3">
             <div>
-              <span className="text-xs text-text-tertiary">Documento</span>
-              <p className="text-sm font-mono font-medium text-text-primary">{resultado.documento}</p>
+              <span className="text-xs text-fg-subtle">Documento</span>
+              <p className="text-sm font-mono font-medium text-fg">{resultado.documento}</p>
             </div>
             <div>
-              <span className="text-xs text-text-tertiary">Tanques</span>
-              <p className="text-sm font-medium text-text-primary">
+              <span className="text-xs text-fg-subtle">Tanques</span>
+              <p className="text-sm font-medium text-fg">
                 {resultado.tanques.length > 0 ? resultado.tanques.join(" / ") : "—"}
               </p>
             </div>
             <div>
-              <span className="text-xs text-text-tertiary">Total de tanques</span>
-              <p className="text-sm font-mono tabular-nums font-medium text-text-primary">
+              <span className="text-xs text-fg-subtle">Total de tanques</span>
+              <p className="text-sm font-mono tabular-nums font-medium text-fg">
                 {resultado.total_tanques}
               </p>
             </div>
@@ -295,7 +260,7 @@ export default function LevantamentoQuantitativosPage() {
           {/* Geometry table */}
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm text-text-secondary uppercase tracking-wide">
+              <CardTitle className="text-sm text-fg-muted uppercase tracking-wide">
                 Geometria Extraída
               </CardTitle>
             </CardHeader>
@@ -303,12 +268,12 @@ export default function LevantamentoQuantitativosPage() {
               <div className="overflow-x-auto">
                 <table className="w-full text-xs font-mono tabular-nums">
                   <thead>
-                    <tr className="border-b border-border bg-bg-secondary">
-                      <th className="sticky left-0 z-10 bg-bg-secondary px-4 py-2 text-left font-medium text-text-secondary min-w-[200px]">
+                    <tr className="border-b border-edge bg-surface-1">
+                      <th className="sticky left-0 z-10 bg-surface-1 px-4 py-2 text-left font-medium text-fg-muted min-w-[200px]">
                         ITEM
                       </th>
                       {COLS_GEO.map((c) => (
-                        <th key={c.key} className="px-3 py-2 text-right font-medium text-text-secondary whitespace-nowrap">
+                        <th key={c.key} className="px-3 py-2 text-right font-medium text-fg-muted whitespace-nowrap">
                           {c.label}
                         </th>
                       ))}
@@ -319,16 +284,16 @@ export default function LevantamentoQuantitativosPage() {
                       <tr
                         key={i}
                         className={cn(
-                          "border-b border-border/50",
-                          i % 2 === 1 ? "bg-bg-secondary/50" : "bg-bg-primary"
+                          "border-b border-edge/50",
+                          i % 2 === 1 ? "bg-surface-1/50" : "bg-canvas"
                         )}
                       >
-                        <td className="sticky left-0 z-10 px-4 py-2 font-sans text-xs font-medium text-text-primary"
-                            style={{ backgroundColor: i % 2 === 1 ? "var(--color-bg-secondary)" : "var(--color-bg-primary)" }}>
+                        <td className="sticky left-0 z-10 px-4 py-2 font-sans text-xs font-medium text-fg"
+                            style={{ backgroundColor: i % 2 === 1 ? "var(--surface-1)" : "var(--canvas)" }}>
                           {item.item}
                         </td>
                         {COLS_GEO.map((c) => (
-                          <td key={c.key} className="px-3 py-2 text-right text-text-secondary">
+                          <td key={c.key} className="px-3 py-2 text-right text-fg-muted">
                             {fmt(item[c.key] as number | null)}
                           </td>
                         ))}
@@ -343,7 +308,7 @@ export default function LevantamentoQuantitativosPage() {
           {/* Quantities table */}
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm text-text-secondary uppercase tracking-wide">
+              <CardTitle className="text-sm text-fg-muted uppercase tracking-wide">
                 Quantitativos Calculados
               </CardTitle>
             </CardHeader>
@@ -351,12 +316,12 @@ export default function LevantamentoQuantitativosPage() {
               <div className="overflow-x-auto">
                 <table className="w-full text-xs font-mono tabular-nums">
                   <thead>
-                    <tr className="border-b border-border bg-bg-secondary">
-                      <th className="sticky left-0 z-10 bg-bg-secondary px-4 py-2 text-left font-medium text-text-secondary min-w-[200px]">
+                    <tr className="border-b border-edge bg-surface-1">
+                      <th className="sticky left-0 z-10 bg-surface-1 px-4 py-2 text-left font-medium text-fg-muted min-w-[200px]">
                         ITEM
                       </th>
                       {COLS_CALC.map((c) => (
-                        <th key={c.key} className="px-3 py-2 text-right font-medium text-text-secondary whitespace-nowrap">
+                        <th key={c.key} className="px-3 py-2 text-right font-medium text-fg-muted whitespace-nowrap">
                           {c.label}
                         </th>
                       ))}
@@ -367,16 +332,16 @@ export default function LevantamentoQuantitativosPage() {
                       <tr
                         key={i}
                         className={cn(
-                          "border-b border-border/50",
-                          i % 2 === 1 ? "bg-bg-secondary/50" : "bg-bg-primary"
+                          "border-b border-edge/50",
+                          i % 2 === 1 ? "bg-surface-1/50" : "bg-canvas"
                         )}
                       >
-                        <td className="sticky left-0 z-10 px-4 py-2 font-sans text-xs font-medium text-text-primary"
-                            style={{ backgroundColor: i % 2 === 1 ? "var(--color-bg-secondary)" : "var(--color-bg-primary)" }}>
+                        <td className="sticky left-0 z-10 px-4 py-2 font-sans text-xs font-medium text-fg"
+                            style={{ backgroundColor: i % 2 === 1 ? "var(--surface-1)" : "var(--canvas)" }}>
                           {item.item}
                         </td>
                         {COLS_CALC.map((c) => (
-                          <td key={c.key} className="px-3 py-2 text-right text-text-secondary">
+                          <td key={c.key} className="px-3 py-2 text-right text-fg-muted">
                             {fmt(item[c.key] as number | null)}
                           </td>
                         ))}
@@ -384,8 +349,8 @@ export default function LevantamentoQuantitativosPage() {
                     ))}
 
                     {/* Total 1 tanque */}
-                    <tr className="border-t-2 border-border bg-success-muted">
-                      <td className="sticky left-0 z-10 bg-success-muted px-4 py-2 font-sans text-xs font-bold text-success">
+                    <tr className="border-t-2 border-edge bg-success-subtle">
+                      <td className="sticky left-0 z-10 bg-success-subtle px-4 py-2 font-sans text-xs font-bold text-success">
                         TOTAL PARA 1 TANQUE
                       </td>
                       {COLS_CALC.map((c) => (
@@ -396,8 +361,8 @@ export default function LevantamentoQuantitativosPage() {
                     </tr>
 
                     {/* Total geral */}
-                    <tr className="border-t border-border bg-info-muted">
-                      <td className="sticky left-0 z-10 bg-info-muted px-4 py-2 font-sans text-xs font-bold text-info">
+                    <tr className="border-t border-edge bg-info-subtle">
+                      <td className="sticky left-0 z-10 bg-info-subtle px-4 py-2 font-sans text-xs font-bold text-info">
                         TOTAL ({resultado.total_tanques} TANQUE{resultado.total_tanques !== 1 ? "S" : ""})
                       </td>
                       {COLS_CALC.map((c) => (

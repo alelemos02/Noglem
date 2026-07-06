@@ -62,7 +62,8 @@ Browser (JSON: {filename, tables}) → POST /api/pdf/extract/excel → Backend �
 
 PDFs escaneados (páginas só com imagem, 0 texto embutido) não têm tabela extraível por texto. O backend detecta isso e usa OCR via Gemini:
 
-- Em `extract_tables`, para cada página: se `page.chars` está vazio (scan) → vai pro caminho de OCR; senão usa pdfplumber normalmente. Caminho híbrido.
+- Em `extract_tables`, para cada página: vai pro caminho de OCR se `page.chars` está vazio (scan puro) **ou** se `_is_image_page(page)` é `True`; senão usa pdfplumber normalmente. Caminho híbrido.
+- `_is_image_page` cobre o **scan "pesquisável"**: PDF onde cada página é a imagem da tabela com uma camada de texto de OCR (ruidosa) por cima. Como tem texto, `page.chars` não é vazio, mas a tabela não tem grade vetorial — o pdfplumber acha 0 tabela e a página seria descartada em silêncio. O heurístico detecta `sem page.lines/page.rects` + imagem cobrindo ≥ `IMAGE_PAGE_MIN_COVERAGE` (0.5) da página e manda pro OCR. Foi o que quebrava o instrument index de 79 páginas (todas pesquisáveis): 78 caíam no buraco, só a capa (texto vazio) era OCR'd.
 - `_ocr_scanned_pages` renderiza as páginas com PyMuPDF (`OCR_RENDER_DPI = 150`) e manda cada imagem pro `gemini-3.5-flash` (`_get_ocr_model`, mesmo padrão do `pdf_comments_service`) com prompt pedindo JSON `{tables:[{headers,rows}]}`. OCR roda em paralelo (`ThreadPoolExecutor`, `OCR_MAX_WORKERS=5`).
 - Depende de `GOOGLE_API_KEY` válida no Railway (a mesma do Translate/PATEC). Sem chave válida, páginas escaneadas retornam 0 tabelas (degrada sem quebrar).
 - **Latência:** cada página OCR'd leva ~35–45s (Gemini). Por isso o frontend limita cada parte a `MAX_PAGES_PER_CHUNK = 4` páginas e a rota `/api/pdf/extract` declara `maxDuration = 60` (teto do Hobby). Um doc de 80 páginas escaneadas ≈ 20 partes ≈ ~15 min, com barra de progresso.
@@ -78,6 +79,16 @@ O Vercel rejeita request com corpo > ~4,5 MB na borda (HTTP 413 `FUNCTION_PAYLOA
 - Barra de progresso mostra "Processando parte X de N".
 - Edge case: se uma única página sozinha passa do limite (ex.: scan em altíssima resolução), lança `PageTooLargeError` com mensagem pedindo para comprimir — não dá para dividir por página.
 - O download do Excel **não reenvia o PDF**: manda as tabelas já extraídas (JSON) para `/api/pdf/extract/excel`, que reusa `tables_to_excel` no backend. Por isso funciona mesmo para PDFs grandes.
-- **Rate limit:** como o split dispara N requests por extração, o backend usa `RATE_LIMIT_PDF_PER_MIN = 60` (era 5 — 5 não comportava nem um PDF dividido em 6+ partes). O frontend espaça os envios em 300ms e faz retry com backoff (1,5s × tentativa, até 4) em 429.
+- **Rate limit:** como o split dispara N requests por extração, o backend usa `RATE_LIMIT_PDF_PER_MIN = 60` (era 5 — 5 não comportava nem um PDF dividido em 6+ partes). O frontend espaça os envios em 300ms.
+- **Resiliência (retry + sucesso parcial):** `extractTablesFromFile` faz retry com backoff (1,5s × tentativa, até 4) não só em `429`, mas também em `5xx`/timeout (`RETRYABLE_STATUS = {429,500,502,503,504}`) e em falha de rede — uma página de OCR lenta pode estourar o teto de ~60s do Vercel e devolver 504. Além disso, o loop de partes em `handleExtract` é `try/catch` **por parte**: se uma parte falha mesmo após os retries, ela é registrada (intervalo de páginas) e o job **continua** em vez de abortar e perder tudo. No fim, mostra o resultado parcial + um aviso (`warning`, estilo `bg-warning-muted`) listando as páginas que falharam. Só lança erro de verdade se **todas** as partes falharem.
 
 Mesmo limite/quirk da ferramenta pid-extractor (que ainda bloqueia em vez de auto-dividir).
+
+## Redesign v3 (2026-07)
+
+UI migrada para o design system v3 "instrumento de precisão" (ver `.claude/rules/design-system-conventions.md`):
+- Header via `<PageHeader tool="{id}">` — nome/descrição/badge vêm do `tools-registry.ts`
+- Upload via `<Dropzone>` compartilhado; loading via `<Spinner>`/`Button loading`
+- Erros persistentes em `<Alert>`; sucesso/erro transiente via `toast` (sonner); ações destrutivas via `useConfirm()`
+- Tokens novos: canvas/surface-1..3, edge, fg-*, accent azure — zero cores Tailwind literais
+- Endpoints e lógica de negócio inalterados

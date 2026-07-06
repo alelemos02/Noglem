@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Folder, Trash2, Search, ArrowRight, Loader2 } from "lucide-react";
+import { Plus, Folder, Trash2, Search, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -17,6 +17,11 @@ import {
   SheetClose,
 } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
+import { PageHeader } from "@/components/ui/page-header";
+import { LoadingBlock } from "@/components/ui/spinner";
+import { EmptyState } from "@/components/ui/empty-state";
+import { toast } from "@/components/ui/toast";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 
 interface Collection {
   id: string;
@@ -27,6 +32,7 @@ interface Collection {
 
 export default function RagDashboard() {
   const router = useRouter();
+  const confirm = useConfirm();
   const [collections, setCollections] = useState<Collection[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -49,6 +55,7 @@ export default function RagDashboard() {
       }
     } catch (error) {
       console.error("Failed to fetch collections", error);
+      toast.error("Erro ao carregar coleções");
     } finally {
       setIsLoading(false);
     }
@@ -67,11 +74,15 @@ export default function RagDashboard() {
 
       if (res.ok) {
         fetchCollections();
+        toast.success("Coleção criada", { description: newCollectionName });
         setNewCollectionName("");
         setIsSheetOpen(false);
+      } else {
+        toast.error("Erro ao criar coleção");
       }
     } catch (error) {
       console.error("Error creating collection", error);
+      toast.error("Erro ao criar coleção");
     } finally {
       setIsCreating(false);
     }
@@ -79,7 +90,14 @@ export default function RagDashboard() {
 
   const handleDeleteCollection = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation(); // Prevent opening collection
-    if (!confirm("Tem certeza que deseja excluir esta coleção e todos os seus documentos?")) return;
+    const name = collections.find((c) => c.id === id)?.name;
+    const ok = await confirm({
+      title: "Excluir coleção?",
+      description: `"${name ?? "Esta coleção"}" e todos os seus documentos serão removidos permanentemente.`,
+      confirmLabel: "Excluir coleção",
+      variant: "danger",
+    });
+    if (!ok) return;
 
     try {
       const res = await fetch(`/api/rag/collections/${id}`, {
@@ -87,9 +105,13 @@ export default function RagDashboard() {
       });
       if (res.ok) {
         setCollections(collections.filter((c) => c.id !== id));
+        toast.success("Coleção excluída");
+      } else {
+        toast.error("Erro ao excluir coleção");
       }
     } catch (error) {
       console.error("Error deleting collection", error);
+      toast.error("Erro ao excluir coleção");
     }
   };
 
@@ -98,31 +120,24 @@ export default function RagDashboard() {
   );
 
   return (
-    <div className="flex flex-col space-y-8 p-8 h-full bg-background/50">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Base de Conhecimento (RAG)</h1>
-          <p className="text-muted-foreground mt-2">
-            Gerencie suas coleções de documentos e converse com elas usando IA.
-          </p>
-        </div>
-
-        <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
-          <SheetTrigger asChild>
-            <Button size="lg" className="shadow-sm">
-              <Plus className="mr-2 h-4 w-4" /> Nova Coleção
-            </Button>
-          </SheetTrigger>
-          <SheetContent>
-            <SheetHeader>
-              <SheetTitle>Criar Nova Coleção</SheetTitle>
-              <SheetDescription>
-                Dê um nome para sua coleção de documentos. Você poderá adicionar PDFs depois.
-              </SheetDescription>
-            </SheetHeader>
-            <div className="grid gap-4 py-4">
-              <div className="grid gap-2">
+    <div className="flex flex-col space-y-6">
+      <PageHeader
+        tool="rag"
+        actions={
+          <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
+            <SheetTrigger asChild>
+              <Button>
+                <Plus className="h-4 w-4" /> Nova coleção
+              </Button>
+            </SheetTrigger>
+            <SheetContent>
+              <SheetHeader>
+                <SheetTitle>Criar nova coleção</SheetTitle>
+                <SheetDescription>
+                  Dê um nome para sua coleção de documentos. Você poderá adicionar PDFs depois.
+                </SheetDescription>
+              </SheetHeader>
+              <div className="grid gap-4 px-4 py-2">
                 <Input
                   id="name"
                   placeholder="Ex: Manuais de Engenharia, Normas ISO..."
@@ -130,24 +145,27 @@ export default function RagDashboard() {
                   onChange={(e) => setNewCollectionName(e.target.value)}
                 />
               </div>
-            </div>
-            <SheetFooter>
-              <SheetClose asChild>
-                <Button variant="outline">Cancelar</Button>
-              </SheetClose>
-              <Button onClick={handleCreateCollection} disabled={isCreating || !newCollectionName}>
-                {isCreating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                Criar Coleção
-              </Button>
-            </SheetFooter>
-          </SheetContent>
-        </Sheet>
-      </div>
+              <SheetFooter>
+                <SheetClose asChild>
+                  <Button variant="outline">Cancelar</Button>
+                </SheetClose>
+                <Button
+                  onClick={handleCreateCollection}
+                  disabled={!newCollectionName}
+                  loading={isCreating}
+                >
+                  Criar coleção
+                </Button>
+              </SheetFooter>
+            </SheetContent>
+          </Sheet>
+        }
+      />
 
       {/* Search and Content */}
       <div className="flex flex-col gap-6">
         <div className="relative w-full max-w-sm">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-fg-subtle" />
           <Input
             type="search"
             placeholder="Buscar coleções..."
@@ -158,58 +176,52 @@ export default function RagDashboard() {
         </div>
 
         {isLoading ? (
-          <div className="flex h-64 w-full items-center justify-center">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          </div>
+          <LoadingBlock label="Carregando coleções..." />
         ) : filteredCollections.length === 0 ? (
-          <div className="flex flex-col items-center justify-center rounded-lg border border-dashed p-16 text-center animate-in fade-in-50">
-            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted/50">
-              <Folder className="h-8 w-8 text-muted-foreground" />
-            </div>
-            <h3 className="mt-4 text-lg font-semibold">Nenhuma coleção encontrada</h3>
-            <p className="mb-4 text-sm text-muted-foreground max-w-sm">
-              Você ainda não criou nenhuma coleção de conhecimento. Comece criando uma para organizar seus documentos.
-            </p>
-            <Button variant="outline" onClick={() => setIsSheetOpen(true)}>
-              Criar Primeira Coleção
-            </Button>
-          </div>
+          <EmptyState
+            icon={Folder}
+            title="Nenhuma coleção encontrada"
+            description="Você ainda não criou nenhuma coleção de conhecimento. Comece criando uma para organizar seus documentos."
+            action={
+              <Button variant="outline" onClick={() => setIsSheetOpen(true)}>
+                Criar primeira coleção
+              </Button>
+            }
+          />
         ) : (
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {filteredCollections.map((collection) => (
               <Card
                 key={collection.id}
-                className="group relative cursor-pointer overflow-hidden transition-all hover:shadow-md border-muted-foreground/10 hover:border-primary/50 bg-card"
+                interactive
+                className="group relative gap-3 py-4"
                 onClick={() => router.push(`/dashboard/rag/${collection.id}`)}
               >
-                <CardHeader className="pb-3">
+                <CardHeader className="pb-0">
                   <div className="flex items-start justify-between">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 transition-colors group-hover:bg-primary/20">
-                      <Folder className="h-5 w-5 text-primary" />
-                    </div>
+                    <Folder className="h-5 w-5 text-fg-subtle transition-colors group-hover:text-accent" />
                     <Button
                       variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:text-destructive hover:bg-destructive/10"
+                      size="icon-sm"
+                      className="text-fg-subtle opacity-0 transition-opacity hover:bg-danger-subtle hover:text-danger group-hover:opacity-100"
                       onClick={(e) => handleDeleteCollection(collection.id, e)}
+                      title="Excluir coleção"
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
-                  <CardTitle className="mt-3 text-lg font-semibold leading-none tracking-tight">
+                  <CardTitle className="mt-2 text-sm font-semibold leading-tight">
                     {collection.name}
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="flex items-center text-sm text-muted-foreground">
-                    <span className="truncate">
-                      Criado em {new Date(collection.created_at).toLocaleDateString()}
-                    </span>
-                  </div>
+                  <p className="truncate font-mono text-[11px] tabular-nums text-fg-subtle">
+                    Criado em {new Date(collection.created_at).toLocaleDateString()}
+                  </p>
                 </CardContent>
                 <CardFooter className="pt-0">
-                  <div className="flex w-full items-center justify-between text-xs text-muted-foreground opacity-60 transition-opacity group-hover:opacity-100">
-                    <Badge variant="secondary" className="font-normal text-xs pointer-events-none">
+                  <div className="flex w-full items-center justify-between text-xs text-fg-muted opacity-60 transition-opacity group-hover:opacity-100">
+                    <Badge variant="secondary" className="pointer-events-none px-1.5 py-0 text-[9px]">
                       Privado
                     </Badge>
                     <span className="flex items-center gap-1">

@@ -24,15 +24,15 @@ function Input({
       id={inputId}
       data-slot="input"
       className={cn(
-        "h-10 w-full min-w-0 rounded-md px-3 text-sm font-body",
-        "bg-surface border border-border text-text-primary",
-        "placeholder:text-text-tertiary",
+        "h-9 w-full min-w-0 rounded-md px-3 text-sm font-sans",
+        "bg-surface-2 border border-edge text-fg",
+        "placeholder:text-fg-subtle",
         "transition-colors",
-        "hover:border-border-hover",
-        "focus:outline-none focus:border-border-focus focus:ring-1 focus:ring-accent",
+        "hover:border-edge-strong",
+        "focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent",
         "disabled:opacity-50 disabled:cursor-not-allowed",
-        "file:text-foreground file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium",
-        error && "border-error focus:border-error focus:ring-error",
+        "file:text-fg file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium",
+        error && "border-danger focus:border-danger focus:ring-danger",
         className
       )}
       aria-invalid={!!error}
@@ -56,7 +56,7 @@ function Input({
       {label && (
         <label
           htmlFor={inputId}
-          className="text-sm font-medium font-heading text-text-secondary"
+          className="text-sm font-medium text-fg-muted"
         >
           {label}
         </label>
@@ -67,7 +67,7 @@ function Input({
       {error && (
         <p
           id={`${inputId}-error`}
-          className="text-xs text-error-text"
+          className="text-xs text-danger-text"
           role="alert"
         >
           {error}
@@ -75,7 +75,7 @@ function Input({
       )}
 
       {!error && hint && (
-        <p id={`${inputId}-hint`} className="text-xs text-text-tertiary">
+        <p id={`${inputId}-hint`} className="text-xs text-fg-subtle">
           {hint}
         </p>
       )}

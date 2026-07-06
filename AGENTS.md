@@ -213,47 +213,49 @@ Usuario → Frontend (Vercel) → Next.js API proxy
 
 ---
 
-## Design System
+## Design System — v3 "instrumento de precisao"
 
 Tokens CSS em `src/app/globals.css` via `@theme inline` (Tailwind v4).
-Componentes em `src/components/ui/`.
+Componentes em `src/components/ui/`. Referencia viva em `/dashboard/styleguide` (admin).
+Identidade: dark-first (grafite frio), data-dense, mono como assinatura visual.
 
-### Imports obrigatorios
+### Fontes
 
-```tsx
-import { Button } from '@/components/ui/button'
-import { Card, CardHeader, CardContent, CardFooter } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { Input } from '@/components/ui/input'
-import { Logo } from '@/components/ui/logo'
-import { Skeleton } from '@/components/ui/skeleton'
-import { cn } from '@/lib/utils'
-```
+IBM Plex Sans (`font-sans` — interface e headings) + IBM Plex Mono (`font-mono` — dados,
+tags, contadores, microlabels), servidas via `next/font` em `src/lib/fonts.ts`.
+Nao existem mais `font-brand`/`font-heading`/`font-body`.
 
 ### Regras visuais — sem excecao
 
 1. **Cores:** APENAS tokens CSS do `globals.css`. Nunca `bg-blue-500`, `text-green-500` etc.
-   - Semanticas: `bg-info-muted text-info`, `bg-success-muted text-success`, `bg-warning-muted text-warning`, `bg-error-muted text-error`
-   - Surface: `bg-surface`, `bg-surface-hover`, `bg-surface-active`
-   - Background: `bg-bg-primary`, `bg-bg-secondary`, `bg-bg-tertiary`
-   - Text: `text-text-primary`, `text-text-secondary`, `text-text-tertiary`
-   - Accent: `bg-accent`, `text-accent`, `bg-accent-muted`
-2. **Accent (#FF4D2D):** apenas CTAs, links e indicadores criticos. Usar com moderacao.
+   - Superficies: `bg-canvas` (fundo do app), `bg-surface-1` (paineis/cards), `bg-surface-2` (inputs/hover), `bg-surface-3` (popover/elevado), `bg-overlay`
+   - Bordas: `border-edge`, `border-edge-strong`
+   - Texto: `text-fg`, `text-fg-muted`, `text-fg-subtle`, `text-fg-disabled`, `text-fg-inverse`
+   - Accent (azure #4BA4EE): `bg-accent`, `text-accent`, `bg-accent-subtle`, `text-accent-fg` (texto sobre accent), `hover:bg-accent-hover`
+   - Semanticas: `success` / `warning` / `danger` / `info`, cada uma com `-subtle` (fundo) e `-text` (texto claro). Ex: `bg-danger-subtle text-danger`
+2. **Accent:** apenas CTAs, links, estado ativo e indicadores criticos. `info` == accent por design.
 3. **Numeros:** SEMPRE `font-mono tabular-nums`.
-4. **Border radius:** maximo `rounded-lg` (8px). NUNCA `rounded-full` em containers.
-5. **Animacoes:** apenas `fade-in`, `fade-in-up`, `shimmer`. Nada pulsando sem acao do usuario.
-6. **Tipografia:**
-   - Logo: `font-brand` (Rajdhani)
-   - Headings: `font-heading` (Space Grotesk)
-   - Body: `font-body` (Inter)
-   - Dados/Codigo: `font-mono` (JetBrains Mono)
+4. **Microlabels:** classe `microlabel` (mono, uppercase, tracking) para categorias, eyebrows e labels de dados.
+5. **Border radius:** escala 2/3/4/6/8px (`rounded-xs` ate `rounded-xl`). NUNCA `rounded-full` em containers.
+6. **Animacoes:** apenas `fade-in`, `fade-in-up`, `shimmer`. Nada pulsando sem acao do usuario.
+7. **Feedback:** sucesso/erro transiente = `toast` (sonner); aviso persistente = `<Alert>`; acao destrutiva = `useConfirm()`. NUNCA `confirm()`/`alert()` nativos.
+8. **Headers de pagina:** SEMPRE `<PageHeader tool="{id}">` — titulo/descricao/badge vem do `tools-registry.ts`.
 
 ### Componentes
 
 - `Button` — variantes: default/primary, secondary/outline, ghost, danger/destructive, link | tamanhos: sm, md, lg, icon | props: loading, asChild
-- `Input` — props: label, error, hint
+- `Input`, `Textarea` — props: label, error, hint
 - `Card`, `CardHeader`, `CardContent`, `CardFooter`, `CardTitle`, `CardDescription`, `CardAction` — prop: interactive
-- `Badge` — variantes: default, success, warning, error, info, secondary, outline | props: dot, asChild
+- `Badge` — chip tecnico mono/uppercase; variantes: default, success, warning, error, info, secondary, outline | props: dot, asChild
+- `PageHeader` — props: tool (id do registry) OU title/description; backHref, actions
+- `Dropzone` — upload unico do DS; props: onFiles, accept, multiple, maxSizeMB, loading, error, hint, compact
+- `Alert` — variantes: info, success, warning, danger | props: title, icon
+- `EmptyState` — props: icon, title, description, action, size
+- `Progress` — props: value, max, indeterminate, label
+- `Spinner` / `LoadingBlock` — loading unico do DS (nunca Loader2 ou divs animate-spin)
+- `Toaster`/`toast` (sonner) — montado no Shell; `toast.success/error/info/promise`
+- `ConfirmProvider`/`useConfirm` — dialogo de confirmacao (substitui confirm() nativo)
+- `Select`, `Tabs`, `Checkbox` — radix com tema do DS
 - `Logo` — variantes: full ("Jul/IA"), compact ("J/"), tagline | tamanhos: sm, md, lg
 - `Skeleton` — shimmer loader
 

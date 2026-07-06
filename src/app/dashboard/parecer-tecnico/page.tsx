@@ -2,11 +2,19 @@
 
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
+import { FileSearch } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { patecApi, type ParecerResponse } from "@/lib/patec-api";
 import { ProcessamentoBadge, ParecerGeralBadge } from "@/components/parecer-tecnico/status-badge";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import { PageHeader } from "@/components/ui/page-header";
+import { LoadingBlock } from "@/components/ui/spinner";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Alert } from "@/components/ui/alert";
+import { toast } from "@/components/ui/toast";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 
 const DISCIPLINA_LABELS: Record<string, string> = {
   instrumentacao: "Instrumentação",
@@ -17,27 +25,28 @@ const DISCIPLINA_LABELS: Record<string, string> = {
 };
 
 const STATUS_BAR_COLORS: Record<string, string> = {
-  A: "bg-green-500",
-  B: "bg-yellow-500",
-  C: "bg-red-500",
-  D: "bg-gray-500",
-  E: "bg-blue-500",
+  A: "bg-success",
+  B: "bg-warning",
+  C: "bg-danger",
+  D: "bg-fg-subtle",
+  E: "bg-info",
 };
 
 const PARECER_BORDER_COLORS: Record<string, string> = {
-  APROVADO: "border-l-green-500",
-  APROVADO_COM_COMENTARIOS: "border-l-yellow-500",
-  REJEITADO: "border-l-red-500",
+  APROVADO: "border-l-success",
+  APROVADO_COM_COMENTARIOS: "border-l-warning",
+  REJEITADO: "border-l-danger",
 };
 
 const SEGMENTS = [
-  { key: "concluidos", label: "Concluídos", color: "bg-green-500", filter: (p: ParecerResponse) => p.status_processamento === "concluido" },
-  { key: "processando", label: "Processando", color: "bg-blue-500", filter: (p: ParecerResponse) => p.status_processamento === "processando" },
-  { key: "pendentes", label: "Pendentes", color: "bg-yellow-500", filter: (p: ParecerResponse) => p.status_processamento === "pendente" },
-  { key: "erro", label: "Erro", color: "bg-red-500", filter: (p: ParecerResponse) => p.status_processamento === "erro" },
+  { key: "concluidos", label: "Concluídos", color: "bg-success", filter: (p: ParecerResponse) => p.status_processamento === "concluido" },
+  { key: "processando", label: "Processando", color: "bg-info", filter: (p: ParecerResponse) => p.status_processamento === "processando" },
+  { key: "pendentes", label: "Pendentes", color: "bg-warning", filter: (p: ParecerResponse) => p.status_processamento === "pendente" },
+  { key: "erro", label: "Erro", color: "bg-danger", filter: (p: ParecerResponse) => p.status_processamento === "erro" },
 ] as const;
 
 export default function ParecerTecnicoPage() {
+  const confirm = useConfirm();
   const [pareceres, setPareceres] = useState<ParecerResponse[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
@@ -89,14 +98,23 @@ export default function ParecerTecnicoPage() {
 
   const handleDeleteSelected = async () => {
     if (selectedCount === 0) return;
-    if (!confirm(`Excluir ${selectedCount} parecer(es) selecionado(s)?`)) return;
+    const ok = await confirm({
+      title: `Excluir ${selectedCount} parecer(es)?`,
+      description: "Os pareceres selecionados e suas análises serão removidos permanentemente.",
+      confirmLabel: "Excluir",
+      variant: "danger",
+    });
+    if (!ok) return;
     setDeletingSelected(true);
     setError("");
     const ids = Array.from(selectedIds);
     const results = await Promise.allSettled(ids.map((id) => patecApi.pareceres.delete(id)));
     const failed = results.filter((r) => r.status === "rejected").length;
     if (failed > 0) setError(`${failed} parecer(es) não puderam ser excluídos.`);
-    if (ids.length - failed > 0) await loadPareceres();
+    if (ids.length - failed > 0) {
+      toast.success(`${ids.length - failed} parecer(es) excluído(s)`);
+      await loadPareceres();
+    }
     setSelectedIds(new Set());
     setDeletingSelected(false);
   };
@@ -109,20 +127,12 @@ export default function ParecerTecnicoPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="font-heading text-2xl font-bold text-text-primary">
-          Parecer Técnico
-        </h1>
-        <p className="mt-1 text-sm text-text-secondary">
-          Análise e comparação de documentação da engenharia versus documentos dos fornecedores
-        </p>
-      </div>
+      <PageHeader tool="parecer-tecnico" />
 
       {/* Summary bar */}
       {total > 0 && (
         <div className="space-y-2">
-          <div className="flex h-3 overflow-hidden rounded-full bg-surface">
+          <div className="flex h-2 overflow-hidden rounded-sm bg-surface-2">
             {counts.map((seg) =>
               seg.count > 0 ? (
                 <div
@@ -138,14 +148,14 @@ export default function ParecerTecnicoPage() {
             {counts.map((seg) =>
               seg.count > 0 ? (
                 <div key={seg.key} className="flex items-center gap-1.5">
-                  <div className={`h-2.5 w-2.5 rounded-full ${seg.color}`} />
-                  <span className="text-xs text-text-secondary">
-                    {seg.label}: <span className="font-semibold">{seg.count}</span>
+                  <div className={`h-2 w-2 rounded-full ${seg.color}`} />
+                  <span className="text-xs text-fg-muted">
+                    {seg.label}: <span className="font-mono font-medium tabular-nums">{seg.count}</span>
                   </span>
                 </div>
               ) : null
             )}
-            <span className="text-xs text-text-tertiary">Total: {total}</span>
+            <span className="font-mono text-xs tabular-nums text-fg-subtle">Total: {total}</span>
           </div>
         </div>
       )}
@@ -163,38 +173,47 @@ export default function ParecerTecnicoPage() {
             <Button
               variant="danger"
               onClick={handleDeleteSelected}
-              disabled={deletingSelected}
+              loading={deletingSelected}
             >
               {deletingSelected ? "Excluindo..." : `Excluir (${selectedCount})`}
             </Button>
           )}
           <Link href="/dashboard/parecer-tecnico/novo">
-            <Button variant="primary">Novo Parecer</Button>
+            <Button variant="primary">Novo parecer</Button>
           </Link>
         </div>
       </div>
 
       {/* Error */}
       {error && (
-        <div className="rounded-lg bg-error-muted p-3 text-sm text-error-text">
-          {error}
-          <Button variant="ghost" size="sm" className="ml-2" onClick={loadPareceres}>
-            Tentar novamente
-          </Button>
-        </div>
+        <Alert variant="danger">
+          <div className="flex items-center justify-between gap-4">
+            <span>{error}</span>
+            <Button variant="ghost" size="sm" onClick={loadPareceres}>
+              Tentar novamente
+            </Button>
+          </div>
+        </Alert>
       )}
 
       {/* Content */}
       {loading ? (
-        <div className="py-12 text-center text-text-tertiary">Carregando...</div>
+        <LoadingBlock label="Carregando pareceres..." />
       ) : pareceres.length === 0 ? (
-        <div className="py-12 text-center text-text-tertiary">
-          Nenhum parecer encontrado
-        </div>
+        <EmptyState
+          icon={FileSearch}
+          title="Nenhum parecer encontrado"
+          description="Crie um novo parecer para começar a análise de documentação de fornecedores."
+          action={
+            <Link href="/dashboard/parecer-tecnico/novo">
+              <Button variant="outline">Criar primeiro parecer</Button>
+            </Link>
+          }
+        />
       ) : (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
           {pareceres.map((p) => {
-            const borderColor = (p.parecer_geral && PARECER_BORDER_COLORS[p.parecer_geral]) || "border-l-border";
+            const borderColor = (p.parecer_geral && PARECER_BORDER_COLORS[p.parecer_geral]) || "border-l-edge";
             const itemCounts = [
               { status: "A", count: p.total_aprovados },
               { status: "B", count: p.total_aprovados_comentarios },
@@ -207,33 +226,30 @@ export default function ParecerTecnicoPage() {
             return (
               <div
                 key={p.id}
-                className={`group relative rounded-lg border border-l-4 bg-surface p-4 transition-all hover:shadow-md hover:border-border-hover ${borderColor} ${
-                  selected ? "ring-2 ring-info" : ""
+                className={`group relative rounded-lg border border-l-2 bg-surface-1 p-4 transition-colors hover:border-edge-strong hover:bg-surface-2 ${borderColor} ${
+                  selected ? "ring-2 ring-accent" : ""
                 }`}
               >
-                <div className="absolute top-3 right-3">
-                  <input
-                    type="checkbox"
+                <div className={`absolute top-3 right-3 transition-opacity ${selected ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}>
+                  <Checkbox
                     checked={selected}
-                    onChange={(e) => toggleSelectOne(p.id, e.target.checked)}
-                    className="rounded border-border opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100"
-                    style={selected ? { opacity: 1 } : undefined}
+                    onCheckedChange={(checked) => toggleSelectOne(p.id, checked === true)}
                   />
                 </div>
 
                 <Link href={`/dashboard/parecer-tecnico/${p.id}`} className="block space-y-3">
                   <div>
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-bold text-info-text">{p.numero_parecer}</span>
+                      <span className="font-mono text-[13px] font-medium text-fg">{p.numero_parecer}</span>
                       <ProcessamentoBadge status={p.status_processamento} />
                       <Badge variant="secondary" className="text-xs">
                         {DISCIPLINA_LABELS[p.disciplina] ?? p.disciplina}
                       </Badge>
                     </div>
-                    <p className="mt-0.5 text-sm font-medium text-text-primary">{p.projeto}</p>
+                    <p className="mt-0.5 text-sm font-medium text-fg">{p.projeto}</p>
                   </div>
 
-                  <div className="flex items-center gap-3 text-xs text-text-secondary">
+                  <div className="flex items-center gap-3 text-xs text-fg-muted">
                     <span>{p.fornecedor}</span>
                     <span>Rev. {p.revisao}</span>
                     <span>{new Date(p.criado_em).toLocaleDateString("pt-BR")}</span>
@@ -241,7 +257,7 @@ export default function ParecerTecnicoPage() {
 
                   {p.total_itens > 0 && (
                     <div className="space-y-1">
-                      <div className="flex h-1.5 overflow-hidden rounded-full bg-surface-hover">
+                      <div className="flex h-1.5 overflow-hidden rounded-sm bg-surface-2">
                         {itemCounts.map((ic) =>
                           ic.count > 0 ? (
                             <div
@@ -253,7 +269,7 @@ export default function ParecerTecnicoPage() {
                         )}
                       </div>
                       <div className="flex items-center justify-between">
-                        <span className="text-xs text-text-tertiary">{p.total_itens} itens</span>
+                        <span className="text-xs text-fg-subtle">{p.total_itens} itens</span>
                         {p.parecer_geral && <ParecerGeralBadge status={p.parecer_geral} />}
                       </div>
                     </div>

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { ProcessamentoBadge, ParecerGeralBadge } from "./status-badge";
 import { ExportButton } from "./export-button";
 import { KeyboardHelp } from "./keyboard-help";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import {
   useWorkspace,
   STATUS_BG_COLORS,
@@ -29,6 +30,7 @@ export function WorkspaceTopbar() {
     deleteParecer,
   } = useWorkspace();
 
+  const confirmDialog = useConfirm();
   const [deleting, setDeleting] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [showDocs, setShowDocs] = useState(false);
@@ -54,7 +56,13 @@ export function WorkspaceTopbar() {
   const total = itens.length;
 
   const handleDelete = async () => {
-    if (!confirm("Tem certeza que deseja excluir este parecer?")) return;
+    const ok = await confirmDialog({
+      title: "Excluir parecer?",
+      description: "O parecer e todas as suas análises serão removidos permanentemente.",
+      confirmLabel: "Excluir parecer",
+      variant: "danger",
+    });
+    if (!ok) return;
     setDeleting(true);
     try {
       await deleteParecer();
@@ -69,7 +77,7 @@ export function WorkspaceTopbar() {
 
   return (
     <>
-      <header className="flex h-14 flex-shrink-0 items-center justify-between border-b border-border bg-surface px-4">
+      <header className="flex h-14 flex-shrink-0 items-center justify-between border-b border-edge bg-surface-1 px-4">
         {/* Left: navigation + identity */}
         <div className="flex items-center gap-3">
           <Link href="/dashboard/parecer-tecnico">
@@ -78,11 +86,11 @@ export function WorkspaceTopbar() {
             </Button>
           </Link>
           <div className="hidden items-center gap-2 sm:flex">
-            <h1 className="text-sm font-bold text-text-primary">Parecer {parecer.numero_parecer}</h1>
-            <span className="text-xs text-text-tertiary">|</span>
-            <span className="text-xs text-text-secondary">{parecer.projeto}</span>
-            <span className="text-xs text-text-tertiary">-</span>
-            <span className="text-xs text-text-secondary">{parecer.fornecedor}</span>
+            <h1 className="text-sm font-bold text-fg">Parecer {parecer.numero_parecer}</h1>
+            <span className="text-xs text-fg-subtle">|</span>
+            <span className="text-xs text-fg-muted">{parecer.projeto}</span>
+            <span className="text-xs text-fg-subtle">-</span>
+            <span className="text-xs text-fg-muted">{parecer.fornecedor}</span>
           </div>
           <ProcessamentoBadge status={parecer.status_processamento} />
           {parecer.parecer_geral && (
@@ -93,7 +101,7 @@ export function WorkspaceTopbar() {
         {/* Center: status distribution bar */}
         {hasResults && total > 0 && (
           <div className="hidden items-center gap-3 md:flex">
-            <div className="flex h-2.5 w-48 overflow-hidden rounded-full bg-surface-hover">
+            <div className="flex h-2.5 w-48 overflow-hidden rounded-full bg-surface-2">
               {(["A", "B", "C", "D", "E"] as const).map((status) => {
                 const count = statusCounts[status] || 0;
                 if (count === 0) return null;
@@ -108,7 +116,7 @@ export function WorkspaceTopbar() {
                 );
               })}
             </div>
-            <span className="text-xs font-mono text-text-secondary">
+            <span className="text-xs font-mono text-fg-muted">
               {total} itens
             </span>
 
@@ -119,8 +127,8 @@ export function WorkspaceTopbar() {
                   onClick={() => toggleFilter("status", "C")}
                   className={`rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors ${
                     filters.status === "C"
-                      ? "bg-red-600 text-white"
-                      : "border border-red-700/50 text-red-400 hover:bg-red-900/30"
+                      ? "bg-danger text-white"
+                      : "border border-danger/35 text-danger hover:bg-danger-subtle"
                   }`}
                 >
                   {statusCounts.C} Rejeitados
@@ -131,8 +139,8 @@ export function WorkspaceTopbar() {
                   onClick={() => toggleFilter("status", "D")}
                   className={`rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors ${
                     filters.status === "D"
-                      ? "bg-gray-600 text-white"
-                      : "border border-border text-text-secondary hover:bg-surface-hover"
+                      ? "bg-fg-subtle text-white"
+                      : "border border-edge text-fg-muted hover:bg-surface-2"
                   }`}
                 >
                   {statusCounts.D} Info Ausente
@@ -150,7 +158,7 @@ export function WorkspaceTopbar() {
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-8 px-2 text-xs text-text-tertiary hover:text-text-primary"
+                className="h-8 px-2 text-xs text-fg-subtle hover:text-fg"
                 onClick={() => setShowDocs(!showDocs)}
                 title="Documentos carregados"
               >
@@ -159,17 +167,17 @@ export function WorkspaceTopbar() {
                 </span>
               </Button>
               {showDocs && (
-                <div className="absolute right-0 top-full z-50 mt-1 w-80 rounded-lg border border-border bg-surface p-4 shadow-lg">
-                  <p className="mb-2 text-xs font-bold text-text-primary">
+                <div className="absolute right-0 top-full z-50 mt-1 w-80 rounded-lg border border-edge bg-surface-1 p-4 shadow-lg">
+                  <p className="mb-2 text-xs font-bold text-fg">
                     Documentos Carregados
                   </p>
                   {engDocs.length > 0 && (
                     <div className="mb-3">
-                      <p className="mb-1 text-xs font-semibold text-text-secondary">
+                      <p className="mb-1 text-xs font-semibold text-fg-muted">
                         Engenharia ({engDocs.length})
                       </p>
                       {engDocs.map((d) => (
-                        <p key={d.id} className="truncate font-mono text-xs text-text-primary" title={d.nome_arquivo}>
+                        <p key={d.id} className="truncate font-mono text-xs text-fg" title={d.nome_arquivo}>
                           {d.nome_arquivo}
                         </p>
                       ))}
@@ -177,11 +185,11 @@ export function WorkspaceTopbar() {
                   )}
                   {fornDocs.length > 0 && (
                     <div>
-                      <p className="mb-1 text-xs font-semibold text-text-secondary">
+                      <p className="mb-1 text-xs font-semibold text-fg-muted">
                         Fornecedor ({fornDocs.length})
                       </p>
                       {fornDocs.map((d) => (
-                        <p key={d.id} className="truncate font-mono text-xs text-text-primary" title={d.nome_arquivo}>
+                        <p key={d.id} className="truncate font-mono text-xs text-fg" title={d.nome_arquivo}>
                           {d.nome_arquivo}
                         </p>
                       ))}
@@ -194,7 +202,7 @@ export function WorkspaceTopbar() {
           <Button
             variant="ghost"
             size="sm"
-            className="h-8 w-8 p-0 text-text-tertiary hover:text-text-primary"
+            className="h-8 w-8 p-0 text-fg-subtle hover:text-fg"
             onClick={() => setShowHelp(true)}
             title="Atalhos de teclado (?)"
           >
@@ -204,7 +212,7 @@ export function WorkspaceTopbar() {
             <Button
               variant="ghost"
               size="sm"
-              className="h-8 px-2 text-xs text-text-secondary hover:text-text-primary"
+              className="h-8 px-2 text-xs text-fg-muted hover:text-fg"
               onClick={() => setShowSetupOverride(!showSetupOverride)}
               title={showSetupOverride ? "Voltar aos resultados" : "Modificar documentos ou reanalisar"}
             >
@@ -226,7 +234,7 @@ export function WorkspaceTopbar() {
           <Button
             variant="ghost"
             size="sm"
-            className="h-8 text-xs text-text-tertiary hover:text-error-text"
+            className="h-8 text-xs text-fg-subtle hover:text-danger-text"
             onClick={handleDelete}
             disabled={deleting}
           >

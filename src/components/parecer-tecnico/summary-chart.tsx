@@ -9,11 +9,11 @@ interface SummaryChartProps {
 }
 
 const SEGMENTS = [
-  { key: "aprovados", label: "Aprovados (A)", color: "#22C55E", prop: "aprovados" as const },
-  { key: "comentarios", label: "Aprov. c/ Com. (B)", color: "#EAB308", prop: "aprovadosComentarios" as const },
-  { key: "rejeitados", label: "Rejeitados (C)", color: "#EF4444", prop: "rejeitados" as const },
-  { key: "ausente", label: "Info Ausente (D)", color: "#6B7280", prop: "infoAusente" as const },
-  { key: "adicionais", label: "Adicionais (E)", color: "#3B82F6", prop: "itensAdicionais" as const },
+  { key: "aprovados", label: "Aprovados (A)", color: "var(--success)", prop: "aprovados" as const },
+  { key: "comentarios", label: "Aprov. c/ Com. (B)", color: "var(--warning)", prop: "aprovadosComentarios" as const },
+  { key: "rejeitados", label: "Rejeitados (C)", color: "var(--danger)", prop: "rejeitados" as const },
+  { key: "ausente", label: "Info Ausente (D)", color: "var(--fg-subtle)", prop: "infoAusente" as const },
+  { key: "adicionais", label: "Adicionais (E)", color: "var(--info)", prop: "itensAdicionais" as const },
 ];
 
 export function SummaryChart(props: SummaryChartProps) {
@@ -39,8 +39,8 @@ export function SummaryChart(props: SummaryChartProps) {
           className="h-full w-full rounded-full"
           style={{ background: gradient }}
         />
-        <div className="absolute inset-3 flex items-center justify-center rounded-full bg-bg-primary">
-          <span className="text-xl font-bold text-text-primary">{total}</span>
+        <div className="absolute inset-3 flex items-center justify-center rounded-full bg-canvas">
+          <span className="text-xl font-bold text-fg">{total}</span>
         </div>
       </div>
       <div className="space-y-1">
@@ -50,7 +50,7 @@ export function SummaryChart(props: SummaryChartProps) {
           return (
             <div key={seg.key} className="flex items-center gap-2">
               <div className="h-3 w-3 rounded-sm" style={{ backgroundColor: seg.color }} />
-              <span className="text-xs text-text-secondary">
+              <span className="text-xs text-fg-muted">
                 {seg.label}: {val}
               </span>
             </div>

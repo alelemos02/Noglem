@@ -1,66 +1,62 @@
-@import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
-
 @import "tailwindcss";
 @import "tw-animate-css";
 
-@custom-variant dark (&:is(.dark *));
-
 /* ==========================================================================
-   Tailwind v4 Theme Registration
-   Maps JulIA Design System tokens to Tailwind utility classes
+   JulIA Design System v3 — "instrumento de precisão"
+   Dark-first, data-dense. Fontes servidas via next/font (src/lib/fonts.ts).
+
+   Camadas:
+   1. @theme inline — registra tokens como utilities Tailwind v4
+   2. :root — valores dos tokens (fonte única de verdade)
+   3. Aliases de compatibilidade — tokens antigos mapeados para os novos
+      (REMOVER na Fase 6 do redesign, após migração de todas as telas)
    ========================================================================== */
+
 @theme inline {
   /* ---- Font Families ---- */
-  --font-sans: 'Inter', sans-serif;
-  --font-brand: 'Rajdhani', sans-serif;
-  --font-heading: 'Space Grotesk', sans-serif;
-  --font-body: 'Inter', sans-serif;
-  --font-mono: 'JetBrains Mono', monospace;
+  --font-sans: var(--font-plex-sans), system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, monospace;
 
-  /* ---- Design System Colors ---- */
-  --color-bg-primary: var(--color-bg-primary);
-  --color-bg-secondary: var(--color-bg-secondary);
-  --color-bg-tertiary: var(--color-bg-tertiary);
-  --color-bg-elevated: var(--color-bg-elevated);
-  --color-bg-overlay: var(--color-bg-overlay);
+  /* ---- Superfícies ---- */
+  --color-canvas: var(--canvas);
+  --color-surface-1: var(--surface-1);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-overlay: var(--overlay);
 
-  --color-surface: var(--color-surface);
-  --color-surface-hover: var(--color-surface-hover);
-  --color-surface-active: var(--color-surface-active);
+  /* ---- Bordas ---- */
+  --color-edge: var(--edge);
+  --color-edge-strong: var(--edge-strong);
 
-  --color-border: var(--color-border);
-  --color-border-hover: var(--color-border-hover);
-  --color-border-focus: var(--color-border-focus);
+  /* ---- Texto ---- */
+  --color-fg: var(--fg);
+  --color-fg-muted: var(--fg-muted);
+  --color-fg-subtle: var(--fg-subtle);
+  --color-fg-disabled: var(--fg-disabled);
+  --color-fg-inverse: var(--fg-inverse);
 
-  --color-text-primary: var(--color-text-primary);
-  --color-text-secondary: var(--color-text-secondary);
-  --color-text-tertiary: var(--color-text-tertiary);
-  --color-text-disabled: var(--color-text-disabled);
-  --color-text-inverse: var(--color-text-inverse);
+  /* ---- Accent ---- */
+  --color-accent: var(--accent-c);
+  --color-accent-hover: var(--accent-c-hover);
+  --color-accent-active: var(--accent-c-active);
+  --color-accent-subtle: var(--accent-c-subtle);
+  --color-accent-fg: var(--accent-c-fg);
 
-  --color-accent: var(--color-accent);
-  --color-accent-hover: var(--color-accent-hover);
-  --color-accent-active: var(--color-accent-active);
-  --color-accent-muted: var(--color-accent-muted);
-  --color-accent-text: var(--color-accent-text);
+  /* ---- Estados semânticos ---- */
+  --color-success: var(--success);
+  --color-success-subtle: var(--success-subtle);
+  --color-success-text: var(--success-text);
+  --color-warning: var(--warning);
+  --color-warning-subtle: var(--warning-subtle);
+  --color-warning-text: var(--warning-text);
+  --color-danger: var(--danger);
+  --color-danger-subtle: var(--danger-subtle);
+  --color-danger-text: var(--danger-text);
+  --color-info: var(--info);
+  --color-info-subtle: var(--info-subtle);
+  --color-info-text: var(--info-text);
 
-  --color-success: var(--color-success);
-  --color-success-muted: var(--color-success-muted);
-  --color-success-text: var(--color-success-text);
-
-  --color-warning: var(--color-warning);
-  --color-warning-muted: var(--color-warning-muted);
-  --color-warning-text: var(--color-warning-text);
-
-  --color-error: var(--color-error);
-  --color-error-muted: var(--color-error-muted);
-  --color-error-text: var(--color-error-text);
-
-  --color-info: var(--color-info);
-  --color-info-muted: var(--color-info-muted);
-  --color-info-text: var(--color-info-text);
-
-  /* ---- Shadcn Compat Colors ---- */
+  /* ---- Shadcn Compat ---- */
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -93,18 +89,20 @@
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
 
-  /* ---- Border Radius ---- */
-  --radius-sm: 2px;
+  /* ---- Border Radius (mais quadrado — instrumento) ---- */
+  --radius-xs: 2px;
+  --radius-sm: 3px;
   --radius-md: 4px;
-  --radius-lg: 8px;
-  --radius-xl: 12px;
+  --radius-lg: 6px;
+  --radius-xl: 8px;
 
   /* ---- Shadows ---- */
   --shadow-sm: var(--shadow-sm);
   --shadow-md: var(--shadow-md);
   --shadow-lg: var(--shadow-lg);
   --shadow-xl: var(--shadow-xl);
-  --shadow-accent: var(--shadow-accent);
+  --shadow-focus: var(--shadow-focus);
+  --shadow-accent: var(--shadow-focus);
 
   /* ---- Animations ---- */
   --animate-fade-in: fade-in var(--duration-normal) var(--easing-out);
@@ -129,35 +127,47 @@
 }
 
 /* ==========================================================================
-   JulIA Design System - Token Values
-   Dark Mode (default) in :root, Light Mode override below
+   Token Values — dark é a identidade (não um "modo")
    ========================================================================== */
 :root {
-  /* ---- Typography ---- */
-  --font-brand: 'Rajdhani', sans-serif;
-  --font-heading: 'Space Grotesk', sans-serif;
-  --font-body: 'Inter', sans-serif;
-  --font-mono: 'JetBrains Mono', monospace;
+  /* ---- Superfícies: grafite frio em camadas ---- */
+  --canvas: #121318;
+  --surface-1: #17181D;
+  --surface-2: #1C1E25;
+  --surface-3: #232530;
+  --overlay: rgba(8, 9, 12, 0.65);
 
-  /* ---- Spacing (base 4px) ---- */
-  --space-0: 0;
-  --space-0-5: 0.125rem;
-  --space-1: 0.25rem;
-  --space-1-5: 0.375rem;
-  --space-2: 0.5rem;
-  --space-3: 0.75rem;
-  --space-4: 1rem;
-  --space-5: 1.25rem;
-  --space-6: 1.5rem;
-  --space-8: 2rem;
-  --space-10: 2.5rem;
-  --space-12: 3rem;
-  --space-16: 4rem;
-  --space-20: 5rem;
-  --space-24: 6rem;
+  /* ---- Bordas ---- */
+  --edge: #282A33;
+  --edge-strong: #3A3D4A;
 
-  /* ---- Border Radius ---- */
-  --radius: 0.5rem;
+  /* ---- Texto ---- */
+  --fg: #E9EBEF;
+  --fg-muted: #A3A9B5;
+  --fg-subtle: #6E7480;
+  --fg-disabled: #474C58;
+  --fg-inverse: #121318;
+
+  /* ---- Accent: azure técnico (HMI/SCADA) ---- */
+  --accent-c: #4BA4EE;
+  --accent-c-hover: #6AB5F2;
+  --accent-c-active: #3B8FD6;
+  --accent-c-subtle: rgba(75, 164, 238, 0.13);
+  --accent-c-fg: #0C1218;
+
+  /* ---- Estados semânticos ---- */
+  --success: #43C583;
+  --success-subtle: rgba(67, 197, 131, 0.13);
+  --success-text: #62D49A;
+  --warning: #DFB13F;
+  --warning-subtle: rgba(223, 177, 63, 0.13);
+  --warning-text: #E9C666;
+  --danger: #EF5F52;
+  --danger-subtle: rgba(239, 95, 82, 0.14);
+  --danger-text: #F58B81;
+  --info: #4BA4EE;
+  --info-subtle: rgba(75, 164, 238, 0.13);
+  --info-text: #7BBCF3;
 
   /* ---- Z-Index ---- */
   --z-base: 0;
@@ -178,147 +188,48 @@
   --easing-in: cubic-bezier(0.4, 0, 1, 1);
   --easing-out: cubic-bezier(0, 0, 0.2, 1);
 
-  /* ---- Shadows (Dark Mode) ---- */
+  /* ---- Shadows ---- */
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
   --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4);
   --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
   --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.6);
-  --shadow-accent: 0 0 0 3px rgba(255, 77, 45, 0.25);
-
-  /* ==========================================================================
-     COLORS - Dark Mode (Default)
-     ========================================================================== */
-  --color-bg-primary: #0A0A0C;
-  --color-bg-secondary: #111114;
-  --color-bg-tertiary: #18181C;
-  --color-bg-elevated: #1E1E24;
-  --color-bg-overlay: rgba(0, 0, 0, 0.6);
-
-  --color-surface: #16161A;
-  --color-surface-hover: #1C1C22;
-  --color-surface-active: #222228;
-
-  --color-border: #2A2A32;
-  --color-border-hover: #3A3A44;
-  --color-border-focus: #FF4D2D;
-
-  --color-text-primary: #F0F0F2;
-  --color-text-secondary: #A0A0AA;
-  --color-text-tertiary: #6E6E7A;
-  --color-text-disabled: #444450;
-  --color-text-inverse: #0A0A0C;
-
-  --color-accent: #FF4D2D;
-  --color-accent-hover: #FF6347;
-  --color-accent-active: #E0401F;
-  --color-accent-muted: rgba(255, 77, 45, 0.15);
-  --color-accent-text: #FF6347;
-
-  --color-success: #22C55E;
-  --color-success-muted: rgba(34, 197, 94, 0.15);
-  --color-success-text: #4ADE80;
-
-  --color-warning: #EAB308;
-  --color-warning-muted: rgba(234, 179, 8, 0.15);
-  --color-warning-text: #FACC15;
-
-  --color-error: #EF4444;
-  --color-error-muted: rgba(239, 68, 68, 0.15);
-  --color-error-text: #F87171;
-
-  --color-info: #3B82F6;
-  --color-info-muted: rgba(59, 130, 246, 0.15);
-  --color-info-text: #60A5FA;
+  --shadow-focus: 0 0 0 3px rgba(75, 164, 238, 0.25);
 
   /* ---- Shadcn Variable Mapping ---- */
-  --background: var(--color-bg-primary);
-  --foreground: var(--color-text-primary);
-  --card: var(--color-surface);
-  --card-foreground: var(--color-text-primary);
-  --popover: var(--color-surface);
-  --popover-foreground: var(--color-text-primary);
-  --primary: var(--color-accent);
-  --primary-foreground: #FFFFFF;
-  --secondary: var(--color-bg-tertiary);
-  --secondary-foreground: var(--color-text-primary);
-  --muted: var(--color-bg-elevated);
-  --muted-foreground: var(--color-text-secondary);
-  --accent: var(--color-surface-hover);
-  --accent-foreground: var(--color-text-primary);
-  --destructive: var(--color-error);
-  --destructive-foreground: var(--color-text-primary);
-  --border: var(--color-border);
-  --input: var(--color-bg-tertiary);
-  --ring: var(--color-accent);
+  --background: var(--canvas);
+  --foreground: var(--fg);
+  --card: var(--surface-1);
+  --card-foreground: var(--fg);
+  --popover: var(--surface-3);
+  --popover-foreground: var(--fg);
+  --primary: var(--accent-c);
+  --primary-foreground: var(--accent-c-fg);
+  --secondary: var(--surface-2);
+  --secondary-foreground: var(--fg);
+  --muted: var(--surface-2);
+  --muted-foreground: var(--fg-muted);
+  --destructive: var(--danger);
+  --destructive-foreground: var(--fg);
+  --border: var(--edge);
+  --input: var(--surface-2);
+  --ring: var(--accent-c);
 
   /* Charts */
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
+  --chart-1: #4BA4EE;
+  --chart-2: #43C583;
+  --chart-3: #DFB13F;
+  --chart-4: #EF5F52;
+  --chart-5: #A3A9B5;
 
   /* Sidebar */
-  --sidebar: var(--color-bg-secondary);
-  --sidebar-foreground: var(--color-text-primary);
-  --sidebar-primary: var(--color-accent);
-  --sidebar-primary-foreground: #FFFFFF;
-  --sidebar-accent: var(--color-surface-hover);
-  --sidebar-accent-foreground: var(--color-text-primary);
-  --sidebar-border: var(--color-border);
-  --sidebar-ring: var(--color-accent);
-}
-
-/* Light Mode Override */
-.light,
-[data-theme="light"] {
-  --color-bg-primary: #FAFAFA;
-  --color-bg-secondary: #F4F4F5;
-  --color-bg-tertiary: #E8E8EC;
-  --color-bg-elevated: #FFFFFF;
-  --color-bg-overlay: rgba(0, 0, 0, 0.3);
-
-  --color-surface: #FFFFFF;
-  --color-surface-hover: #F4F4F5;
-  --color-surface-active: #E8E8EC;
-
-  --color-border: #D4D4D8;
-  --color-border-hover: #A1A1AA;
-  --color-border-focus: #D93A1F;
-
-  --color-text-primary: #18181B;
-  --color-text-secondary: #52525B;
-  --color-text-tertiary: #A1A1AA;
-  --color-text-disabled: #D4D4D8;
-  --color-text-inverse: #FAFAFA;
-
-  --color-accent: #D93A1F;
-  --color-accent-hover: #B83216;
-  --color-accent-active: #A02B12;
-  --color-accent-muted: rgba(217, 58, 31, 0.1);
-  --color-accent-text: #D93A1F;
-
-  --color-success: #16A34A;
-  --color-success-muted: rgba(22, 163, 74, 0.1);
-  --color-success-text: #15803D;
-
-  --color-warning: #CA8A04;
-  --color-warning-muted: rgba(202, 138, 4, 0.1);
-  --color-warning-text: #A16207;
-
-  --color-error: #DC2626;
-  --color-error-muted: rgba(220, 38, 38, 0.1);
-  --color-error-text: #B91C1C;
-
-  --color-info: #2563EB;
-  --color-info-muted: rgba(37, 99, 235, 0.1);
-  --color-info-text: #1D4ED8;
-
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
-  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.15);
-  --shadow-accent: 0 0 0 3px rgba(217, 58, 31, 0.2);
+  --sidebar: var(--surface-1);
+  --sidebar-foreground: var(--fg-muted);
+  --sidebar-primary: var(--accent-c);
+  --sidebar-primary-foreground: var(--accent-c-fg);
+  --sidebar-accent: var(--surface-2);
+  --sidebar-accent-foreground: var(--fg);
+  --sidebar-border: var(--edge);
+  --sidebar-ring: var(--accent-c);
 }
 
 /* ==========================================================================
@@ -326,15 +237,24 @@
    ========================================================================== */
 @layer base {
   * {
-    @apply border-border outline-ring/50;
+    @apply border-edge outline-ring/50;
   }
 
   body {
-    @apply bg-background text-foreground;
-    font-family: var(--font-body);
+    @apply bg-canvas text-fg;
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
   }
+}
 
-  h1, h2, h3, h4, h5, h6 {
-    font-family: var(--font-heading);
-  }
+/* ==========================================================================
+   Utilitários de assinatura
+   ========================================================================== */
+@utility microlabel {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--fg-subtle);
 }

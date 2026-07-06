@@ -1,7 +1,9 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { patecApi, type DocumentoResponse } from "@/lib/patec-api";
+import { Dropzone } from "@/components/ui/dropzone";
+import { toast } from "@/components/ui/toast";
 
 interface FileUploadZoneProps {
   parecerId: string;
@@ -14,17 +16,15 @@ interface FileUploadZoneProps {
 export function FileUploadZone({ parecerId, tipo, label, documentos, onUploadComplete }: FileUploadZoneProps) {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
-  const [dragOver, setDragOver] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
 
   const filtered = documentos.filter((d) => d.tipo === tipo);
 
-  const handleFiles = async (files: FileList | null) => {
-    if (!files || files.length === 0) return;
+  const handleFiles = async (files: File[]) => {
+    if (files.length === 0) return;
     setUploading(true);
     setError("");
     try {
-      for (const file of Array.from(files)) {
+      for (const file of files) {
         await patecApi.documentos.upload(parecerId, tipo, file);
       }
       onUploadComplete();
@@ -39,6 +39,7 @@ export function FileUploadZone({ parecerId, tipo, label, documentos, onUploadCom
     try {
       await patecApi.documentos.delete(parecerId, docId);
       onUploadComplete();
+      toast.success("Documento removido");
     } catch {
       setError("Erro ao remover documento");
     }
@@ -53,43 +54,28 @@ export function FileUploadZone({ parecerId, tipo, label, documentos, onUploadCom
 
   return (
     <div>
-      <p className="mb-2 text-sm font-medium text-text-secondary">{label}</p>
-      <div
-        onClick={() => inputRef.current?.click()}
-        onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-        onDragLeave={() => setDragOver(false)}
-        onDrop={(e) => { e.preventDefault(); setDragOver(false); handleFiles(e.dataTransfer.files); }}
-        className={`cursor-pointer rounded-lg border-2 border-dashed p-4 text-center transition-colors ${
-          dragOver ? "border-info bg-info-muted" : "border-border hover:border-border-hover"
-        }`}
-      >
-        <input
-          ref={inputRef}
-          type="file"
-          accept=".pdf,.docx,.xlsx"
-          multiple
-          className="hidden"
-          onChange={(e) => handleFiles(e.target.files)}
-        />
-        <p className="text-sm text-text-tertiary">
-          {uploading ? "Enviando..." : "Arraste arquivos ou clique para selecionar"}
-        </p>
-        <p className="mt-1 text-xs text-text-disabled">PDF, DOCX, XLSX (max 50MB)</p>
-      </div>
-
-      {error && <p className="mt-2 text-xs text-error-text">{error}</p>}
+      <p className="mb-2 text-sm font-medium text-fg-muted">{label}</p>
+      <Dropzone
+        onFiles={handleFiles}
+        accept=".pdf,.docx,.xlsx"
+        multiple
+        compact
+        loading={uploading}
+        error={error}
+        hint="PDF, DOCX, XLSX (máx. 50 MB)"
+      />
 
       {filtered.length > 0 && (
         <ul className="mt-3 space-y-1">
           {filtered.map((doc) => (
-            <li key={doc.id} className="flex items-center justify-between rounded-md bg-surface-hover px-3 py-2">
-              <div className="flex items-center gap-2 min-w-0">
-                <span className="truncate text-sm text-text-primary">{doc.nome_arquivo}</span>
+            <li key={doc.id} className="flex items-center justify-between rounded-md border border-edge bg-surface-2 px-3 py-2">
+              <div className="flex min-w-0 items-center gap-2">
+                <span className="truncate text-sm text-fg">{doc.nome_arquivo}</span>
                 {doc.tamanho_bytes && (
-                  <span className="flex-shrink-0 text-xs text-text-tertiary">{formatSize(doc.tamanho_bytes)}</span>
+                  <span className="flex-shrink-0 font-mono text-xs tabular-nums text-fg-subtle">{formatSize(doc.tamanho_bytes)}</span>
                 )}
               </div>
-              <button onClick={() => handleDelete(doc.id)} className="ml-2 text-xs text-text-tertiary hover:text-error-text">
+              <button onClick={() => handleDelete(doc.id)} className="ml-2 text-xs text-fg-subtle transition-colors hover:text-danger-text">
                 Remover
               </button>
             </li>

@@ -18,13 +18,13 @@ export function EstimativaCusto({ parecerId }: { parecerId: string }) {
   if (loading || !estimativa) return null;
 
   return (
-    <div className="rounded-lg border border-info/30 bg-info-muted p-4">
+    <div className="rounded-lg border border-info/30 bg-info-subtle p-4">
       <button onClick={() => setCollapsed(!collapsed)} className="flex w-full items-center justify-between text-sm font-medium text-info-text">
         Estimativa de custo
         <span className="text-xs">{collapsed ? "▼" : "▲"}</span>
       </button>
       {!collapsed && (
-        <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-text-secondary">
+        <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-fg-muted">
           <span>Caracteres:</span><span>{estimativa.total_caracteres.toLocaleString()}</span>
           <span>Tokens entrada:</span><span>{estimativa.tokens_estimados_entrada.toLocaleString()}</span>
           <span>Tokens saída:</span><span>{estimativa.tokens_estimados_saida.toLocaleString()}</span>

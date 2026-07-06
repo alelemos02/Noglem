@@ -86,14 +86,14 @@ export function RevisoesPanel({ parecerId }: RevisoesPanelProps) {
 
   if (loading) {
     return (
-      <p className="text-sm text-text-secondary">Carregando revisoes...</p>
+      <p className="text-sm text-fg-muted">Carregando revisoes...</p>
     );
   }
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <p className="text-sm text-text-secondary">
+        <p className="text-sm text-fg-muted">
           {revisoes.length} revisao(oes) salva(s)
         </p>
         <Button
@@ -121,7 +121,7 @@ export function RevisoesPanel({ parecerId }: RevisoesPanelProps) {
 
       {revisoes.length > 1 && (
         <div className="flex items-center gap-2">
-          <p className="text-xs text-text-secondary">
+          <p className="text-xs text-fg-muted">
             Selecione 2 revisoes para comparar:
           </p>
           <Button
@@ -151,21 +151,21 @@ export function RevisoesPanel({ parecerId }: RevisoesPanelProps) {
               className={`flex cursor-pointer items-center justify-between rounded border p-3 text-sm transition-colors ${
                 isSelected
                   ? "border-accent bg-accent/10"
-                  : "border-border hover:bg-surface-hover"
+                  : "border-edge hover:bg-surface-2"
               }`}
               onClick={() => toggleRevSelection(rev.numero_revisao)}
             >
               <div>
-                <span className="font-medium text-text-primary">
+                <span className="font-medium text-fg">
                   Revisao {rev.numero_revisao}
                 </span>
                 {rev.motivo && (
-                  <span className="ml-2 text-text-secondary">
+                  <span className="ml-2 text-fg-muted">
                     - {rev.motivo}
                   </span>
                 )}
               </div>
-              <div className="flex items-center gap-3 text-xs text-text-secondary">
+              <div className="flex items-center gap-3 text-xs text-fg-muted">
                 <span>
                   {rev.total_itens} itens | {rev.parecer_geral || "Pendente"}
                 </span>
@@ -185,26 +185,26 @@ export function RevisoesPanel({ parecerId }: RevisoesPanelProps) {
       </div>
 
       {compareResult && (
-        <div className="rounded-lg border border-border bg-surface p-4">
-          <h4 className="mb-3 text-sm font-bold text-text-primary">
+        <div className="rounded-lg border border-edge bg-surface-1 p-4">
+          <h4 className="mb-3 text-sm font-bold text-fg">
             Comparacao: Rev {compareResult.revisao_a.numero_revisao} vs Rev{" "}
             {compareResult.revisao_b.numero_revisao}
           </h4>
           <div className="space-y-3 text-sm">
             {Object.keys(compareResult.diferencas.resumo).length > 0 && (
               <div>
-                <p className="mb-1 font-medium text-text-primary">
+                <p className="mb-1 font-medium text-fg">
                   Alteracoes no resumo:
                 </p>
                 {Object.entries(compareResult.diferencas.resumo).map(
                   ([campo, diff]) => (
-                    <p key={campo} className="text-xs text-text-secondary">
+                    <p key={campo} className="text-xs text-fg-muted">
                       <span className="font-medium">{campo}:</span>{" "}
-                      <span className="text-red-400">
+                      <span className="text-danger">
                         {String(diff.de)}
                       </span>{" "}
                       →{" "}
-                      <span className="text-green-400">
+                      <span className="text-success">
                         {String(diff.para)}
                       </span>
                     </p>
@@ -215,18 +215,18 @@ export function RevisoesPanel({ parecerId }: RevisoesPanelProps) {
 
             <div className="flex gap-4 text-xs">
               {compareResult.diferencas.itens_adicionados > 0 && (
-                <span className="text-green-400">
+                <span className="text-success">
                   +{compareResult.diferencas.itens_adicionados} itens
                   adicionados
                 </span>
               )}
               {compareResult.diferencas.itens_removidos > 0 && (
-                <span className="text-red-400">
+                <span className="text-danger">
                   -{compareResult.diferencas.itens_removidos} itens removidos
                 </span>
               )}
               {compareResult.diferencas.itens_alterados.length > 0 && (
-                <span className="text-yellow-400">
+                <span className="text-warning">
                   {compareResult.diferencas.itens_alterados.length} itens
                   alterados
                 </span>
@@ -235,7 +235,7 @@ export function RevisoesPanel({ parecerId }: RevisoesPanelProps) {
 
             {compareResult.diferencas.itens_alterados.length > 0 && (
               <div>
-                <p className="mb-1 font-medium text-text-primary">
+                <p className="mb-1 font-medium text-fg">
                   Itens alterados:
                 </p>
                 {compareResult.diferencas.itens_alterados
@@ -243,19 +243,19 @@ export function RevisoesPanel({ parecerId }: RevisoesPanelProps) {
                   .map((item) => (
                     <div
                       key={item.numero}
-                      className="mb-1 ml-2 border-l-2 border-yellow-600/50 pl-2 text-xs"
+                      className="mb-1 ml-2 border-l-2 border-warning/35 pl-2 text-xs"
                     >
-                      <span className="font-medium text-text-primary">
+                      <span className="font-medium text-fg">
                         Item {item.numero}:
                       </span>{" "}
                       {Object.entries(item.alteracoes).map(([key, diff]) => (
-                        <span key={key} className="mr-2 text-text-secondary">
+                        <span key={key} className="mr-2 text-fg-muted">
                           {key}:{" "}
-                          <span className="text-red-400">
+                          <span className="text-danger">
                             {String(diff.de)}
                           </span>{" "}
                           →{" "}
-                          <span className="text-green-400">
+                          <span className="text-success">
                             {String(diff.para)}
                           </span>
                         </span>
@@ -263,7 +263,7 @@ export function RevisoesPanel({ parecerId }: RevisoesPanelProps) {
                     </div>
                   ))}
                 {compareResult.diferencas.itens_alterados.length > 10 && (
-                  <p className="ml-2 text-xs text-text-tertiary">
+                  <p className="ml-2 text-xs text-fg-subtle">
                     ... e mais{" "}
                     {compareResult.diferencas.itens_alterados.length - 10}{" "}
                     alteracoes
@@ -276,7 +276,7 @@ export function RevisoesPanel({ parecerId }: RevisoesPanelProps) {
               compareResult.diferencas.itens_adicionados === 0 &&
               compareResult.diferencas.itens_removidos === 0 &&
               compareResult.diferencas.itens_alterados.length === 0 && (
-                <p className="text-text-secondary">
+                <p className="text-fg-muted">
                   Nenhuma diferenca encontrada entre as revisoes.
                 </p>
               )}

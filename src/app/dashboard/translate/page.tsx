@@ -1,10 +1,21 @@
 "use client";
 
 import { useState } from "react";
-import { Languages, ArrowRight, Copy, Check, Sparkles, Globe, Trash2 } from "lucide-react";
+import { ArrowRight, Copy, Check, Sparkles, Globe, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { PageHeader } from "@/components/ui/page-header";
+import { Textarea } from "@/components/ui/textarea";
+import { Alert } from "@/components/ui/alert";
+import { toast } from "@/components/ui/toast";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { cn } from "@/lib/utils";
 
 const languages = [
   { code: "pt", name: "Português" },
@@ -18,6 +29,30 @@ const languages = [
   { code: "ru", name: "Russo" },
   { code: "ar", name: "Árabe" },
 ];
+
+function LangPill({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        "rounded-sm px-2.5 py-1 font-mono text-[11px] uppercase tracking-wide transition-colors",
+        active
+          ? "bg-surface-3 font-medium text-fg"
+          : "text-fg-subtle hover:bg-surface-2 hover:text-fg"
+      )}
+    >
+      {children}
+    </button>
+  );
+}
 
 export default function TranslatePage() {
   const [sourceText, setSourceText] = useState("");
@@ -69,6 +104,7 @@ export default function TranslatePage() {
       setTranslatedText(data.translated_text);
       if (data.improved_text) setImprovedText(data.improved_text);
       if (data.detected_language) setDetectedLang(data.detected_language);
+      toast.success("Tradução concluída");
 
     } catch (err) {
       const message = err instanceof Error ? err.message : "Erro desconhecido";
@@ -82,118 +118,106 @@ export default function TranslatePage() {
   const handleCopy = (text: string) => {
     navigator.clipboard.writeText(text);
     setCopied(true);
+    toast.success("Copiado para a área de transferência");
     setTimeout(() => setCopied(false), 2000);
   };
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center gap-4">
-        <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-info-muted">
-          <Languages className="h-6 w-6 text-info" />
-        </div>
-        <div>
-          <h1 className="text-2xl font-bold">Tradutor AI</h1>
-          <p className="text-muted-foreground">
-            Traduza textos técnicos com precisão usando Google Gemini
-          </p>
-        </div>
-        <Badge className="ml-auto">Live</Badge>
-      </div>
+      <PageHeader tool="translate" />
 
       {/* Controls */}
-      <div className="flex items-center justify-between rounded-lg border bg-card p-4 shadow-sm">
-        <div className="flex items-center gap-3">
-          <Sparkles className={`h-6 w-6 ${improveMode ? "text-warning" : "text-muted-foreground"}`} />
-          <div>
-            <h3 className="font-semibold text-base">Melhorar texto</h3>
-            <p className="text-sm text-muted-foreground">Reescreve o texto original para maior fluidez antes de traduzir.</p>
+      <Card className="gap-0 py-0">
+        <CardContent className="flex items-center justify-between gap-4 p-4">
+          <div className="flex items-center gap-3">
+            <Sparkles className={`h-5 w-5 shrink-0 ${improveMode ? "text-warning" : "text-fg-subtle"}`} />
+            <div>
+              <h3 className="text-sm font-semibold text-fg">Melhorar texto</h3>
+              <p className="text-[13px] text-fg-muted">Reescreve o texto original para maior fluidez antes de traduzir.</p>
+            </div>
           </div>
-        </div>
-        <label className="relative inline-flex cursor-pointer items-center">
-          <input
-            type="checkbox"
-            className="peer sr-only"
-            checked={improveMode}
-            onChange={(e) => setImproveMode(e.target.checked)}
-          />
-          <div className="peer h-6 w-11 rounded-full bg-input after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:bg-background after:transition-all after:content-[''] peer-checked:bg-accent peer-checked:after:translate-x-full peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-ring peer-focus:ring-offset-2"></div>
-        </label>
-      </div>
+          <label className="relative inline-flex cursor-pointer items-center">
+            <input
+              type="checkbox"
+              className="peer sr-only"
+              checked={improveMode}
+              onChange={(e) => setImproveMode(e.target.checked)}
+            />
+            <div className="peer h-5 w-9 rounded-full bg-surface-3 border border-edge-strong after:absolute after:left-[3px] after:top-[3px] after:h-[14px] after:w-[14px] after:rounded-full after:bg-fg-muted after:transition-all after:content-[''] peer-checked:bg-accent peer-checked:border-accent peer-checked:after:translate-x-4 peer-checked:after:bg-accent-fg peer-focus-visible:outline-none peer-focus-visible:ring-2 peer-focus-visible:ring-accent peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-canvas"></div>
+          </label>
+        </CardContent>
+      </Card>
 
       {/* Translation Interface */}
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Source */}
-        <Card className="flex flex-col h-full">
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-base flex items-center gap-2">
-                Texto Original
+        <Card className="flex h-full flex-col gap-4">
+          <CardHeader className="pb-0">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <CardTitle className="flex items-center gap-2 text-sm">
+                Texto original
                 {detectedLang && (
-                  <span className="flex items-center gap-1 text-xs font-normal text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
-                    <Globe className="h-3 w-3" /> Detectado: {detectedLang}
+                  <span className="flex items-center gap-1 rounded-sm bg-surface-2 px-2 py-0.5 font-mono text-[10px] font-normal uppercase tracking-wide text-fg-muted">
+                    <Globe className="h-3 w-3" /> {detectedLang}
                   </span>
                 )}
               </CardTitle>
               <div className="flex items-center gap-2">
-                <div className="hidden sm:flex items-center gap-1 bg-muted/50 p-1 rounded-md">
-                  <button 
-                    onClick={() => setSourceLang("auto")}
-                    className={`px-3 py-1 text-xs rounded-sm transition-colors ${sourceLang === "auto" ? "bg-background shadow-sm font-medium" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}
-                  >
-                    Auto
-                  </button>
-                  <button onClick={() => setSourceLang("pt")} className={`px-3 py-1 text-xs rounded-sm transition-colors ${sourceLang === "pt" ? "bg-background shadow-sm font-medium" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}>PT</button>
-                  <button onClick={() => setSourceLang("en")} className={`px-3 py-1 text-xs rounded-sm transition-colors ${sourceLang === "en" ? "bg-background shadow-sm font-medium" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}>EN</button>
-                  <button onClick={() => setSourceLang("es")} className={`px-3 py-1 text-xs rounded-sm transition-colors ${sourceLang === "es" ? "bg-background shadow-sm font-medium" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}>ES</button>
+                <div className="hidden items-center gap-0.5 rounded-md border border-edge bg-surface-2/50 p-0.5 sm:flex">
+                  <LangPill active={sourceLang === "auto"} onClick={() => setSourceLang("auto")}>Auto</LangPill>
+                  <LangPill active={sourceLang === "pt"} onClick={() => setSourceLang("pt")}>PT</LangPill>
+                  <LangPill active={sourceLang === "en"} onClick={() => setSourceLang("en")}>EN</LangPill>
+                  <LangPill active={sourceLang === "es"} onClick={() => setSourceLang("es")}>ES</LangPill>
                 </div>
-                <select
-                  value={sourceLang}
-                  onChange={(e) => setSourceLang(e.target.value)}
-                  className="rounded-md border border-input bg-background px-3 py-1 text-sm max-w-[140px]"
-                >
-                  <option value="auto">Detectar Idioma</option>
-                  {languages.map((lang) => (
-                    <option key={lang.code} value={lang.code}>
-                      {lang.name}
-                    </option>
-                  ))}
-                </select>
+                <Select value={sourceLang} onValueChange={setSourceLang}>
+                  <SelectTrigger className="h-8 w-[150px] text-[13px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="auto">Detectar idioma</SelectItem>
+                    {languages.map((lang) => (
+                      <SelectItem key={lang.code} value={lang.code}>
+                        {lang.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
           </CardHeader>
           <CardContent className="flex-1">
-            <textarea
+            <Textarea
               value={sourceText}
               onChange={(e) => setSourceText(e.target.value)}
               placeholder="Digite ou cole o texto para traduzir..."
-              className="min-h-[300px] w-full resize-none rounded-md border border-input bg-background p-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              className="min-h-[300px] resize-none"
             />
           </CardContent>
         </Card>
 
         {/* Target */}
-        <Card className="flex flex-col h-full">
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-base">Tradução</CardTitle>
+        <Card className="flex h-full flex-col gap-4">
+          <CardHeader className="pb-0">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <CardTitle className="text-sm">Tradução</CardTitle>
               <div className="flex items-center gap-2">
-                <div className="hidden sm:flex items-center gap-1 bg-muted/50 p-1 rounded-md">
-                  <button onClick={() => setTargetLang("pt")} className={`px-3 py-1 text-xs rounded-sm transition-colors ${targetLang === "pt" ? "bg-background shadow-sm font-medium" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}>PT</button>
-                  <button onClick={() => setTargetLang("en")} className={`px-3 py-1 text-xs rounded-sm transition-colors ${targetLang === "en" ? "bg-background shadow-sm font-medium" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}>EN</button>
-                  <button onClick={() => setTargetLang("es")} className={`px-3 py-1 text-xs rounded-sm transition-colors ${targetLang === "es" ? "bg-background shadow-sm font-medium" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}>ES</button>
+                <div className="hidden items-center gap-0.5 rounded-md border border-edge bg-surface-2/50 p-0.5 sm:flex">
+                  <LangPill active={targetLang === "pt"} onClick={() => setTargetLang("pt")}>PT</LangPill>
+                  <LangPill active={targetLang === "en"} onClick={() => setTargetLang("en")}>EN</LangPill>
+                  <LangPill active={targetLang === "es"} onClick={() => setTargetLang("es")}>ES</LangPill>
                 </div>
-                <select
-                  value={targetLang}
-                  onChange={(e) => setTargetLang(e.target.value)}
-                  className="rounded-md border border-input bg-background px-3 py-1 text-sm max-w-[140px]"
-                >
-                  {languages.map((lang) => (
-                    <option key={lang.code} value={lang.code}>
-                      {lang.name}
-                    </option>
-                  ))}
-                </select>
+                <Select value={targetLang} onValueChange={setTargetLang}>
+                  <SelectTrigger className="h-8 w-[150px] text-[13px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {languages.map((lang) => (
+                      <SelectItem key={lang.code} value={lang.code}>
+                        {lang.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
           </CardHeader>
@@ -201,20 +225,17 @@ export default function TranslatePage() {
 
             {/* Improved Text Section (Optional) */}
             {improveMode && improvedText && (
-              <div className="rounded-md border border-warning/20 bg-warning-muted p-3">
-                <p className="mb-1 text-xs font-semibold text-warning-text flex items-center gap-1">
-                  <Sparkles className="h-3 w-3" /> Texto Melhorado (Original Refinado):
-                </p>
-                <p className="text-sm text-foreground/90 italic">{improvedText}</p>
-              </div>
+              <Alert variant="warning" title="Texto melhorado (original refinado)" icon={Sparkles}>
+                <p className="italic">{improvedText}</p>
+              </Alert>
             )}
 
-            <div className="relative flex-1 h-full">
-              <textarea
+            <div className="relative h-full flex-1">
+              <Textarea
                 value={translatedText}
                 readOnly
                 placeholder="A tradução aparecerá aqui..."
-                className={`w-full resize-none rounded-md border border-input bg-muted/50 p-3 text-sm ${improveMode && improvedText ? 'min-h-[220px]' : 'min-h-[300px]'}`}
+                className={`resize-none bg-surface-1 ${improveMode && improvedText ? "min-h-[220px]" : "min-h-[300px]"}`}
               />
               {translatedText && (
                 <Button
@@ -236,11 +257,7 @@ export default function TranslatePage() {
       </div>
 
       {/* Error Message */}
-      {error && (
-        <div className="rounded-lg border border-error/50 bg-error-muted p-4 text-center text-sm text-error-text">
-          {error}
-        </div>
-      )}
+      {error && <Alert variant="danger">{error}</Alert>}
 
       {/* Action Button */}
       <div className="flex justify-center gap-4">
@@ -249,7 +266,7 @@ export default function TranslatePage() {
           variant="outline"
           onClick={handleClear}
           disabled={!sourceText && !translatedText}
-          className="gap-2 min-w-[120px]"
+          className="min-w-[120px] gap-2"
         >
           <Trash2 className="h-4 w-4" />
           Limpar
@@ -257,14 +274,12 @@ export default function TranslatePage() {
         <Button
           size="lg"
           onClick={handleTranslate}
-          disabled={!sourceText.trim() || isLoading}
-          className="gap-2 min-w-[200px]"
+          disabled={!sourceText.trim()}
+          loading={isLoading}
+          className="min-w-[200px] gap-2"
         >
           {isLoading ? (
-            <>
-              <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-              Traduzindo...
-            </>
+            "Traduzindo..."
           ) : (
             <>
               Traduzir

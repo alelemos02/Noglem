@@ -44,7 +44,7 @@ export function ItemListPanel({ onItemSelect }: ItemListPanelProps) {
   return (
     <div className="flex h-full flex-col">
       {/* Search + filters */}
-      <div className="border-b border-border p-3 space-y-2">
+      <div className="border-b border-edge p-3 space-y-2">
         <Input
           placeholder="Buscar itens..."
           className="h-8 text-sm"
@@ -67,7 +67,7 @@ export function ItemListPanel({ onItemSelect }: ItemListPanelProps) {
                 className={`rounded-full px-2 py-0.5 text-xs font-medium transition-colors ${
                   active
                     ? "bg-accent text-white"
-                    : "border border-border text-text-secondary hover:bg-surface-hover"
+                    : "border border-edge text-fg-muted hover:bg-surface-2"
                 }`}
               >
                 {opt.label} ({count})
@@ -77,7 +77,7 @@ export function ItemListPanel({ onItemSelect }: ItemListPanelProps) {
         </div>
 
         {/* Count */}
-        <div className="text-xs text-text-tertiary">
+        <div className="text-xs text-fg-subtle">
           {filteredItens.length} de {itens.length} itens
           {summaryParts.length > 0 && ` (${summaryParts.join(", ")})`}
         </div>
@@ -86,7 +86,7 @@ export function ItemListPanel({ onItemSelect }: ItemListPanelProps) {
       {/* Item list */}
       <div className="flex-1 overflow-y-auto">
         {filteredItens.length === 0 ? (
-          <div className="p-6 text-center text-sm text-text-tertiary">
+          <div className="p-6 text-center text-sm text-fg-subtle">
             Nenhum item encontrado
           </div>
         ) : (
@@ -97,27 +97,27 @@ export function ItemListPanel({ onItemSelect }: ItemListPanelProps) {
                 key={item.id}
                 ref={isSelected ? selectedRef : undefined}
                 onClick={() => handleSelect(item.id)}
-                className={`cursor-pointer border-b border-border border-l-4 p-3 transition-colors ${
+                className={`cursor-pointer border-b border-edge border-l-4 p-3 transition-colors ${
                   STATUS_COLORS[item.status] || "border-l-border"
                 } ${
                   isSelected
                     ? "bg-accent/10 ring-1 ring-inset ring-accent/30"
-                    : "hover:bg-surface-hover"
+                    : "hover:bg-surface-2"
                 }`}
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-text-secondary">
+                      <span className="text-xs font-bold text-fg-muted">
                         Item {item.numero}
                       </span>
                       <StatusBadge status={item.status} />
                     </div>
-                    <p className="mt-1 line-clamp-2 text-sm text-text-primary">
+                    <p className="mt-1 line-clamp-2 text-sm text-fg">
                       {item.descricao_requisito}
                     </p>
                     {item.categoria && (
-                      <span className="mt-1 inline-block text-xs text-text-tertiary">
+                      <span className="mt-1 inline-block text-xs text-fg-subtle">
                         {item.categoria}
                       </span>
                     )}

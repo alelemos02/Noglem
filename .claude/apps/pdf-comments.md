@@ -34,3 +34,12 @@ Underline, StrikeOut, Squiggly) e exporta para Excel formatado. Filtra campos de
 - Apenas tipos `COMMENT_TYPES` são aceitos; anotações gráficas (Line, Polygon, Stamp) são ignoradas.
 - Limite: 100 MB por arquivo, validado no backend e comunicado ao frontend via campo `error` no resultado.
 - Rate limit reutiliza `enforce_pdf_rate_limit` (5 req/min por usuário).
+
+## Redesign v3 (2026-07)
+
+UI migrada para o design system v3 "instrumento de precisão" (ver `.claude/rules/design-system-conventions.md`):
+- Header via `<PageHeader tool="{id}">` — nome/descrição/badge vêm do `tools-registry.ts`
+- Upload via `<Dropzone>` compartilhado; loading via `<Spinner>`/`Button loading`
+- Erros persistentes em `<Alert>`; sucesso/erro transiente via `toast` (sonner); ações destrutivas via `useConfirm()`
+- Tokens novos: canvas/surface-1..3, edge, fg-*, accent azure — zero cores Tailwind literais
+- Endpoints e lógica de negócio inalterados

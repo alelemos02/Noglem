@@ -34,11 +34,11 @@ export function WorkspaceLayout() {
   };
 
   return (
-    <div className="flex h-full flex-col bg-bg-primary">
+    <div className="flex h-full flex-col bg-canvas">
       <WorkspaceTopbar />
 
       {/* Mobile tab bar */}
-      <div className="flex border-b border-border bg-surface lg:hidden">
+      <div className="flex border-b border-edge bg-surface-1 lg:hidden">
         {(
           [
             { key: "lista", label: "Itens" },
@@ -53,7 +53,7 @@ export function WorkspaceLayout() {
             className={`flex-1 px-4 py-2.5 text-sm font-medium transition-colors ${
               mobileTab === tab.key
                 ? "border-b-2 border-accent text-accent"
-                : "text-text-secondary hover:text-text-primary"
+                : "text-fg-muted hover:text-fg"
             }`}
           >
             {tab.label}
@@ -64,11 +64,11 @@ export function WorkspaceLayout() {
       {/* Desktop: 2-panel grid */}
       <div className="hidden flex-1 overflow-hidden lg:grid lg:grid-cols-[320px_1fr]">
         {/* Left panel - Item list */}
-        <div className="overflow-y-auto border-r border-border bg-surface">
+        <div className="overflow-y-auto border-r border-edge bg-surface-1">
           {hasResults ? (
             <ItemListPanel />
           ) : (
-            <div className="flex h-full items-center justify-center p-6 text-center text-sm text-text-tertiary">
+            <div className="flex h-full items-center justify-center p-6 text-center text-sm text-fg-subtle">
               Os itens aparecerao aqui apos a analise.
             </div>
           )}
@@ -88,11 +88,11 @@ export function WorkspaceLayout() {
       {/* Mobile: tabbed view */}
       <div className="flex-1 overflow-y-auto lg:hidden">
         {mobileTab === "lista" && (
-          <div className="bg-surface">
+          <div className="bg-surface-1">
             {hasResults ? (
               <ItemListPanel onItemSelect={() => setMobileTab("detalhe")} />
             ) : (
-              <div className="p-6 text-center text-sm text-text-tertiary">
+              <div className="p-6 text-center text-sm text-fg-subtle">
                 Os itens aparecerao aqui apos a analise.
               </div>
             )}
@@ -102,11 +102,11 @@ export function WorkspaceLayout() {
           <div>{renderCenterPanel()}</div>
         )}
         {mobileTab === "chat" && (
-          <div className="flex h-full flex-col bg-surface">
+          <div className="flex h-full flex-col bg-surface-1">
             {hasResults ? (
               <ChatPanelWrapper />
             ) : (
-              <div className="flex h-full items-center justify-center p-6 text-center text-sm text-text-tertiary">
+              <div className="flex h-full items-center justify-center p-6 text-center text-sm text-fg-subtle">
                 O chat com IA estara disponivel apos a analise.
               </div>
             )}

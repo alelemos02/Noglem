@@ -1,31 +1,41 @@
 "use client";
 
-const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
-  A: { label: "A - Aprovado", className: "bg-green-900/40 text-green-400 border-green-700/50" },
-  B: { label: "B - Aprov. Com.", className: "bg-yellow-900/40 text-yellow-400 border-yellow-700/50" },
-  C: { label: "C - Rejeitado", className: "bg-red-900/40 text-red-400 border-red-700/50" },
-  D: { label: "D - Info Ausente", className: "bg-gray-800/60 text-gray-400 border-gray-600/50" },
-  E: { label: "E - Adicional", className: "bg-blue-900/40 text-blue-400 border-blue-700/50" },
+import { Badge, type BadgeProps } from "@/components/ui/badge";
+
+type Variant = NonNullable<BadgeProps["variant"]>;
+
+const STATUS_CONFIG: Record<string, { label: string; variant: Variant }> = {
+  A: { label: "A · Aprovado", variant: "success" },
+  B: { label: "B · Aprov. Com.", variant: "warning" },
+  C: { label: "C · Rejeitado", variant: "error" },
+  D: { label: "D · Info Ausente", variant: "secondary" },
+  E: { label: "E · Adicional", variant: "info" },
 };
 
-const PARECER_GERAL_CONFIG: Record<string, { label: string; className: string }> = {
-  APROVADO: { label: "Aprovado", className: "bg-green-900/40 text-green-400 border-green-700/50" },
-  APROVADO_COM_COMENTARIOS: { label: "Aprov. c/ Com.", className: "bg-yellow-900/40 text-yellow-400 border-yellow-700/50" },
-  REJEITADO: { label: "Rejeitado", className: "bg-red-900/40 text-red-400 border-red-700/50" },
+const PARECER_GERAL_CONFIG: Record<string, { label: string; variant: Variant }> = {
+  APROVADO: { label: "Aprovado", variant: "success" },
+  APROVADO_COM_COMENTARIOS: { label: "Aprov. c/ Com.", variant: "warning" },
+  REJEITADO: { label: "Rejeitado", variant: "error" },
 };
 
-const PROCESSAMENTO_CONFIG: Record<string, { label: string; className: string }> = {
-  pendente: { label: "Pendente", className: "bg-gray-800/60 text-gray-400 border-gray-600/50" },
-  processando: { label: "Processando", className: "bg-blue-900/40 text-blue-400 border-blue-700/50" },
-  concluido: { label: "Concluído", className: "bg-green-900/40 text-green-400 border-green-700/50" },
-  erro: { label: "Erro", className: "bg-red-900/40 text-red-400 border-red-700/50" },
+const PROCESSAMENTO_CONFIG: Record<string, { label: string; variant: Variant }> = {
+  pendente: { label: "Pendente", variant: "secondary" },
+  processando: { label: "Processando", variant: "info" },
+  concluido: { label: "Concluído", variant: "success" },
+  erro: { label: "Erro", variant: "error" },
 };
 
-function BaseBadge({ config, value }: { config: Record<string, { label: string; className: string }>; value: string | null }) {
+function BaseBadge({
+  config,
+  value,
+}: {
+  config: Record<string, { label: string; variant: Variant }>;
+  value: string | null;
+}) {
   if (!value) return null;
   const c = config[value];
-  if (!c) return <span className="inline-flex items-center rounded-md border border-border px-2 py-0.5 text-xs font-medium text-text-tertiary">{value}</span>;
-  return <span className={`inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium ${c.className}`}>{c.label}</span>;
+  if (!c) return <Badge variant="outline">{value}</Badge>;
+  return <Badge variant={c.variant}>{c.label}</Badge>;
 }
 
 export function StatusBadge({ status }: { status: string }) {

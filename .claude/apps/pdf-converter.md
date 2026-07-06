@@ -55,3 +55,12 @@ Download:     Browser → GET {download_url} → Backend → arquivo binário
 
 - O frontend unifica `converted_size` e `formatted_size` sob `final_size` na interface
 - Aceitar apenas `.pdf` no modo convert, apenas `.docx` no modo format — validação no frontend e backend
+
+## Redesign v3 (2026-07)
+
+UI migrada para o design system v3 "instrumento de precisão" (ver `.claude/rules/design-system-conventions.md`):
+- Header via `<PageHeader tool="{id}">` — nome/descrição/badge vêm do `tools-registry.ts`
+- Upload via `<Dropzone>` compartilhado; loading via `<Spinner>`/`Button loading`
+- Erros persistentes em `<Alert>`; sucesso/erro transiente via `toast` (sonner); ações destrutivas via `useConfirm()`
+- Tokens novos: canvas/surface-1..3, edge, fg-*, accent azure — zero cores Tailwind literais
+- Endpoints e lógica de negócio inalterados

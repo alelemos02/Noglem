@@ -7,6 +7,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { patecApi, type ReportLanguage } from "@/lib/patec-api";
+import { PageHeader } from "@/components/ui/page-header";
+import { Alert } from "@/components/ui/alert";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
 type DisciplinaKey = "instrumentacao" | "eletrico" | "civil" | "mecanico" | "tubulacao";
@@ -92,21 +101,17 @@ export default function NovoParecerPage() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
-      <div>
-        <Link
-          href="/dashboard/parecer-tecnico"
-          className="text-sm text-text-tertiary hover:text-text-secondary"
-        >
-          ← Voltar para listagem
-        </Link>
-        <h1 className="mt-2 font-heading text-2xl font-bold text-text-primary">
-          Novo Parecer Técnico
-        </h1>
-      </div>
+      <PageHeader
+        title="Novo Parecer Técnico"
+        description="Selecione a disciplina, envie os documentos e configure a análise."
+        backHref="/dashboard/parecer-tecnico"
+        backLabel="Pareceres"
+        className="mb-0"
+      />
 
       {/* Disciplina selector */}
       <div className="space-y-3">
-        <p className="text-sm font-medium text-text-secondary">
+        <p className="text-sm font-medium text-fg-muted">
           Selecione a disciplina *
         </p>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
@@ -121,11 +126,11 @@ export default function NovoParecerPage() {
                 className={cn(
                   "relative flex flex-col items-start gap-1 rounded-lg border p-4 text-left transition-all",
                   d.ativo
-                    ? "cursor-pointer hover:border-border-hover hover:bg-surface-hover"
+                    ? "cursor-pointer hover:border-edge-strong hover:bg-surface-2"
                     : "cursor-not-allowed opacity-50",
                   isSelected
-                    ? "border-accent bg-accent-muted"
-                    : "border-border bg-surface"
+                    ? "border-accent bg-accent-subtle"
+                    : "border-edge bg-surface-1"
                 )}
               >
                 {!d.ativo && (
@@ -135,11 +140,11 @@ export default function NovoParecerPage() {
                 )}
                 <span className={cn(
                   "text-sm font-semibold",
-                  isSelected ? "text-accent" : "text-text-primary"
+                  isSelected ? "text-accent" : "text-fg"
                 )}>
                   {d.label}
                 </span>
-                <span className="text-xs text-text-tertiary leading-snug">
+                <span className="text-xs text-fg-subtle leading-snug">
                   {d.descricao}
                 </span>
               </button>
@@ -149,9 +154,9 @@ export default function NovoParecerPage() {
       </div>
 
       {/* Form fields */}
-      <div className="rounded-lg border border-border bg-surface p-6 space-y-4">
+      <div className="rounded-lg border border-edge bg-surface-1 p-6 space-y-4">
         <div>
-          <label className="mb-1 block text-sm font-medium text-text-secondary">
+          <label className="mb-1 block text-sm font-medium text-fg-muted">
             Número do Parecer *
           </label>
           <Input
@@ -162,7 +167,7 @@ export default function NovoParecerPage() {
         </div>
 
         <div>
-          <label className="mb-1 block text-sm font-medium text-text-secondary">
+          <label className="mb-1 block text-sm font-medium text-fg-muted">
             Projeto *
           </label>
           <Input
@@ -173,7 +178,7 @@ export default function NovoParecerPage() {
         </div>
 
         <div>
-          <label className="mb-1 block text-sm font-medium text-text-secondary">
+          <label className="mb-1 block text-sm font-medium text-fg-muted">
             Fornecedor *
           </label>
           <Input
@@ -184,7 +189,7 @@ export default function NovoParecerPage() {
         </div>
 
         <div>
-          <label className="mb-1 block text-sm font-medium text-text-secondary">
+          <label className="mb-1 block text-sm font-medium text-fg-muted">
             Revisão
           </label>
           <Input
@@ -195,27 +200,27 @@ export default function NovoParecerPage() {
         </div>
 
         <div>
-          <label className="mb-1 block text-sm font-medium text-text-secondary">
+          <label className="mb-1 block text-sm font-medium text-fg-muted">
             Idioma do Relatório
           </label>
-          <select
+          <Select
             value={idiomaRelatorio}
-            onChange={(e) => setIdiomaRelatorio(e.target.value as ReportLanguage)}
-            className="w-full rounded-md border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+            onValueChange={(v) => setIdiomaRelatorio(v as ReportLanguage)}
           >
-            {IDIOMAS_RELATORIO.map((idioma) => (
-              <option key={idioma.value} value={idioma.value}>
-                {idioma.label}
-              </option>
-            ))}
-          </select>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {IDIOMAS_RELATORIO.map((idioma) => (
+                <SelectItem key={idioma.value} value={idioma.value}>
+                  {idioma.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
-        {error && (
-          <div className="rounded-lg bg-error-muted p-3 text-sm text-error-text">
-            {error}
-          </div>
-        )}
+        {error && <Alert variant="danger">{error}</Alert>}
 
         <div className="flex gap-3 pt-2">
           <Link href="/dashboard/parecer-tecnico">
@@ -224,9 +229,10 @@ export default function NovoParecerPage() {
           <Button
             variant="primary"
             onClick={handleCreate}
-            disabled={!canCreate || creating}
+            disabled={!canCreate}
+            loading={creating}
           >
-            {creating ? "Criando..." : "Criar Parecer"}
+            {creating ? "Criando..." : "Criar parecer"}
           </Button>
         </div>
       </div>

@@ -26,22 +26,22 @@ export function KeyboardHelp({ open, onOpenChange }: KeyboardHelpProps) {
       onClick={() => onOpenChange(false)}
     >
       <div
-        className="w-full max-w-md rounded-lg border border-border bg-surface p-6 shadow-xl"
+        className="w-full max-w-md rounded-lg border border-edge bg-surface-1 p-6 shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="mb-4 text-lg font-bold text-text-primary">
+        <h2 className="mb-4 text-lg font-bold text-fg">
           Atalhos de Teclado
         </h2>
         <div className="space-y-1">
           {SHORTCUTS.map((s) => (
             <div
               key={s.key}
-              className="flex items-center justify-between rounded px-2 py-1.5 hover:bg-surface-hover"
+              className="flex items-center justify-between rounded px-2 py-1.5 hover:bg-surface-2"
             >
-              <span className="text-sm text-text-secondary">
+              <span className="text-sm text-fg-muted">
                 {s.description}
               </span>
-              <kbd className="rounded border border-border bg-white/10 px-2 py-0.5 font-mono text-xs text-text-primary">
+              <kbd className="rounded border border-edge bg-white/10 px-2 py-0.5 font-mono text-xs text-fg">
                 {s.key}
               </kbd>
             </div>
@@ -50,7 +50,7 @@ export function KeyboardHelp({ open, onOpenChange }: KeyboardHelpProps) {
         <div className="mt-4 text-right">
           <button
             onClick={() => onOpenChange(false)}
-            className="rounded-md px-3 py-1.5 text-sm text-text-secondary hover:bg-surface-hover hover:text-text-primary"
+            className="rounded-md px-3 py-1.5 text-sm text-fg-muted hover:bg-surface-2 hover:text-fg"
           >
             Fechar
           </button>

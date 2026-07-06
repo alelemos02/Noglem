@@ -8,8 +8,8 @@ function Skeleton({ className, ...props }: SkeletonProps) {
     <div
       data-slot="skeleton"
       className={cn(
-        "rounded-md bg-surface-hover",
-        "bg-gradient-to-r from-surface-hover via-border/30 to-surface-hover",
+        "rounded-md bg-surface-2",
+        "bg-gradient-to-r from-surface-2 via-edge/40 to-surface-2",
         "bg-[length:200%_100%] animate-shimmer",
         className
       )}

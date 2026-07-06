@@ -14,32 +14,33 @@ export interface BadgeProps extends React.ComponentProps<"span"> {
   asChild?: boolean
 }
 
-/* ---------- Variant styles (JulIA Design System) ---------- */
+/* ---------- Variant styles (JulIA Design System v3) ----------
+   Chip técnico: mono, uppercase, tracking — assinatura da identidade. */
 
 const variantStyles: Record<BadgeVariant, string> = {
-  default: "bg-accent text-white border-accent/20",
-  success: "bg-success-muted text-success-text border-success/20",
-  warning: "bg-warning-muted text-warning-text border-warning/20",
-  error: "bg-error-muted text-error-text border-error/20",
-  info: "bg-info-muted text-info-text border-info/20",
-  secondary: "bg-secondary text-secondary-foreground border-border",
-  destructive: "bg-error-muted text-error-text border-error/20",
-  outline: "border-border text-foreground bg-transparent",
-  ghost: "bg-transparent text-muted-foreground border-transparent",
-  link: "text-accent-text underline-offset-4 border-transparent",
+  default: "bg-accent-subtle text-accent border-accent/35",
+  success: "bg-success-subtle text-success border-success/35",
+  warning: "bg-warning-subtle text-warning border-warning/35",
+  error: "bg-danger-subtle text-danger border-danger/35",
+  info: "bg-info-subtle text-info border-info/35",
+  secondary: "bg-surface-2 text-fg-muted border-edge-strong",
+  destructive: "bg-danger-subtle text-danger border-danger/35",
+  outline: "border-edge-strong text-fg-muted bg-transparent",
+  ghost: "bg-transparent text-fg-subtle border-transparent",
+  link: "text-accent underline-offset-4 border-transparent",
 }
 
 const dotColors: Record<BadgeVariant, string> = {
-  default: "bg-white",
+  default: "bg-accent",
   success: "bg-success",
   warning: "bg-warning",
-  error: "bg-error",
+  error: "bg-danger",
   info: "bg-info",
-  secondary: "bg-text-tertiary",
-  destructive: "bg-error",
-  outline: "bg-text-tertiary",
-  ghost: "bg-text-tertiary",
-  link: "bg-accent-text",
+  secondary: "bg-fg-subtle",
+  destructive: "bg-danger",
+  outline: "bg-fg-subtle",
+  ghost: "bg-fg-subtle",
+  link: "bg-accent",
 }
 
 /* ---------- Component ---------- */
@@ -60,8 +61,8 @@ function Badge({
       data-variant={variant}
       className={cn(
         "inline-flex items-center gap-1.5",
-        "rounded-md border px-2 py-0.5",
-        "text-xs font-medium font-heading tracking-wide",
+        "rounded-sm border px-2 py-0.5",
+        "font-mono text-[10px] font-medium uppercase tracking-[0.09em]",
         "w-fit whitespace-nowrap shrink-0",
         variantStyles[variant],
         className
@@ -70,7 +71,7 @@ function Badge({
     >
       {dot && (
         <span
-          className={cn("h-1.5 w-1.5 rounded-full", dotColors[variant])}
+          className={cn("h-[5px] w-[5px] rounded-full", dotColors[variant])}
           aria-hidden="true"
         />
       )}

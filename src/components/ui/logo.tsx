@@ -9,10 +9,10 @@ export interface LogoProps {
   className?: string
 }
 
-const sizeStyles: Record<LogoSize, { text: string; slash: string; tagline: string }> = {
-  sm: { text: "text-xl", slash: "text-xl", tagline: "text-[10px]" },
-  md: { text: "text-3xl", slash: "text-3xl", tagline: "text-xs" },
-  lg: { text: "text-5xl", slash: "text-5xl", tagline: "text-sm" },
+const sizeStyles: Record<LogoSize, { text: string; tagline: string }> = {
+  sm: { text: "text-lg", tagline: "text-[9px]" },
+  md: { text: "text-2xl", tagline: "text-[10px]" },
+  lg: { text: "text-4xl", tagline: "text-xs" },
 }
 
 function Logo({ variant = "full", size = "md", className }: LogoProps) {
@@ -22,14 +22,14 @@ function Logo({ variant = "full", size = "md", className }: LogoProps) {
     return (
       <span
         className={cn(
-          "inline-flex items-baseline font-brand leading-none select-none",
+          "inline-flex items-baseline font-sans font-semibold leading-none tracking-tight select-none",
           s.text,
           className
         )}
       >
-        <span className="font-semibold text-text-primary tracking-tight">J</span>
+        <span className="text-fg">J</span>
         <span
-          className="font-bold text-accent -mx-[0.05em]"
+          className="text-accent -mx-[0.05em]"
           style={{ transform: "skewX(-8deg)", display: "inline-block" }}
           aria-hidden="true"
         >
@@ -48,25 +48,25 @@ function Logo({ variant = "full", size = "md", className }: LogoProps) {
     >
       <span
         className={cn(
-          "inline-flex items-baseline font-brand leading-none",
+          "inline-flex items-baseline font-sans font-semibold leading-none tracking-tight",
           s.text
         )}
       >
-        <span className="font-regular text-text-primary tracking-tight">Jul</span>
+        <span className="text-fg">Jul</span>
         <span
-          className="font-bold text-accent -mx-[0.05em]"
+          className="text-accent -mx-[0.05em]"
           style={{ transform: "skewX(-8deg)", display: "inline-block" }}
           aria-hidden="true"
         >
           /
         </span>
-        <span className="font-bold text-text-primary tracking-tight">IA</span>
+        <span className="text-fg">IA</span>
       </span>
 
       {variant === "tagline" && (
         <span
           className={cn(
-            "font-heading font-medium text-text-tertiary uppercase tracking-widest mt-1",
+            "microlabel mt-1.5",
             s.tagline
           )}
         >

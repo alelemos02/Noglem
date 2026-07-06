@@ -56,3 +56,12 @@ POST https://api.anthropic.com/v1/messages
 - O iframe ocupa 100% da viewport (`h-[calc(100vh-4rem)]`)
 - Comunicação entre o iframe e o Next.js é via `window.postMessage` se necessário
 - Não compartilha tokens de design system com o resto do app (HTML puro)
+
+## Redesign v3 (2026-07)
+
+UI migrada para o design system v3 "instrumento de precisão" (ver `.claude/rules/design-system-conventions.md`):
+- Header via `<PageHeader tool="{id}">` — nome/descrição/badge vêm do `tools-registry.ts`
+- Upload via `<Dropzone>` compartilhado; loading via `<Spinner>`/`Button loading`
+- Erros persistentes em `<Alert>`; sucesso/erro transiente via `toast` (sonner); ações destrutivas via `useConfirm()`
+- Tokens novos: canvas/surface-1..3, edge, fg-*, accent azure — zero cores Tailwind literais
+- Endpoints e lógica de negócio inalterados

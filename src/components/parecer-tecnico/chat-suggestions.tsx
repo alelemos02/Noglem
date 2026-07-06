@@ -21,12 +21,12 @@ export function ChatSuggestions({ item, onSelect }: ChatSuggestionsProps) {
   ];
 
   return (
-    <div className="flex flex-wrap gap-1.5 border-b border-border px-4 py-2">
+    <div className="flex flex-wrap gap-1.5 border-b border-edge px-4 py-2">
       {suggestions.map((text) => (
         <button
           key={text}
           onClick={() => onSelect(text)}
-          className="rounded-full border border-border px-2.5 py-1 text-xs text-text-tertiary transition-colors hover:bg-surface-hover hover:text-text-primary"
+          className="rounded-full border border-edge px-2.5 py-1 text-xs text-fg-subtle transition-colors hover:bg-surface-2 hover:text-fg"
         >
           {text.length > 50 ? text.slice(0, 47) + "..." : text}
         </button>
