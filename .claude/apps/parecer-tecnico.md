@@ -1,122 +1,114 @@
 ---
 name: parecer-tecnico
-description: Parecer Técnico (PATEC) — análise LLM de documentação de engenharia vs fornecedores, microserviço próprio
+description: Parecer Técnico (PATEC) — caso técnico completo conduzido por conversa (JulIA), com ciclo iterativo com fornecedor, verificação final e revisão de especificação. Microserviço próprio.
 metadata:
   type: project
 ---
 
 # Parecer Técnico (PATEC)
 
-**Status:** Beta  
+**Status:** Beta
 **Categoria:** Análise
+**Origem:** portado do PATEC_PLUS em 2026-07 (substituiu integralmente a versão anterior — backend e frontend).
 
 ## O que faz
 
-Ferramenta de análise comparativa: recebe documentação de engenharia (especificações, datasheets) e documentos de fornecedores, e gera um parecer técnico item a item usando LLM. Cada item recebe um status (A=Aprovado, B=Aprovado com comentários, C=Rejeitado, D=Info ausente, E=Item adicional) e o parecer geral é: APROVADO, APROVADO_COM_COMENTARIOS ou REJEITADO.
+O parecer é um **caso técnico** com ciclo de vida completo, dirigido por
+`pareceres.fase_caso`:
 
-## Disciplinas
+```
+SETUP → REQUISITOS → ANALISE → CICLO_FORNECEDOR → VERIFICACAO_FINAL → FECHADO
+```
 
-O usuário seleciona a disciplina ao criar um novo parecer. A disciplina altera o system prompt enviado ao Gemini:
+1. **Setup/Requisitos (W1)** — upload de docs; a LLM extrai a lista de requisitos, o engenheiro edita e aprova → tabela `requisitos` (fonte única de verdade, validada por humano).
+2. **Análise (R1/W2)** — `run_analysis_sync` lê os requisitos aprovados do BD (não re-extrai), classifica A–E, vincula `ItemParecer.requisito_id`. `POST /ciclo/iniciar` (W2) leva ao ciclo. **A análise só roda na fase ANALISE** (gate em `analise.py`).
+3. **Ciclo com fornecedor (W3/R2/W4)** — resposta entra por `POST /rodadas` (tipos 1–4: `PROPOSTA_REVISADA`, `RESPOSTA_ITENS`, `RESPOSTA_ITENS_PROPOSTA_POSTERIOR`, `EMAIL_AVULSO`) ou pela carta XLSX (`/reimportar-respostas`). LLM sugere vínculos → engenheiro confirma (W3) → avaliação R2 → decisão por item (W4): `ACEITAR / ESCLARECER / REJEITAR / REPROVAR_CASO`.
+4. **Verificação final (R3/W5)** — Tipo 1 dispensa LLM; tipos 2/3/4 exigem proposta final + verificação contra os acordos.
+5. **Fechamento (W6)** — `POST /fechar` com `APROVADO / COM_PENDENCIA / REPROVADO`.
+6. **Revisão de especificação (R4/W7, lateral)** — `POST /spec-versoes`: diff contra os requisitos do BD (cenários A/B/C); aplicar reabre alterados, desativa removidos (nunca apaga), inclui novos.
 
-| Disciplina | Status | System prompt |
-|------------|--------|---------------|
-| `instrumentacao` | Ativo | `SYSTEM_PROMPT_INSTRUMENTACAO` (ISA, IEC 61511, IEC 61508) |
-| `eletrico` | Ativo | `SYSTEM_PROMPT_ELETRICO` (NR-10, ABNT NBR 5410, IEC 60364, IEC 60079) |
-| `civil`, `mecanico`, `tubulacao` | Em breve (desabilitado na UI) | — |
+Estados do item: `ABERTO → PENDENTE_FORNECEDOR → EM_REAVALIACAO → ACEITO/REPROVADO` (+ `DESATIVADO`).
 
-A lógica de seleção de prompt está em `get_system_prompt(disciplina)` em `llm_prompt.py`. O campo `disciplina` é armazenado no model `Parecer` e exibido como badge na lista.
+## Frontend — UI conversacional (JulIA)
 
-## Tipos de documentos
+A página do caso é uma **thread de conversa única** (estilo chat), derivada 100%
+do estado do backend — F5 é idempotente. Tudo em `src/components/parecer-tecnico/`:
 
-| Tipo (`Documento.tipo`) | Papel na análise |
-|-------------------------|-----------------|
-| `engenharia` | Documento principal de engenharia — especificação técnica a ser verificada |
-| `fornecedor` | Proposta técnica do fornecedor — comparada contra a especificação |
-| `anexo_engenharia` | Documentos complementares (datasheets de referência, normas internas) — fornecidos como contexto de apoio à IA, não como spec principal |
+- `derive-step.ts` — função pura: escolhe o ÚNICO passo ativo + widget a partir do snapshot (a precedência espelha `state_machine.py`).
+- `derive-timeline.ts` — remonta o passado "congelado" com timestamps reais do BD.
+- `conversation-provider.tsx` — snapshot único (parecer, docs, requisitos, draft, itens, rodadas, resumo, verificação, specVersoes, chatHistory), `refreshSnapshot()` e UM poller consolidado para todos os jobs assíncronos.
+- `widgets/` — um widget interativo por passo (upload via `<Dropzone>`, requisitos, progress, análise-resultado, rodada, vinculação, decisão, verificação, fechar, export, spec).
+- `commands.ts` — comandos locais da barra de texto (`ver tabela`, `ver itens`, `exportar …`, `revisar especificação`, `reanalisar`, `editar requisitos`, `fechar caso`); o que não casa vai ao chat RAG.
+- `data-panel.tsx` / `widgets/ciclo-table-panel.tsx` — modais de tabela (banco do caso; decisões W4 em lote).
+- `status-badge.tsx` — badges A–E/parecer geral/processamento (usado na lista).
 
-O upload de `anexo_engenharia` usa o endpoint `POST /pareceres/{id}/documentos/anexo_engenharia`. Anexos são opcionais — a análise só exige `engenharia` + `fornecedor`. No prompt, os anexos aparecem na seção `## DOCUMENTOS COMPLEMENTARES (ENGENHARIA)` entre os docs de engenharia e os do fornecedor.
+**Ações de chat (contrato `<acao>`)**: a LLM JulIA emite bloco estruturado que o
+backend filtra do stream e executa; o frontend ressincroniza. A LLM nunca despeja
+JSON/tabela no chat.
 
-## Perfis de análise (`perfil_analise`)
+### Páginas
+- Lista: `src/app/dashboard/parecer-tecnico/page.tsx` (cards + badge de fase/desfecho)
+- Criar: `src/app/dashboard/parecer-tecnico/novo/page.tsx` (form → redireciona para a conversa)
+- Caso: `src/app/dashboard/parecer-tecnico/[id]/page.tsx` (ConversationProvider + ConversationScreen, escapa o padding do Shell com `-m-6 h-[calc(100vh-3.5rem)]`)
+- Qualidade (dono): `src/app/dashboard/parecer-tecnico/qualidade/page.tsx` — métricas da IA, protegida por `OWNER_EMAILS` no backend
 
-| Perfil | Itens | Comportamento |
-|--------|-------|---------------|
-| `simples` | 10 | Desvios críticos: segurança, rejeições e bloqueios |
-| `padrao` | 15 | Cobertura equilibrada dos requisitos críticos e relevantes |
-| `completa` | 20 | Análise abrangente cobrindo todos os requisitos de impacto técnico |
-| `personalizado` / `custom_N` | N (1-100) | Número exato de itens definido pelo usuário |
-| `integral` | sem limite | Analisa TODOS os requisitos da tabela de engenharia na íntegra |
+### API Route (proxy)
+`src/app/api/parecer-tecnico/[...path]/route.ts` — Clerk auth + `X-Internal-API-Key`
++ `X-User-Id`; exporta **GET/POST/PUT/PATCH/DELETE**; suporta SSE (chat) e downloads.
+Para rotas `v1/admin*` envia também `X-User-Email` (e-mail real do Clerk) — é ele
+que o `require_owner` compara com `OWNER_EMAILS` (usuários Clerk ficam gravados
+com e-mail sintético `clerk_<id>@noglem.com.br`).
 
-O perfil `integral` usa `PROFILE_INTEGRAL_TEMPLATE` em `llm_prompt.py` (sem cap de itens) e é aceito pelo validator em `analise.py`.
+Cliente tipado: `src/lib/patec-api.ts` (único client autorizado).
 
-## Arquivos principais
+## Backend — microserviço (`services/patec-backend/`, Railway, porta 8001)
 
-### Frontend
-- Lista de pareceres: `src/app/dashboard/parecer-tecnico/page.tsx`
-- Criar novo: `src/app/dashboard/parecer-tecnico/novo/page.tsx`
-- Detalhe/resultado: `src/app/dashboard/parecer-tecnico/[id]/page.tsx`
-- Componentes UI: `src/components/parecer-tecnico/` (status-badge, etc.)
-- API client: `src/lib/patec-api.ts`
+FastAPI + Celery + PostgreSQL/pgvector + Redis. Deploy: `railway.toml` (API) +
+`railway.worker.toml` (worker Celery). `start.sh` roda `alembic upgrade head` no boot.
 
-### API Route
-- Proxy catch-all: `src/app/api/parecer-tecnico/[...path]/route.ts`
+Serviços-chave (`app/services/`):
+- `llm_client.py` — único cliente LLM (Gemini via httpx); ninguém chama o provedor direto.
+- `prompts/` — prompts por operação: `analise`, `extracao` (W1), `vinculacao` (W3), `avaliacao` (R2), `verificacao` (R3), `spec_diff` (R4), `seguranca`.
+- `analyzer.py` — orquestração R1; `_validate_parecer_json` é o normalizador central (repara chaves corrompidas pela LLM).
+- `tasks.py` — Celery `run_analysis_sync`; cache `CacheAnalise` chaveado por `PROMPT_VERSION` + requisitos + docs + disciplina + idioma. **Mudou prompt/lógica de `analyze_documents`? Incremente `PROMPT_VERSION`.** Pipeline pós-cache (grounding, consistency, recovery, optimize) roda mesmo em cache hit.
+- `requisitos.py` (W1), `ciclo.py` (W3/R2), `verificador_final.py` (R3), `spec_diff.py` (R4), `state_machine.py` (item + caso), `doc_selection.py` (só o doc de engenharia mais recente por nome), `ocr.py`, `chat.py`/`chat_memory.py` (chat RAG com ações), `exporter.py` (PDF/XLSX/DOCX + carta de pendências), `indexer.py`/`retriever.py` (pgvector).
 
-### Backend
-- Microserviço PATEC: `services/patec-backend/` (Railway, porta 8001)
-- Variável de ambiente: `PATEC_API_URL` (default: `http://localhost:8000`)
+Endpoints novos vs. versão antiga: `requisitos.py`, `verificacao.py`,
+`revisao_spec.py`, `admin.py` (qualidade). Removidos: `llm_prompt.py`, `preview.py`
+(não existe mais preview de documento).
+
+### Variáveis de ambiente (Railway — API e worker)
+Além das já existentes (`DATABASE_URL*`, `REDIS_URL`, `GEMINI_API_KEY`, `SECRET_KEY`,
+`DOCUMENT_ENCRYPTION_KEY`, `INTERNAL_API_KEY`):
+- `ENV=production` — ativa fail-fast de segredos default no startup (`validate_production_secrets`)
+- `GEMINI_MODEL` (ex.: `gemini-2.5-flash`)
+- `GEMINI_EXTRACTION_MODEL=gemini-3.1-pro-preview` (W1 define o escopo inteiro)
+- `GEMINI_VERIFIER_MODEL=gemini-3.1-pro-preview` + `ENABLE_LLM_VERIFIER=true`
+- `OWNER_EMAILS` — e-mails (reais, do login Clerk) com acesso ao dashboard de qualidade
+
+### Carta de pendências (layout XLSX)
+Posições das colunas em `exporter.py` (`_CARTA_HEADERS`, `_CARTA_COL_RESPOSTA`,
+`_CARTA_COL_ITEM_ID`) são a fonte única — o reimport determinístico em
+`ciclo_avaliativo.py` importa essas constantes. Nunca re-hardcode coluna.
+
+## Perfis de análise (governam só a extração W1)
+
+`simples` (10) / `padrao` (15) / `completa` (20) / `integral` (todos) / `custom_N`.
 
 ## Fluxo de dados
 
 ```
-Browser → patecApi.* → /api/parecer-tecnico/* → PATEC microservice
+Browser → patecApi.* → /api/parecer-tecnico/* → PATEC microservice (8001)
 ```
 
-O proxy suporta SSE streaming (análise em tempo real), file downloads (PDF/XLSX), e multipart uploads.
+## Migração 2026-07 (PATEC_PLUS)
 
-## Status de processamento
+- 9 migrations novas (f1a0caso0001 … f9a0qaflag09) aplicadas automaticamente no deploy pelo `start.sh`. Elas **dropam** `pareceres.status_global` e `pareceres.rodada_atual` e renomeiam estados (`RESOLVIDO→ACEITO`, `ATENDE→ACEITAR` etc.) com backfill embutido.
+- Pareceres legados nascem com `fase_caso='SETUP'`. Recomendado one-off pós-deploy:
+  `UPDATE pareceres SET fase_caso='ANALISE' WHERE status_processamento='concluido' AND fase_caso='SETUP';`
+- `PROMPT_VERSION` mudou → cache antigo é ignorado naturalmente.
 
-```
-pendente → processando → concluido
-                      ↘ erro
-```
+## Skills relacionadas
 
-## Modelo de dados principal (ParecerResponse)
-
-```ts
-interface ParecerResponse {
-  id: string;
-  numero_parecer: string;    // ex: "PT-001"
-  projeto: string;
-  fornecedor: string;
-  revisao: string;
-  disciplina: string;        // ex: "instrumentacao" | "eletrico"
-  status_processamento: "pendente" | "processando" | "concluido" | "erro";
-  parecer_geral: "APROVADO" | "APROVADO_COM_COMENTARIOS" | "REJEITADO" | null;
-  total_itens: number;
-  total_aprovados: number;
-  total_aprovados_comentarios: number;
-  total_rejeitados: number;
-  total_info_ausente: number;
-  total_itens_adicionais: number;
-  criado_em: string;
-}
-```
-
-## Decisões de arquitetura
-
-- PATEC é um microserviço completamente separado com banco próprio e Alembic
-- A análise LLM é assíncrona — o frontend lista e refetch para detectar mudança de status
-- A página de lista refaz fetch quando a janela recebe foco (para pegar pareceres que terminaram em background)
-- O `patec-api.ts` é o único client autorizado — não chame `/api/parecer-tecnico/` diretamente do frontend
-
-## Skill relacionada
-
-Existe a skill `/patec-otimizar` para otimização de prompts e parâmetros do PATEC.
-
-## Redesign v3 (2026-07)
-
-UI migrada para o design system v3 "instrumento de precisão" (ver `.claude/rules/design-system-conventions.md`):
-- Header via `<PageHeader tool="{id}">` — nome/descrição/badge vêm do `tools-registry.ts`
-- Upload via `<Dropzone>` compartilhado; loading via `<Spinner>`/`Button loading`
-- Erros persistentes em `<Alert>`; sucesso/erro transiente via `toast` (sonner); ações destrutivas via `useConfirm()`
-- Tokens novos: canvas/surface-1..3, edge, fg-*, accent azure — zero cores Tailwind literais
-- Endpoints e lógica de negócio inalterados
+- `/patec-otimizar` — revisão de concisão dos campos dos itens.
+- `/verificar-fluxos` — auditoria estática dos gates W1–W7/R1–R4 e da máquina de estados (backend + derive-step).

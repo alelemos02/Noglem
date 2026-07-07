@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -90,6 +90,8 @@ async def criar_revisao(
             "prioridade": item.prioridade,
             "norma_referencia": item.norma_referencia,
             "editado_manualmente": item.editado_manualmente,
+            "estado": item.estado,
+            "marcacao_revisao": item.marcacao_revisao,
         }
         for item in itens
     ]

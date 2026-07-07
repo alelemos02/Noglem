@@ -8,6 +8,7 @@ from app.core.database import get_db
 from app.core.deps import get_current_user, require_role
 from app.models.usuario import Usuario
 from app.models.parecer import Parecer
+from app.services.prompts.analise import DISCIPLINAS_SUPORTADAS
 from app.schemas.parecer import (
     ParecerCreate,
     ParecerUpdate,
@@ -38,6 +39,11 @@ def _to_response(p: Parecer) -> ParecerResponse:
         total_rejeitados=p.total_rejeitados,
         total_info_ausente=p.total_info_ausente,
         total_itens_adicionais=p.total_itens_adicionais,
+        fase_caso=p.fase_caso,
+        complementares_resolvidos=p.complementares_resolvidos,
+        desfecho=p.desfecho,
+        fechado_em=p.fechado_em,
+        motivo_fechamento=p.motivo_fechamento,
         criado_em=p.criado_em,
         atualizado_em=p.atualizado_em,
     )
@@ -50,6 +56,15 @@ async def criar_parecer(
     db: AsyncSession = Depends(get_db),
     current_user: Usuario = Depends(require_role("admin", "analista")),
 ):
+    if data.disciplina not in DISCIPLINAS_SUPORTADAS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"Disciplina '{data.disciplina}' nao suportada. "
+                f"Disciplinas disponiveis: {', '.join(sorted(DISCIPLINAS_SUPORTADAS))}."
+            ),
+        )
+
     result = await db.execute(
         select(Parecer).where(Parecer.numero_parecer == data.numero_parecer)
     )
@@ -138,6 +153,33 @@ async def obter_parecer(
     parecer = result.scalar_one_or_none()
     if not parecer:
         raise HTTPException(status_code=404, detail="Parecer nao encontrado")
+    return _to_response(parecer)
+
+
+@router.post("/{parecer_id}/complementares-resolvidos", response_model=ParecerResponse)
+async def confirmar_complementares(
+    parecer_id: uuid.UUID,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(require_role("admin", "analista")),
+):
+    """Gate de setup: marca que o usuário resolveu os documentos complementares
+    da engenharia (anexou referências/normas OU declarou que não tem). Libera o
+    fluxo para a etapa seguinte (proposta do fornecedor)."""
+    result = await db.execute(select(Parecer).where(Parecer.id == parecer_id))
+    parecer = result.scalar_one_or_none()
+    if not parecer:
+        raise HTTPException(status_code=404, detail="Parecer nao encontrado")
+
+    parecer.complementares_resolvidos = True
+    await registrar_auditoria(
+        db, current_user, "confirmar_complementares", "parecer",
+        recurso_id=str(parecer_id),
+        detalhes="Documentos complementares resolvidos (setup)",
+        request=request,
+    )
+    await db.commit()
+    await db.refresh(parecer)
     return _to_response(parecer)
 
 

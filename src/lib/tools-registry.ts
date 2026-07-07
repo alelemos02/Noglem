@@ -111,7 +111,7 @@ export const tools: Tool[] = [
   {
     id: "parecer-tecnico",
     title: "Parecer Técnico",
-    description: "Análise e comparação de documentação da engenharia versus documentos dos fornecedores",
+    description: "Caso técnico completo conduzido pela JulIA: requisitos, análise LLM, ciclo com fornecedor, verificação final e fechamento",
     icon: FileCheck,
     href: "/dashboard/parecer-tecnico",
     category: "analise",

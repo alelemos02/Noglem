@@ -77,7 +77,43 @@ def extract_xlsx(file_path: str) -> str:
     return "\n".join(text_parts)
 
 
+_IMAGE_TYPES = {"png", "jpg", "jpeg", "webp"}
+
+# Abaixo deste total de caracteres um documento (nao-imagem) e tratado como
+# "baixo rendimento" — tipicamente um PDF escaneado (so imagem) ou arquivo vazio.
+# Um documento de engenharia real tem milhares de caracteres.
+_MIN_CHARS_DOCUMENTO = 120
+
+
+def aviso_extracao(file_type: str, texto: str | None) -> str | None:
+    """Retorna um aviso quando o documento ficou sem texto suficiente — ou None.
+
+    Rede contra a falha silenciosa: imagem/PDF escaneado entram como texto vazio
+    e a analise rodaria no vazio sem o engenheiro saber. Derivado apenas do texto
+    ja no banco — apos o OCR preencher `texto_extraido`, o aviso some sozinho
+    (por isso o teste de rendimento vem ANTES do caso imagem).
+    """
+    chars = len((texto or "").strip())
+    if chars >= _MIN_CHARS_DOCUMENTO:
+        return None
+    if file_type in _IMAGE_TYPES:
+        return (
+            "Imagem sem texto legivel: o OCR ainda nao recuperou conteudo (pode "
+            "estar em andamento) ou a imagem esta ilegivel. Aguarde ou envie uma "
+            "imagem mais nitida / um arquivo pesquisavel."
+        )
+    return (
+        f"Pouco texto extraido ({chars} caracteres). Se este for um documento "
+        "escaneado ou foto, o conteudo pode nao ter sido lido — aguarde o OCR ou "
+        "envie um arquivo pesquisavel (PDF com texto, DOCX ou XLSX)."
+    )
+
+
 def extract_text(file_path: str, file_type: str) -> str:
+    if file_type in _IMAGE_TYPES:
+        # Imagens ficam anexadas ao caso. OCR pode ser conectado aqui no futuro.
+        return ""
+
     extractors = {
         "pdf": extract_pdf,
         "docx": extract_docx,

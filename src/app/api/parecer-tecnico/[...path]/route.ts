@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
+import { auth, currentUser } from "@clerk/nextjs/server";
 
 // PATEC backend URL (separate from main backend)
 const PATEC_URL = process.env.PATEC_API_URL || "http://localhost:8000";
@@ -25,6 +25,15 @@ async function handler(
       "X-User-Id": userId,
       ...(INTERNAL_API_KEY && { "X-Internal-API-Key": INTERNAL_API_KEY }),
     };
+
+    // Rotas admin (dashboard de qualidade) são restritas por e-mail no backend
+    // (OWNER_EMAILS). O usuário Clerk fica gravado lá com e-mail sintético,
+    // então o e-mail real do login vai neste header confiável.
+    if (path.startsWith("v1/admin")) {
+      const user = await currentUser();
+      const email = user?.primaryEmailAddress?.emailAddress;
+      if (email) headers["X-User-Email"] = email;
+    }
 
     const contentType = request.headers.get("content-type");
     if (contentType) {
@@ -105,4 +114,10 @@ async function handler(
   }
 }
 
-export { handler as GET, handler as POST, handler as PUT, handler as DELETE };
+export {
+  handler as GET,
+  handler as POST,
+  handler as PUT,
+  handler as PATCH,
+  handler as DELETE,
+};

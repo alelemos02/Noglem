@@ -14,14 +14,15 @@ from app.models.parecer import Parecer
 from app.models.documento import Documento
 from app.schemas.documento import DocumentoResponse
 from app.services.document_crypto import encrypt_bytes, decrypted_temp_file
-from app.services.text_extractor import extract_text
-from app.services.indexer import index_document
+from app.services.text_extractor import aviso_extracao, extract_text
+from app.services.indexer import enqueue_indexing
+from app.services.ocr import enqueue_ocr
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/pareceres/{parecer_id}/documentos", tags=["documentos"])
 
-ALLOWED_EXTENSIONS = {"pdf", "docx", "xlsx"}
+ALLOWED_EXTENSIONS = {"pdf", "docx", "xlsx", "png", "jpg", "jpeg", "webp"}
 MAX_FILE_SIZE = settings.MAX_FILE_SIZE_MB * 1024 * 1024
 
 
@@ -38,6 +39,7 @@ def _to_response(d: Documento) -> DocumentoResponse:
         tipo_arquivo=d.tipo_arquivo,
         tamanho_bytes=d.tamanho_bytes,
         criado_em=d.criado_em,
+        aviso_extracao=aviso_extracao(d.tipo_arquivo, d.texto_extraido),
     )
 
 
@@ -54,6 +56,7 @@ async def _upload_doc(
     tipo: str,
     file: UploadFile,
     db: AsyncSession,
+    enfileirar_indexacao: bool = True,
 ) -> DocumentoResponse:
     parecer = await _get_parecer(parecer_id, db)
 
@@ -61,7 +64,7 @@ async def _upload_doc(
     if ext not in ALLOWED_EXTENSIONS:
         raise HTTPException(
             status_code=400,
-            detail=f"Tipo de arquivo nao permitido: .{ext}. Permitidos: {', '.join(ALLOWED_EXTENSIONS)}",
+            detail=f"Tipo de arquivo nao permitido: .{ext}. Permitidos: {', '.join(sorted(ALLOWED_EXTENSIONS))}",
         )
 
     content = await file.read()
@@ -103,20 +106,40 @@ async def _upload_doc(
     await db.commit()
     await db.refresh(documento)
 
-    # Index document for RAG (chunk + embed + store)
-    try:
-        chunk_count = await index_document(documento, db)
-        await db.commit()
+    # Extracao normal rendeu pouco/nenhum texto (imagem sem OCR, PDF escaneado)?
+    # Dispara OCR multimodal em background — ele preenche texto_extraido e SÓ
+    # ENTAO indexa. Fecha o A2: antes, esses documentos entravam vazios e mudos.
+    # Teto de tamanho para o OCR: os bytes viajam pela fila (base64), entao
+    # arquivos muito grandes ficam de fora (o aviso persiste e o usuario envia um
+    # arquivo pesquisavel). 20 MB cobre fotos/scans tipicos com folga.
+    _OCR_MAX_BYTES = 20 * 1024 * 1024
+    ocr_pendente = (
+        ext in {"png", "jpg", "jpeg", "webp", "pdf"}
+        and len(content) <= _OCR_MAX_BYTES
+        and aviso_extracao(ext, texto) is not None
+    )
+    if ocr_pendente:
+        ocr_task = enqueue_ocr(str(documento.id), content)
         logger.info(
-            "Indexed %d chunks for documento %s (%s)",
-            chunk_count,
-            documento.id,
-            documento.nome_arquivo,
+            "OCR enfileirado para documento %s (task=%s) — baixo rendimento de extracao",
+            documento.id, ocr_task,
         )
-    except Exception:
-        logger.exception(
-            "RAG indexing failed for documento %s, continuing without embeddings",
+        # a indexacao acontece DEPOIS do OCR (run_ocr_sync enfileira ao concluir)
+        return _to_response(documento)
+
+    # Index document for RAG in the BACKGROUND (chunk + embed pode levar minutos
+    # em documentos grandes — bloquear aqui estoura o timeout do upload e o
+    # browser mostra "Failed to fetch"). O índice só é usado no chat, depois.
+    #
+    # `enfileirar_indexacao=False`: a revisão de especificação adia a indexação
+    # para DEPOIS do diff R4 — senão a enxurrada de embeddings concorre com a
+    # chamada de comparação pela mesma cota da LLM e estoura 429 (ver spec_diff).
+    if enfileirar_indexacao:
+        task_id = enqueue_indexing(str(documento.id))
+        logger.info(
+            "RAG indexing enfileirado para documento %s (task=%s)",
             documento.id,
+            task_id,
         )
 
     return _to_response(documento)

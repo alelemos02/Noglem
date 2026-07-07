@@ -1,18 +1,31 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.deps import get_current_user, require_role
+from app.services.audit import registrar_auditoria
 from app.models.usuario import Usuario
 from app.models.parecer import Parecer
 from app.models.item_parecer import ItemParecer
 from app.models.recomendacao import Recomendacao
-from app.schemas.item_parecer import ItemParecerResponse, ItemParecerUpdate, RecomendacaoResponse
+from app.models.requisito import Requisito
+from app.schemas.item_parecer import (
+    ItemParecerResponse,
+    ItemParecerUpdate,
+    RastreabilidadeLinha,
+    RastreabilidadeResponse,
+    RecomendacaoResponse,
+)
 
 router = APIRouter(prefix="/pareceres/{parecer_id}", tags=["itens"])
+
+# Marca da justificativa dos placeholders injetados pela reconciliacao de escopo
+# (T2/B2): um requisito aprovado que a analise nao cobriu vira status D com este
+# texto. Usado para classificar a linha como "revisar".
+_MARCA_PLACEHOLDER = "nao coberto pela analise automatica"
 
 VALID_STATUSES = {"A", "B", "C", "D", "E"}
 VALID_PRIORITIES = {"ALTA", "MEDIA", "BAIXA"}
@@ -35,8 +48,78 @@ def _item_to_response(item: ItemParecer) -> ItemParecerResponse:
         prioridade=item.prioridade,
         norma_referencia=item.norma_referencia,
         editado_manualmente=item.editado_manualmente,
+        estado=item.estado,
+        verificacao_flag=item.verificacao_flag,
+        verificacao_nota=item.verificacao_nota,
+        flag_consistencia=item.flag_consistencia,
+        nota_revisao=item.nota_revisao,
         criado_em=item.criado_em,
         atualizado_em=item.atualizado_em,
+    )
+
+
+@router.get("/rastreabilidade", response_model=RastreabilidadeResponse)
+async def rastreabilidade(
+    parecer_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Cobertura requisito -> item: para cada requisito aprovado, qual item da
+    analise o cobre. Destaca o que precisa de revisao manual (requisito sem item
+    ou coberto apenas por placeholder da reconciliacao). Nasce do vinculo
+    requisito_id garantido pela reconciliacao de escopo fechado (T2)."""
+    requisitos = (
+        (
+            await db.execute(
+                select(Requisito)
+                .where(
+                    Requisito.parecer_id == parecer_id,
+                    Requisito.ativo.is_(True),
+                    Requisito.aprovado_em.isnot(None),
+                )
+                .order_by(Requisito.numero)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    itens = (
+        (await db.execute(select(ItemParecer).where(ItemParecer.parecer_id == parecer_id)))
+        .scalars()
+        .all()
+    )
+    item_por_req: dict[uuid.UUID, ItemParecer] = {
+        i.requisito_id: i for i in itens if i.requisito_id
+    }
+
+    linhas: list[RastreabilidadeLinha] = []
+    cobertos = 0
+    for r in requisitos:
+        item = item_por_req.get(r.id)
+        placeholder = bool(
+            item and _MARCA_PLACEHOLDER in (item.justificativa_tecnica or "").lower()
+        )
+        coberto = item is not None and not placeholder
+        if coberto:
+            cobertos += 1
+        linhas.append(
+            RastreabilidadeLinha(
+                requisito_numero=r.numero,
+                requisito_descricao=r.descricao_requisito,
+                requisito_valor=r.valor_requerido,
+                requisito_prioridade=r.prioridade,
+                referencia_engenharia=r.referencia_engenharia,
+                item_numero=item.numero if item else None,
+                item_status=item.status if item else None,
+                cobertura="coberto" if coberto else "revisar",
+            )
+        )
+
+    return RastreabilidadeResponse(
+        total_requisitos=len(requisitos),
+        cobertos=cobertos,
+        a_revisar=len(requisitos) - cobertos,
+        linhas=linhas,
     )
 
 
@@ -79,6 +162,7 @@ async def atualizar_item(
     parecer_id: uuid.UUID,
     item_id: uuid.UUID,
     data: ItemParecerUpdate,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: Usuario = Depends(require_role("admin", "analista")),
 ):
@@ -102,10 +186,28 @@ async def atualizar_item(
             status_code=400, detail=f"Prioridade invalida. Validas: {VALID_PRIORITIES}"
         )
 
+    status_anterior = item.status
+    estado_anterior = item.estado
+    prioridade_anterior = item.prioridade
     for field, value in update_data.items():
         setattr(item, field, value)
 
     item.editado_manualmente = True
+    if {"status", "prioridade"} & set(update_data):
+        await registrar_auditoria(
+            db,
+            current_user,
+            "item_atualizacao_manual",
+            "item",
+            recurso_id=str(item_id),
+            detalhes=(
+                f"item_numero={item.numero}; "
+                f"status_anterior={status_anterior}; status_novo={item.status}; "
+                f"estado_anterior={estado_anterior}; estado_novo={item.estado}; "
+                f"prioridade_anterior={prioridade_anterior}; prioridade_nova={item.prioridade}"
+            ),
+            request=request,
+        )
     await db.commit()
     await db.refresh(item)
 

@@ -123,8 +123,11 @@ class ParecerResponse(BaseModel):
     total_rejeitados: int
     total_info_ausente: int
     total_itens_adicionais: int
-    rodada_atual: int = 1
-    status_global: str = "EM_ANALISE"
+    fase_caso: str = "SETUP"
+    complementares_resolvidos: bool = False
+    desfecho: str | None = None
+    fechado_em: datetime | None = None
+    motivo_fechamento: str | None = None
     criado_em: datetime
     atualizado_em: datetime
 

@@ -10,10 +10,8 @@ Usage:
 
 import asyncio
 import logging
-import sys
 
-from sqlalchemy import select, func
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 
 logging.basicConfig(
     level=logging.INFO,

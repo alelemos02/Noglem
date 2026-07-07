@@ -45,15 +45,18 @@ async def retrieve_relevant_chunks(
         return []
 
     # 2. Search via pgvector cosine distance, filtered by parecer_id
-    # Using raw SQL for pgvector operator support
+    # Using raw SQL for pgvector operator support.
+    # NB: usamos CAST(... AS vector) em vez de `::vector` — o operador `::`
+    # colide com a sintaxe de bind param `:nome` do SQLAlchemy text() e gera
+    # "syntax error at or near :".
     sql = text("""
         SELECT
             id, documento_id, parecer_id, conteudo, page_number,
             chunk_index, chunk_type, nome_arquivo, tipo_documento, criado_em,
-            1 - (embedding <=> :query_vec::vector) AS similarity
+            1 - (embedding <=> CAST(:query_vec AS vector)) AS similarity
         FROM documento_chunks
         WHERE parecer_id = :parecer_id
-        ORDER BY embedding <=> :query_vec::vector
+        ORDER BY embedding <=> CAST(:query_vec AS vector)
         LIMIT :top_k
     """)
 

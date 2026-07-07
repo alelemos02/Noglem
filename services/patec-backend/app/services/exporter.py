@@ -3,7 +3,7 @@ import logging
 from datetime import datetime
 
 from reportlab.lib import colors
-from reportlab.lib.pagesizes import A4
+from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import mm
 from reportlab.platypus import (
@@ -18,12 +18,36 @@ from docx.shared import Pt
 from docx.enum.table import WD_TABLE_ALIGNMENT
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 
-# Coluna onde o fornecedor preenche a resposta (1-based: F = 6)
-_CARTA_COL_RESPOSTA = 6
-# Coluna oculta com ITEM_ID (G = 7)
-_CARTA_COL_ITEM_ID = 7
-# Senha de proteção da planilha (protege colunas A-E e G; deixa F editável)
+# Layout da carta de pendências (1-based). Fonte ÚNICA da verdade: o reimport
+# determinístico (api/v1/endpoints/ciclo_avaliativo.py) importa estas constantes —
+# nunca redefina as posições lá.
+_CARTA_HEADERS = [
+    "Item",
+    "Disciplina/Categoria",
+    "Status",
+    "Requisito da Engenharia",
+    "Valor Requerido",
+    "Referencia (Engenharia)",
+    "Valor do Fornecedor",
+    "Referencia (Fornecedor)",
+    "Pendencia / Acao Requerida",
+    "Resposta do Fornecedor",
+    "ITEM_ID",
+]
+# Coluna onde o fornecedor preenche a resposta (única editável)
+_CARTA_COL_RESPOSTA = 10
+# Coluna oculta com ITEM_ID que guia o reimport determinístico
+_CARTA_COL_ITEM_ID = 11
+# Senha de proteção da planilha (protege tudo menos a coluna de resposta)
 _CARTA_SHEET_PASSWORD = "patec_pendencias"
+
+_CARTA_STATUS_CODES = {
+    "A": ("AP", "Aprovado"),
+    "B": ("AC", "Aprovado com comentarios"),
+    "C": ("RJ", "Rejeitado"),
+    "D": ("IA", "Informacao ausente"),
+    "E": ("AD", "Item adicional do fornecedor"),
+}
 
 logger = logging.getLogger(__name__)
 
@@ -288,6 +312,10 @@ def _status_label(status: str, idioma_relatorio: str) -> str:
     return _STATUS_LABELS_BY_LANGUAGE.get(idioma_relatorio, STATUS_LABELS).get(status, status)
 
 
+def _carta_status_code(status: str) -> str:
+    return _CARTA_STATUS_CODES.get(status, (status, status))[0]
+
+
 def _general_opinion_label(parecer_geral: str | None, idioma_relatorio: str) -> str:
     texts = _get_report_texts(idioma_relatorio)
     if not parecer_geral:
@@ -305,9 +333,28 @@ def _processing_status_label(status_processamento: str, idioma_relatorio: str) -
     )
 
 
+# Highlights do bloco 41: itens alterados/incluidos por revisao de especificacao
+_MARCACAO_LABELS = {
+    "NOVO": {"pt": "[NOVO - REVISAO DA ESPECIFICACAO]", "es": "[NUEVO - REVISION DE LA ESPECIFICACION]", "en": "[NEW - SPECIFICATION REVISION]"},
+    "ALTERADO": {"pt": "[ALTERADO - REVISAO DA ESPECIFICACAO]", "es": "[MODIFICADO - REVISION DE LA ESPECIFICACION]", "en": "[CHANGED - SPECIFICATION REVISION]"},
+}
+
+
+def _marcacao_prefix(item, idioma_relatorio: str) -> str:
+    marcacao = getattr(item, "marcacao_revisao", None)
+    if marcacao in _MARCACAO_LABELS:
+        labels = _MARCACAO_LABELS[marcacao]
+        return labels.get(idioma_relatorio, labels["pt"])
+    return ""
+
+
 def _build_solicitacao_engenharia(item, idioma_relatorio: str = "pt") -> str:
     texts = _get_report_texts(idioma_relatorio)
-    parts = [item.descricao_requisito or ""]
+    prefix = _marcacao_prefix(item, idioma_relatorio)
+    descricao = item.descricao_requisito or ""
+    if prefix:
+        descricao = f"{prefix}\n{descricao}"
+    parts = [descricao]
     if item.valor_requerido:
         parts.append(f"{texts['required_value']}: {item.valor_requerido}")
     if item.referencia_engenharia:
@@ -347,10 +394,12 @@ def export_pdf(parecer, itens, recomendacoes) -> bytes:
         idioma_relatorio = _get_report_language(parecer)
         texts = _get_report_texts(idioma_relatorio)
         buffer = io.BytesIO()
+        # Paisagem: mais largura util (~257mm) para a tabela de itens — texto
+        # respira e as colunas ficam melhor distribuidas.
         doc = SimpleDocTemplate(
-            buffer, pagesize=A4,
+            buffer, pagesize=landscape(A4),
             leftMargin=20 * mm, rightMargin=20 * mm,
-            topMargin=25 * mm, bottomMargin=20 * mm,
+            topMargin=20 * mm, bottomMargin=18 * mm,
         )
 
         styles = getSampleStyleSheet()
@@ -363,8 +412,11 @@ def export_pdf(parecer, itens, recomendacoes) -> bytes:
             name="Header2", parent=styles["Heading2"], fontSize=11,
             spaceAfter=4, textColor=colors.HexColor("#2d3748"),
         ))
+        # splitLongWords=0: NUNCA quebra uma palavra no meio (evita "COMENT-ARIOS"
+        # no status). O texto quebra so entre palavras.
         styles.add(ParagraphStyle(
-            name="CenteredSmallBody", parent=styles["SmallBody"], fontSize=7, leading=9, alignment=1
+            name="CenteredSmallBody", parent=styles["SmallBody"], fontSize=7,
+            leading=9, alignment=1, splitLongWords=0, wordWrap="LTR",
         ))
 
         elements = []
@@ -451,7 +503,9 @@ def export_pdf(parecer, itens, recomendacoes) -> bytes:
                 texts["status"],
                 texts["observation"],
             ]
-            col_widths = [50 * mm, 42 * mm, 22 * mm, 56 * mm]
+            # Paisagem A4 util ~257mm: colunas mais largas, status com folga p/
+            # "APROVADO COM COMENTARIOS" caber sem quebrar.
+            col_widths = [75 * mm, 65 * mm, 32 * mm, 85 * mm]
 
             rows = [item_header]
             for item in export_itens:
@@ -634,17 +688,21 @@ def export_xlsx(parecer, itens, recomendacoes) -> bytes:
         raise
 
 
-def export_carta_pendencias(parecer, itens_pendentes) -> bytes:
+def export_carta_pendencias(parecer, itens_pendentes, rodada: int = 1) -> bytes:
     """
     Gera a carta de pendências em XLSX para os itens em PENDENTE_FORNECEDOR.
 
     Estrutura:
       - Linha 1: instrução ao fornecedor
-      - Linha 2: cabeçalhos (A–G)
+      - Linha 2: cabeçalhos (ver _CARTA_HEADERS)
       - Linhas 3+: um item por linha
-    Colunas A–E e G são protegidas (somente leitura).
-    Coluna F (Resposta do Fornecedor) é editável.
-    Coluna G (ITEM_ID) é oculta para guiar o reimport determinístico.
+    Todas as celulas de conteudo sao protegidas (somente leitura) menos a de
+    resposta (_CARTA_COL_RESPOSTA). A protecao da planilha permite ajustes visuais
+    (formatacao, largura/altura, ocultar linhas/colunas e filtros), mas
+    bloqueia alteracao de conteudo fora da resposta. A coluna ITEM_ID
+    (_CARTA_COL_ITEM_ID) é oculta e guia o reimport determinístico; cada item leva
+    também valor requerido/ofertado e as referências (de onde no documento a
+    informação foi extraída).
     """
     try:
         wb = Workbook()
@@ -655,6 +713,7 @@ def export_carta_pendencias(parecer, itens_pendentes) -> bytes:
         header_fill = PatternFill(start_color="2D3748", end_color="2D3748", fill_type="solid")
         instrucao_fill = PatternFill(start_color="FFF3CD", end_color="FFF3CD", fill_type="solid")
         resposta_fill = PatternFill(start_color="E8F5E9", end_color="E8F5E9", fill_type="solid")
+        ref_font = Font(italic=True, size=8, color="555555")
         thin_border = Border(
             left=Side(style="thin"), right=Side(style="thin"),
             top=Side(style="thin"), bottom=Side(style="thin"),
@@ -662,32 +721,30 @@ def export_carta_pendencias(parecer, itens_pendentes) -> bytes:
         locked_protection = Protection(locked=True)
         unlocked_protection = Protection(locked=False)
 
+        resposta_letter = get_column_letter(_CARTA_COL_RESPOSTA)
+        last_visible_letter = get_column_letter(_CARTA_COL_ITEM_ID - 1)
+
         # ── Linha 1: instrução ──────────────────────────────────────────
         instrucao = (
-            "INSTRUCAO AO FORNECEDOR: Preencha APENAS a coluna F (Resposta do Fornecedor). "
-            "Nao altere nenhuma outra celula. Nao remova linhas nem colunas. "
-            "Retorne este arquivo preenchido para avaliacao."
+            f"INSTRUCAO AO FORNECEDOR: Preencha APENAS a coluna {resposta_letter} "
+            "(Resposta do Fornecedor), destacada em verde. As demais colunas trazem o "
+            "contexto da analise (valor requerido, valor ofertado e as referencias de "
+            "onde cada informacao foi extraida) e estao bloqueadas contra alteracao "
+            "de conteudo. Voce pode ajustar largura/altura, ocultar linhas ou colunas, "
+            "aplicar filtros e formatar visualmente. Nao remova linhas/colunas nem "
+            "altere o conteudo das demais celulas. Retorne este arquivo preenchido."
         )
-        ws.merge_cells("A1:F1")
+        ws.merge_cells(f"A1:{last_visible_letter}1")
         cell = ws["A1"]
         cell.value = instrucao
         cell.font = Font(bold=True, size=9, color="7B4F00")
         cell.fill = instrucao_fill
         cell.alignment = Alignment(wrap_text=True, vertical="center")
         cell.protection = locked_protection
-        ws.row_dimensions[1].height = 36
+        ws.row_dimensions[1].height = 48
 
         # ── Linha 2: cabeçalhos ─────────────────────────────────────────
-        cabecalhos = [
-            "Item",
-            "Disciplina/Categoria",
-            "Prioridade",
-            "Requisito da Engenharia",
-            "Pendencia / Acao Requerida",
-            "Resposta do Fornecedor",
-            "ITEM_ID",
-        ]
-        for col, titulo in enumerate(cabecalhos, 1):
+        for col, titulo in enumerate(_CARTA_HEADERS, 1):
             cell = ws.cell(row=2, column=col, value=titulo)
             cell.font = header_font
             cell.fill = header_fill if col != _CARTA_COL_RESPOSTA else PatternFill(
@@ -697,8 +754,8 @@ def export_carta_pendencias(parecer, itens_pendentes) -> bytes:
             cell.alignment = Alignment(horizontal="center", wrap_text=True)
             cell.protection = locked_protection
 
-        # Larguras das colunas
-        col_widths = [8, 22, 14, 55, 55, 55, 15]
+        # Larguras das colunas (alinhadas a _CARTA_HEADERS)
+        col_widths = [7, 20, 8, 50, 40, 38, 40, 38, 45, 50, 15]
         for i, w in enumerate(col_widths, 1):
             ws.column_dimensions[get_column_letter(i)].width = w
 
@@ -706,17 +763,22 @@ def export_carta_pendencias(parecer, itens_pendentes) -> bytes:
         ws.column_dimensions[get_column_letter(_CARTA_COL_ITEM_ID)].hidden = True
 
         # ── Linhas de dados ─────────────────────────────────────────────
-        prioridade_colors = {"ALTA": "FFCCCC", "MEDIA": "FFF3CC", "BAIXA": "E8F5E9"}
+        ref_cols = {6, 8}  # Referência (Engenharia) / Referência (Fornecedor)
 
         for item in itens_pendentes:
             # Busca acao_requerida da última rodada (campo do item, fallback para o campo direto)
             pendencia = (item.acao_requerida or "").strip() or "Ver justificativa tecnica."
 
+            # row_values segue _CARTA_HEADERS na ordem exata.
             row_values = [
                 item.numero,
                 item.categoria or "",
-                item.prioridade or "",
+                _carta_status_code(item.status),
                 (item.descricao_requisito or "").strip(),
+                (item.valor_requerido or "").strip(),
+                (item.referencia_engenharia or "").strip() or "—",
+                (item.valor_fornecedor or "").strip(),
+                (item.referencia_fornecedor or "").strip() or "—",
                 pendencia,
                 "",                      # Resposta — editável
                 str(item.id),            # ITEM_ID — oculto
@@ -724,8 +786,6 @@ def export_carta_pendencias(parecer, itens_pendentes) -> bytes:
 
             ws.append(row_values)
             row_idx = ws.max_row
-
-            prio_color = prioridade_colors.get(item.prioridade or "", "FFFFFF")
 
             for col in range(1, _CARTA_COL_ITEM_ID + 1):
                 cell = ws.cell(row=row_idx, column=col)
@@ -735,13 +795,40 @@ def export_carta_pendencias(parecer, itens_pendentes) -> bytes:
                 if col == _CARTA_COL_RESPOSTA:
                     cell.fill = resposta_fill
                     cell.protection = unlocked_protection
-                elif col == 3:  # prioridade
-                    cell.fill = PatternFill(
-                        start_color=prio_color, end_color=prio_color, fill_type="solid"
-                    )
-                    cell.protection = locked_protection
                 else:
+                    if col in ref_cols:
+                        cell.font = ref_font
                     cell.protection = locked_protection
+
+        data_end_row = ws.max_row
+
+        # ── Legenda de status ────────────────────────────────────────────
+        legend_start = data_end_row + 2
+        ws.cell(row=legend_start, column=1, value="Legenda de status")
+        ws.merge_cells(
+            start_row=legend_start,
+            start_column=1,
+            end_row=legend_start,
+            end_column=3,
+        )
+        legend_title = ws.cell(row=legend_start, column=1)
+        legend_title.font = Font(bold=True, color="FFFFFF", size=10)
+        legend_title.fill = header_fill
+        legend_title.alignment = Alignment(horizontal="center")
+        legend_title.border = thin_border
+        legend_title.protection = locked_protection
+
+        for offset, (_status, (codigo, significado)) in enumerate(_CARTA_STATUS_CODES.items(), 1):
+            row_idx = legend_start + offset
+            code_cell = ws.cell(row=row_idx, column=1, value=codigo)
+            desc_cell = ws.cell(row=row_idx, column=2, value=significado)
+            ws.merge_cells(start_row=row_idx, start_column=2, end_row=row_idx, end_column=3)
+            for cell in (code_cell, desc_cell):
+                cell.border = thin_border
+                cell.protection = locked_protection
+                cell.alignment = Alignment(vertical="center")
+            code_cell.font = Font(bold=True)
+            code_cell.alignment = Alignment(horizontal="center")
 
         # ── Metadados do parecer numa aba separada ──────────────────────
         ws_meta = wb.create_sheet("Info")
@@ -752,7 +839,7 @@ def export_carta_pendencias(parecer, itens_pendentes) -> bytes:
         ws_meta["A3"] = "Fornecedor"
         ws_meta["B3"] = parecer.fornecedor
         ws_meta["A4"] = "Rodada"
-        ws_meta["B4"] = getattr(parecer, "rodada_atual", 1)
+        ws_meta["B4"] = rodada
         ws_meta["A5"] = "Data emissao"
         ws_meta["B5"] = datetime.now().strftime("%d/%m/%Y")
         ws_meta["A6"] = "Total pendentes"
@@ -760,9 +847,21 @@ def export_carta_pendencias(parecer, itens_pendentes) -> bytes:
         ws_meta.column_dimensions["A"].width = 20
         ws_meta.column_dimensions["B"].width = 40
 
-        # ── Protege a aba Pendencias (somente col F editável) ───────────
+        if data_end_row >= 2:
+            ws.auto_filter.ref = f"A2:{get_column_letter(_CARTA_COL_ITEM_ID)}{data_end_row}"
+
+        # Protege conteudo, mas libera ajustes visuais de layout/formato.
         ws.protection.sheet = True
         ws.protection.password = _CARTA_SHEET_PASSWORD
+        ws.protection.formatCells = False
+        ws.protection.formatColumns = False
+        ws.protection.formatRows = False
+        ws.protection.autoFilter = False
+        ws.protection.sort = False
+        ws.protection.insertColumns = True
+        ws.protection.insertRows = True
+        ws.protection.deleteColumns = True
+        ws.protection.deleteRows = True
         ws.protection.enable()
 
         buffer = io.BytesIO()
@@ -772,6 +871,122 @@ def export_carta_pendencias(parecer, itens_pendentes) -> bytes:
     except Exception:
         logger.exception("Erro ao gerar carta de pendencias para parecer %s", parecer.numero_parecer)
         raise
+
+
+_CICLO_HEADERS = [
+    "#",
+    "Categoria",
+    "Prioridade",
+    "Requisito",
+    "Valor requerido",
+    "Resposta do fornecedor",
+    "Avaliacao IA",
+    "Justificativa IA",
+    "Decisao / Estado",
+]
+_CICLO_VEREDITO_LABEL = {"ATENDE": "Atende", "PARCIAL": "Parcial", "NAO_ATENDE": "Nao atende"}
+_CICLO_DECISAO_LABEL = {
+    "ACEITAR": "Aceitar",
+    "ESCLARECER": "Esclarecer",
+    "REJEITAR": "Rejeitar",
+    "REPROVAR_CASO": "Reprovar caso",
+}
+_CICLO_ESTADO_LABEL = {
+    "ABERTO": "Aberto",
+    "PENDENTE_FORNECEDOR": "Aguardando fornecedor",
+    "EM_REAVALIACAO": "Pendente de decisao",
+    "ACEITO": "Aceito",
+    "REPROVADO": "Reprovado",
+    "DESATIVADO": "Desativado",
+}
+_CICLO_ESTADO_FILL = {
+    "ACEITO": "E8F5E9",
+    "EM_REAVALIACAO": "FFF3CD",
+    "REPROVADO": "FFCCCC",
+    "PENDENTE_FORNECEDOR": "E3F2FD",
+}
+
+
+def export_ciclo_rodada(parecer, linhas: list[dict], rodada: int = 1) -> bytes:
+    """Excel com a visao completa da rodada do ciclo: TODOS os itens com a
+    resposta do fornecedor, a avaliacao da IA e a decisao/estado. Diferente da
+    carta de pendencias (que vai PARA o fornecedor), este e para o engenheiro
+    revisar tudo de uma vez — sem protecao de planilha, livre para manipular."""
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Rodada"
+
+    header_font = Font(bold=True, color="FFFFFF", size=10)
+    header_fill = PatternFill(start_color="2D3748", end_color="2D3748", fill_type="solid")
+    thin_border = Border(
+        left=Side(style="thin"), right=Side(style="thin"),
+        top=Side(style="thin"), bottom=Side(style="thin"),
+    )
+
+    for col, titulo in enumerate(_CICLO_HEADERS, 1):
+        cell = ws.cell(row=1, column=col, value=titulo)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.border = thin_border
+        cell.alignment = Alignment(horizontal="center", wrap_text=True)
+
+    widths = [6, 16, 10, 45, 30, 50, 14, 50, 22]
+    for i, w in enumerate(widths, 1):
+        ws.column_dimensions[get_column_letter(i)].width = w
+
+    for ln in linhas:
+        estado = ln.get("estado") or ""
+        veredito = ln.get("veredito_ia")
+        decisao = ln.get("decisao_humana")
+        decisao_estado = (
+            _CICLO_DECISAO_LABEL.get(decisao, decisao)
+            if decisao
+            else _CICLO_ESTADO_LABEL.get(estado, estado)
+        )
+        ws.append([
+            ln.get("numero"),
+            ln.get("categoria") or "",
+            ln.get("prioridade") or "",
+            (ln.get("descricao_requisito") or "").strip(),
+            (ln.get("valor_requerido") or "").strip(),
+            (ln.get("resposta_fornecedor") or "").strip() or "—",
+            _CICLO_VEREDITO_LABEL.get(veredito, veredito or "—"),
+            (ln.get("justificativa_ia") or "").strip() or "—",
+            decisao_estado or "—",
+        ])
+        row_idx = ws.max_row
+        for col in range(1, len(_CICLO_HEADERS) + 1):
+            cell = ws.cell(row=row_idx, column=col)
+            cell.border = thin_border
+            cell.alignment = Alignment(wrap_text=True, vertical="top")
+        fill = _CICLO_ESTADO_FILL.get(estado)
+        if fill:
+            ws.cell(row=row_idx, column=len(_CICLO_HEADERS)).fill = PatternFill(
+                start_color=fill, end_color=fill, fill_type="solid"
+            )
+
+    if ws.max_row >= 1:
+        ws.auto_filter.ref = f"A1:{get_column_letter(len(_CICLO_HEADERS))}{ws.max_row}"
+    ws.freeze_panes = "A2"
+
+    ws_meta = wb.create_sheet("Info")
+    meta_rows = [
+        ("Parecer", parecer.numero_parecer),
+        ("Projeto", parecer.projeto),
+        ("Fornecedor", parecer.fornecedor),
+        ("Rodada", rodada),
+        ("Data emissao", datetime.now().strftime("%d/%m/%Y")),
+        ("Total itens", len(linhas)),
+    ]
+    for r, (rotulo, valor) in enumerate(meta_rows, 1):
+        ws_meta.cell(row=r, column=1, value=rotulo)
+        ws_meta.cell(row=r, column=2, value=valor)
+    ws_meta.column_dimensions["A"].width = 20
+    ws_meta.column_dimensions["B"].width = 40
+
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    return buffer.getvalue()
 
 
 def export_docx(parecer, itens, recomendacoes) -> bytes:

@@ -103,7 +103,7 @@ export default function NovoParecerPage() {
     <div className="mx-auto max-w-2xl space-y-6">
       <PageHeader
         title="Novo Parecer Técnico"
-        description="Selecione a disciplina, envie os documentos e configure a análise."
+        description="Selecione a disciplina e identifique o caso — a JulIA conduz o restante na conversa."
         backHref="/dashboard/parecer-tecnico"
         backLabel="Pareceres"
         className="mb-0"

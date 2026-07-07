@@ -7,5 +7,10 @@ from app.models.revisao import RevisaoParecer  # noqa: F401
 from app.models.audit_log import AuditLog  # noqa: F401
 from app.models.cache_analise import CacheAnalise  # noqa: F401
 from app.models.mensagem_chat import MensagemChat  # noqa: F401
+from app.models.mensagem_chat_embedding import MensagemChatEmbedding  # noqa: F401
 from app.models.documento_chunk import DocumentoChunk  # noqa: F401
 from app.models.rodada_avaliacao import RodadaAvaliacao  # noqa: F401
+from app.models.requisito import Requisito  # noqa: F401
+from app.models.rodada_fornecedor import RodadaFornecedor  # noqa: F401
+from app.models.verificacao_final import VerificacaoFinal  # noqa: F401
+from app.models.versao_especificacao import VersaoEspecificacao  # noqa: F401

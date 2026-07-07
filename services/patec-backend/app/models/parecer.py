@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -27,8 +27,22 @@ class Parecer(Base):
     total_rejeitados: Mapped[int] = mapped_column(Integer, default=0)
     total_info_ausente: Mapped[int] = mapped_column(Integer, default=0)
     total_itens_adicionais: Mapped[int] = mapped_column(Integer, default=0)
-    rodada_atual: Mapped[int] = mapped_column(Integer, default=1)
-    status_global: Mapped[str] = mapped_column(String(25), default="EM_ANALISE")
+    fase_caso: Mapped[str] = mapped_column(String(30), nullable=False, default="SETUP")
+    desfecho: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    fechado_em: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    fechado_por: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("usuarios.id"), nullable=True
+    )
+    motivo_fechamento: Mapped[str | None] = mapped_column(Text, nullable=True)
+    revisao_spec_em_andamento: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False
+    )
+    # Setup: o usuário já resolveu os documentos complementares da engenharia
+    # (anexou referências/normas OU declarou que não tem). Gate conversacional
+    # entre o documento principal e a proposta do fornecedor.
+    complementares_resolvidos: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False
+    )
     criado_por: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("usuarios.id"), nullable=True
     )
@@ -39,6 +53,14 @@ class Parecer(Base):
 
     documentos = relationship("Documento", back_populates="parecer", cascade="all, delete-orphan")
     itens = relationship("ItemParecer", back_populates="parecer", cascade="all, delete-orphan")
+    requisitos = relationship(
+        "Requisito", back_populates="parecer", cascade="all, delete-orphan",
+        order_by="Requisito.numero",
+    )
+    rodadas_fornecedor = relationship(
+        "RodadaFornecedor", back_populates="parecer", cascade="all, delete-orphan",
+        order_by="RodadaFornecedor.numero",
+    )
     recomendacoes = relationship(
         "Recomendacao", back_populates="parecer", cascade="all, delete-orphan"
     )

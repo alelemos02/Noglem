@@ -1,4 +1,5 @@
 import hashlib
+import json
 import logging
 import uuid
 
@@ -13,16 +14,24 @@ from app.models.documento import Documento
 from app.models.item_parecer import ItemParecer
 from app.models.parecer import Parecer
 from app.models.recomendacao import Recomendacao
+from app.models.requisito import Requisito
+from app.models.rodada_avaliacao import RodadaAvaliacao
 from app.services.analyzer import (
     DEFAULT_ANALYSIS_PROFILE,
     analyze_documents,
+    flag_items_for_verification,
     get_profile_label,
     llm_self_review,
     normalize_analysis_profile,
     optimize_item_fields,
+    recover_missing_supplier_values,
+    reconciliar_escopo_fechado,
     validate_reference_grounding,
     validate_value_consistency,
+    verify_flagged_items,
 )
+from app.services.doc_selection import eng_docs_correntes
+from app.services.state_machine import evento_para_classificacao, transicionar
 
 logger = logging.getLogger(__name__)
 
@@ -38,19 +47,31 @@ def _get_sync_engine():
 
 # Bump this version whenever SYSTEM_PROMPT or profile instructions change
 # to automatically invalidate cached results from previous prompt versions.
-PROMPT_VERSION = "6"
+# v8: escopo fechado nos requisitos aprovados (R1 nao re-extrai da engenharia).
+# v9: escopo fechado forca chamada unica (sem chunk) + otimizacao preserva
+#     requisito_numero (vinculo item<->requisito) + dedupe de docs de engenharia.
+# v10: delimitacao anti-injecao (marcadores <<<...>>> em torno do texto dos
+#      documentos + guardrail no system prompt). Muda o prompt de analise.
+PROMPT_VERSION = "10"
 
 
 def _compute_docs_hash(
+    requisitos_payload: list[dict],
     eng_text: str,
     forn_text: str,
-    analysis_profile: str,
+    disciplina: str,
     idioma_relatorio: str,
     anexos_text: str = "",
 ) -> str:
+    # O escopo da analise e definido pelos requisitos aprovados (W1); o perfil
+    # governa apenas a extracao e por isso fica fora do hash.
+    requisitos_json = json.dumps(requisitos_payload, sort_keys=True, ensure_ascii=False)
+    # MODEL entra na chave: trocar o modelo de analise (ex.: flash->pro) precisa
+    # invalidar o cache, senao re-analisar devolve o resultado do modelo anterior.
     content = (
-        f"V:{PROMPT_VERSION}\nPROFILE:{analysis_profile}\nLANG:{idioma_relatorio}\n"
-        f"ENG:{eng_text}\nFORN:{forn_text}\nANEXOS:{anexos_text}"
+        f"V:{PROMPT_VERSION}\nMODEL:{settings.GEMINI_MODEL}\n"
+        f"DISC:{disciplina}\nLANG:{idioma_relatorio}\n"
+        f"REQ:{requisitos_json}\nENG:{eng_text}\nFORN:{forn_text}\nANEXOS:{anexos_text}"
     )
     return hashlib.sha256(content.encode("utf-8")).hexdigest()
 
@@ -58,9 +79,14 @@ def _compute_docs_hash(
 def run_analysis_sync(
     parecer_id: str,
     analysis_profile: str = DEFAULT_ANALYSIS_PROFILE,
-    itens_aprovados: list[dict] | None = None,
 ):
-    """Run analysis in-process (no Celery), suitable for background threading."""
+    """
+    Run analysis in-process (no Celery), suitable for background threading.
+
+    Operacao R1: o escopo da analise vem dos requisitos aprovados pelo
+    engenheiro (tabela `requisitos`, gravada na operacao W1) — nunca de uma
+    lista passada por parametro.
+    """
     analysis_profile = normalize_analysis_profile(analysis_profile)
     profile_label = get_profile_label(analysis_profile)
     engine = _get_sync_engine()
@@ -85,7 +111,9 @@ def run_analysis_sync(
                 select(Documento).where(Documento.parecer_id == parecer.id)
             ).scalars().all()
 
-            eng_docs = [d for d in docs if d.tipo == "engenharia"]
+            # Só a versão mais recente de cada doc de engenharia — revisões de
+            # spec criam duplicatas que inflavam a análise (ver doc_selection).
+            eng_docs = eng_docs_correntes(list(docs))
             forn_docs = [d for d in docs if d.tipo == "fornecedor"]
             anexo_docs = [d for d in docs if d.tipo == "anexo_engenharia"]
 
@@ -107,24 +135,52 @@ def run_analysis_sync(
                 for d in anexo_docs
             )
 
+            # R1: carrega os requisitos aprovados (W1) — fonte unica do escopo
+            # (aprovado_em IS NULL = rascunho ainda em revisao, nunca entra)
+            requisitos = db.execute(
+                select(Requisito)
+                .where(
+                    Requisito.parecer_id == parecer.id,
+                    Requisito.ativo.is_(True),
+                    Requisito.aprovado_em.isnot(None),
+                )
+                .order_by(Requisito.numero)
+            ).scalars().all()
+
+            if not requisitos:
+                raise ValueError(
+                    "Nenhum requisito aprovado encontrado. Extraia e aprove a "
+                    "lista de requisitos antes de iniciar a analise."
+                )
+
+            requisitos_payload = [
+                {
+                    "numero": r.numero,
+                    "categoria": r.categoria,
+                    "descricao_requisito": r.descricao_requisito,
+                    "valor_requerido": r.valor_requerido,
+                    "prioridade": r.prioridade,
+                    "norma_referencia": r.norma_referencia,
+                    "referencia_engenharia": r.referencia_engenharia,
+                }
+                for r in requisitos
+            ]
+            requisito_por_numero = {r.numero: r for r in requisitos}
+
             set_progress(parecer_id, 25, "Verificando cache de analise...", "cache_lookup")
             idioma_relatorio = getattr(parecer, "idioma_relatorio", "pt")
+            disciplina = getattr(parecer, "disciplina", "instrumentacao")
             docs_hash = _compute_docs_hash(
+                requisitos_payload,
                 texto_engenharia,
                 texto_fornecedor,
-                analysis_profile,
+                disciplina,
                 idioma_relatorio,
                 texto_anexos,
             )
-            # When itens_aprovados is set the scope differs from a plain profile
-            # run — skip cache to avoid returning a stale result.
-            cached = (
-                None
-                if itens_aprovados
-                else db.execute(
-                    select(CacheAnalise).where(CacheAnalise.hash_documentos == docs_hash)
-                ).scalar_one_or_none()
-            )
+            cached = db.execute(
+                select(CacheAnalise).where(CacheAnalise.hash_documentos == docs_hash)
+            ).scalar_one_or_none()
 
             _llm_step = {"n": 0}
 
@@ -148,7 +204,7 @@ def run_analysis_sync(
                 set_progress(
                     parecer_id,
                     35,
-                    f"Iniciando analise com IA ({profile_label})...",
+                    f"Iniciando analise com LLM ({profile_label})...",
                     "llm_analysis",
                 )
                 result = analyze_documents(
@@ -160,18 +216,17 @@ def run_analysis_sync(
                     numero_parecer=parecer.numero_parecer,
                     on_progress=on_progress,
                     analysis_profile=analysis_profile,
-                    disciplina=getattr(parecer, "disciplina", "instrumentacao"),
+                    disciplina=disciplina,
                     idioma_relatorio=idioma_relatorio,
-                    itens_aprovados=itens_aprovados,
+                    itens_aprovados=requisitos_payload,
                 )
-                if not itens_aprovados:
-                    db.add(
-                        CacheAnalise(
-                            hash_documentos=docs_hash,
-                            resultado=result,
-                        )
+                db.add(
+                    CacheAnalise(
+                        hash_documentos=docs_hash,
+                        resultado=result,
                     )
-                    logger.info("Cached result for hash %s", docs_hash[:16])
+                )
+                logger.info("Cached result for hash %s", docs_hash[:16])
 
             set_progress(
                 parecer_id,
@@ -231,17 +286,63 @@ def run_analysis_sync(
                     review_summary.get("corrections", 0),
                 )
 
-                if review_summary.get("corrections", 0) > 0:
-                    review_warning = (
-                        f"Revisao automatica por IA: {review_summary['corrections']} "
-                        "item(ns) corrigido(s) apos segunda verificacao. "
-                        "Itens marcados com [CORRECAO_AUTO_REVISAO]."
-                    )
-                    parecer.comentario_geral = (
-                        f"{parecer.comentario_geral}\n\n{review_warning}".strip()
-                        if parecer.comentario_geral
-                        else review_warning
-                    )
+                # NB: avisos internos de QA (self-review/grounding/consistencia/
+                # verificacao/reconciliacao) NAO vao para comentario_geral — ele e
+                # exportado ao cliente. Ficam so no log (a cobertura fica no painel
+                # de rastreabilidade e nos proprios itens D).
+
+            # Supplier value recovery: refill blanks for items whose status implies
+            # the supplier offered something (anti-drop / anti-blank guard).
+            set_progress(
+                parecer_id,
+                86,
+                "Recuperando valores do fornecedor ausentes...",
+                "supplier_recovery",
+            )
+            result, recovery = recover_missing_supplier_values(
+                data=result, texto_fornecedor=texto_fornecedor
+            )
+            logger.info(
+                "Supplier recovery: checked=%d flagged=%d recovered=%d",
+                recovery["items_checked"],
+                recovery["items_flagged"],
+                recovery["items_recovered"],
+            )
+
+            # Cross-item verification: a deterministic detector flags suspect items
+            # (e.g. the same supplier value reused across distinct requirements),
+            # then a stronger model (Pro) re-checks ONLY those items.
+            set_progress(
+                parecer_id,
+                87,
+                "Verificando itens com possivel erro de leitura...",
+                "verification",
+            )
+            result, verif_flag = flag_items_for_verification(result)
+            verif_review = {"reviewed": 0, "corrections": 0}
+            if (
+                getattr(settings, "ENABLE_LLM_VERIFIER", True)
+                and verif_flag["items_flagged"] > 0
+            ):
+                set_progress(
+                    parecer_id,
+                    87,
+                    f"Revisando {verif_flag['items_flagged']} item(ns) sinalizado(s) "
+                    "com verificacao IA Pro...",
+                    "verification",
+                )
+                result, verif_review = verify_flagged_items(
+                    data=result,
+                    texto_engenharia=texto_engenharia,
+                    texto_fornecedor=texto_fornecedor,
+                    flag_summary=verif_flag,
+                )
+            logger.info(
+                "Verification: flagged=%d reviewed=%d corrections=%d",
+                verif_flag["items_flagged"],
+                verif_review["reviewed"],
+                verif_review.get("corrections", 0),
+            )
 
             # Field optimization: compact verbose fields via LLM before saving
             set_progress(
@@ -251,6 +352,21 @@ def run_analysis_sync(
                 "optimizing_fields",
             )
             result = optimize_item_fields(result, idioma_relatorio=idioma_relatorio)
+
+            # Reconciliação de escopo fechado: garante 1 item por requisito
+            # aprovado (injeta placeholder D para faltantes) — a análise nunca
+            # sai cobrindo menos do que o engenheiro aprovou.
+            set_progress(
+                parecer_id, 89, "Reconciliando escopo com os requisitos aprovados...",
+                "reconciling",
+            )
+            result, reconciliacao = reconciliar_escopo_fechado(result, requisitos_payload)
+            logger.info(
+                "Reconciliacao escopo: aprovados=%d faltantes=%d duplicados=%s",
+                reconciliacao["requisitos_aprovados"],
+                reconciliacao["itens_faltantes"],
+                reconciliacao["requisitos_duplicados"],
+            )
 
             set_progress(parecer_id, 90, "Salvando resultados no banco...", "saving_results")
             db.execute(
@@ -265,23 +381,51 @@ def run_analysis_sync(
             itens = pt.get("itens", [])
 
             for item_data in itens:
-                db.add(
-                    ItemParecer(
-                        parecer_id=parecer.id,
-                        numero=item_data.get("numero", 0),
-                        categoria=item_data.get("categoria"),
-                        descricao_requisito=item_data.get("descricao_requisito", ""),
-                        referencia_engenharia=item_data.get("referencia_engenharia"),
-                        referencia_fornecedor=item_data.get("referencia_fornecedor"),
-                        valor_requerido=item_data.get("valor_requerido"),
-                        valor_fornecedor=item_data.get("valor_fornecedor"),
-                        status=item_data.get("status", "D"),
-                        justificativa_tecnica=item_data.get("justificativa_tecnica", ""),
+                status_item = item_data.get("status", "D")
+                requisito_numero = item_data.get("requisito_numero")
+                requisito_vinculado = (
+                    requisito_por_numero.get(requisito_numero)
+                    if isinstance(requisito_numero, int)
+                    else None
+                )
+                # Estado inicial do ciclo de vida: A resolve; B/C/D/E aguardam fornecedor
+                estado_inicial = transicionar(
+                    "ABERTO", evento_para_classificacao(status_item)
+                )
+
+                item = ItemParecer(
+                    parecer_id=parecer.id,
+                    requisito_id=requisito_vinculado.id if requisito_vinculado else None,
+                    numero=item_data.get("numero", 0),
+                    categoria=item_data.get("categoria"),
+                    descricao_requisito=item_data.get("descricao_requisito", ""),
+                    referencia_engenharia=item_data.get("referencia_engenharia"),
+                    referencia_fornecedor=item_data.get("referencia_fornecedor"),
+                    valor_requerido=item_data.get("valor_requerido"),
+                    valor_fornecedor=item_data.get("valor_fornecedor"),
+                    status=status_item,
+                    justificativa_tecnica=item_data.get("justificativa_tecnica", ""),
+                    acao_requerida=item_data.get("acao_requerida"),
+                    prioridade=item_data.get("prioridade"),
+                    norma_referencia=item_data.get("norma_referencia"),
+                    estado=estado_inicial,
+                    verificacao_flag=item_data.get("_verificacao_flag"),
+                    verificacao_nota=item_data.get("_verificacao_nota"),
+                    flag_consistencia=item_data.get("_flag_consistencia"),
+                    nota_revisao=item_data.get("_nota_revisao"),
+                )
+                # W2 (parcial): rodada 1 e a base do historico por item — R2 le daqui
+                item.rodadas.append(
+                    RodadaAvaliacao(
+                        numero_rodada=1,
+                        origem="PROPOSTA_INICIAL",
+                        conteudo=item_data.get("valor_fornecedor"),
+                        classificacao_ia=status_item if status_item in "ABCDE" else None,
+                        justificativa_ia=item_data.get("justificativa_tecnica", ""),
                         acao_requerida=item_data.get("acao_requerida"),
-                        prioridade=item_data.get("prioridade"),
-                        norma_referencia=item_data.get("norma_referencia"),
                     )
                 )
+                db.add(item)
 
             recomendacoes = pt.get("recomendacoes", [])
             for i, texto in enumerate(recomendacoes):
@@ -300,32 +444,24 @@ def run_analysis_sync(
             parecer.total_info_ausente = resumo.get("informacao_ausente", 0)
             parecer.total_itens_adicionais = resumo.get("itens_adicionais_fornecedor", 0)
             parecer.parecer_geral = resumo.get("parecer_geral")
+            # comentario_geral e SO o comentario gerado pela analise — os avisos de
+            # QA (grounding/consistencia/verificacao/reconciliacao) ficam no log,
+            # NAO no documento entregue ao cliente (evita "18 itens com possivel
+            # alucinacao" no parecer). A cobertura de escopo aparece no painel de
+            # rastreabilidade e nos itens D injetados.
             parecer.comentario_geral = resumo.get("comentario_geral")
             parecer.conclusao = pt.get("conclusao")
             parecer.status_processamento = "concluido"
 
-            if grounding["items_flagged"] > 0:
-                warning = (
-                    f"Validacao de referencias: {grounding['items_flagged']} item(ns) "
-                    "marcado(s) com possivel alucinacao."
-                )
-                parecer.comentario_geral = (
-                    f"{parecer.comentario_geral}\n\n{warning}".strip()
-                    if parecer.comentario_geral
-                    else warning
-                )
-
-            if consistency["items_flagged"] > 0:
-                consistency_warning = (
-                    f"Validacao de consistencia: {consistency['items_flagged']} item(ns) "
-                    "com possivel erro de leitura (termos requeridos encontrados no texto "
-                    "do fornecedor). Verifique os itens marcados com [VALIDACAO_CONSISTENCIA]."
-                )
-                parecer.comentario_geral = (
-                    f"{parecer.comentario_geral}\n\n{consistency_warning}".strip()
-                    if parecer.comentario_geral
-                    else consistency_warning
-                )
+            logger.info(
+                "QA pos-cache: grounding_flag=%d consistency_flag=%d verif_flag=%d "
+                "recon_faltantes=%d recon_duplicados=%s",
+                grounding["items_flagged"],
+                consistency["items_flagged"],
+                verif_flag["items_flagged"],
+                reconciliacao["itens_faltantes"],
+                reconciliacao["requisitos_duplicados"],
+            )
 
             db.commit()
             set_progress(parecer_id, 100, "Analise concluida com sucesso.", "completed")
@@ -377,11 +513,10 @@ def run_analysis_sync(
 def start_analysis_in_background(
     parecer_id: str,
     analysis_profile: str = DEFAULT_ANALYSIS_PROFILE,
-    itens_aprovados: list[dict] | None = None,
 ) -> str:
     """Start analysis via Celery queue and return the task id."""
     from app.worker import processar_parecer_task
 
-    task = processar_parecer_task.delay(parecer_id, analysis_profile, itens_aprovados)
+    task = processar_parecer_task.delay(parecer_id, analysis_profile)
 
     return task.id

@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { patecApi, type ParecerResponse } from "@/lib/patec-api";
 import { ProcessamentoBadge, ParecerGeralBadge } from "@/components/parecer-tecnico/status-badge";
+import { faseLabel } from "@/components/parecer-tecnico/phase-line";
+import { desfechoLabel } from "@/components/parecer-tecnico/script";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { PageHeader } from "@/components/ui/page-header";
@@ -36,6 +38,12 @@ const PARECER_BORDER_COLORS: Record<string, string> = {
   APROVADO: "border-l-success",
   APROVADO_COM_COMENTARIOS: "border-l-warning",
   REJEITADO: "border-l-danger",
+};
+
+const DESFECHO_VARIANT: Record<string, "success" | "warning" | "error"> = {
+  APROVADO: "success",
+  COM_PENDENCIA: "warning",
+  REPROVADO: "error",
 };
 
 const SEGMENTS = [
@@ -245,6 +253,19 @@ export default function ParecerTecnicoPage() {
                       <Badge variant="secondary" className="text-xs">
                         {DISCIPLINA_LABELS[p.disciplina] ?? p.disciplina}
                       </Badge>
+                      {p.fase_caso === "FECHADO" ? (
+                        <Badge
+                          variant={DESFECHO_VARIANT[p.desfecho ?? ""] ?? "secondary"}
+                          className="text-xs"
+                          dot
+                        >
+                          {desfechoLabel(p.desfecho)}
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-xs">
+                          {faseLabel(p.fase_caso)}
+                        </Badge>
+                      )}
                     </div>
                     <p className="mt-0.5 text-sm font-medium text-fg">{p.projeto}</p>
                   </div>

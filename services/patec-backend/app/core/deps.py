@@ -1,4 +1,5 @@
 import uuid
+from typing import Annotated
 
 from fastapi import Depends, Header, HTTPException, Request, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -145,3 +146,33 @@ def require_role(*roles: str):
         return current_user
 
     return role_checker
+
+
+async def require_owner(
+    current_user: Usuario = Depends(get_current_user),
+    x_user_email: Annotated[str | None, Header()] = None,
+) -> Usuario:
+    """Restringe ao DONO da ferramenta (dashboard de qualidade).
+
+    Nao usa papel: no proxy Clerk todo usuario vira 'admin', entao 'admin' nao
+    distingue o dono. O gate e por e-mail (settings.OWNER_EMAILS). Em dev (nao
+    producao) o gate e aberto — util para ver o dashboard localmente; em producao
+    so os e-mails de OWNER_EMAILS passam.
+
+    Usuarios do proxy Clerk ficam gravados com e-mail sintetico
+    (clerk_<id>@noglem.com.br), que nao serve para o gate. O proxy Next envia o
+    e-mail real do login em X-User-Email — header confiavel porque toda rota ja
+    passa por require_internal_api_key.
+    """
+    if not settings.is_production:
+        return current_user
+    candidatos = {
+        (current_user.email or "").strip().lower(),
+        (x_user_email or "").strip().lower(),
+    }
+    if candidatos & settings.owner_emails:
+        return current_user
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Acesso restrito ao dono da ferramenta.",
+    )

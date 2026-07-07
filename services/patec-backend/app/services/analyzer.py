@@ -1,19 +1,21 @@
+import difflib
 import json
 import logging
 import re
-import time
 import unicodedata
 
-import httpx
-
 from app.core.config import settings
-from app.services.llm_prompt import (
+from app.services.llm_client import call_llm, extract_json
+from app.services.prompts.seguranca import envelopar
+from app.services.prompts.analise import (
     USER_PROMPT_TEMPLATE,
     CHUNK_USER_PROMPT_TEMPLATE,
     REDUCE_PROMPT,
     PROFILE_ITEM_LIMIT_TEMPLATE,
     PROFILE_INTEGRAL_TEMPLATE,
     FIELD_OPTIMIZATION_SYSTEM,
+    SUPPLIER_VALUE_RECOVERY_SYSTEM,
+    VERIFIER_SYSTEM,
     APPROVED_ITEMS_CONTEXT,
     get_report_language_instruction,
     get_system_prompt,
@@ -52,130 +54,6 @@ DEFAULT_ACTION_BY_STATUS = {
     "D": "Complementar a documentacao tecnica com dados objetivos e rastreaveis para avaliacao.",
     "E": "Submeter item adicional para avaliacao formal da engenharia quanto a aceitabilidade no escopo.",
 }
-RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
-
-
-def _extract_error_detail(response: httpx.Response) -> str:
-    try:
-        data = response.json()
-        detail = data.get("error", {}).get("message") or response.text
-    except Exception:
-        detail = response.text
-
-    detail = (detail or "").strip()
-    # Keep user-facing message concise.
-    if "Please refer to" in detail:
-        detail = detail.split("Please refer to", 1)[0].strip()
-    return detail
-
-
-def _parse_retry_after_seconds(response: httpx.Response) -> float | None:
-    retry_after = response.headers.get("retry-after")
-    if not retry_after:
-        return None
-
-    try:
-        seconds = float(retry_after)
-    except ValueError:
-        return None
-
-    if seconds <= 0:
-        return None
-
-    return seconds
-
-
-def _retry_delay_seconds(response: httpx.Response, attempt: int) -> float:
-    header_delay = _parse_retry_after_seconds(response)
-    if header_delay is not None:
-        return min(header_delay, settings.GEMINI_RETRY_MAX_SECONDS)
-
-    delay = settings.GEMINI_RETRY_BASE_SECONDS * (2 ** (attempt - 1))
-    return min(delay, settings.GEMINI_RETRY_MAX_SECONDS)
-
-
-def _repair_truncated_json(text: str) -> str:
-    """Attempt to repair truncated JSON by closing open structures.
-
-    Handles truncation mid-string, mid-key, trailing escapes, and
-    incomplete key-value pairs.
-    """
-    in_string = False
-    escape = False
-    stack = []
-
-    for ch in text:
-        if escape:
-            escape = False
-            continue
-        if ch == '\\' and in_string:
-            escape = True
-            continue
-        if ch == '"':
-            in_string = not in_string
-            continue
-        if in_string:
-            continue
-        if ch in ('{', '['):
-            stack.append(ch)
-        elif ch == '}' and stack and stack[-1] == '{':
-            stack.pop()
-        elif ch == ']' and stack and stack[-1] == '[':
-            stack.pop()
-
-    # If trailing escape inside string, remove it and close
-    if escape:
-        text = text[:-1]
-
-    # If we ended inside a string, close it
-    if in_string:
-        text += '"'
-
-        # After closing string, we might be in an incomplete key-value pair.
-        # Find the last structural context to decide what to append.
-        stripped = text.rstrip()
-        if stripped.endswith('":'):
-            # Key without value: add null
-            text += ' null'
-        elif stripped.endswith(','):
-            # Trailing comma: remove it
-            text = text.rstrip()[:-1]
-
-    # Remove any trailing commas before closing
-    text = text.rstrip()
-    if text.endswith(','):
-        text = text[:-1]
-
-    # Close any remaining open structures
-    for opener in reversed(stack):
-        text += ']' if opener == '[' else '}'
-
-    return text
-
-
-def _extract_json(text: str) -> dict:
-    """Extract JSON from LLM response, handling possible markdown code blocks."""
-    text = text.strip()
-    # Remove markdown code blocks if present
-    if text.startswith("```"):
-        text = re.sub(r"^```(?:json)?\s*\n?", "", text)
-        text = re.sub(r"\n?```\s*$", "", text)
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError as e:
-        logger.warning("JSON parse failed (%s), attempting repair", e)
-        try:
-            repaired = _repair_truncated_json(text)
-            return json.loads(repaired)
-        except json.JSONDecodeError:
-            logger.warning("Repair failed, truncating to last complete item")
-            # Last resort: find the last complete item in the array and close
-            last_brace = text.rfind('},')
-            if last_brace > 0:
-                truncated = text[:last_brace + 1]
-                truncated = _repair_truncated_json(truncated)
-                return json.loads(truncated)
-            raise
 
 
 def normalize_analysis_profile(profile: str | None) -> str:
@@ -233,107 +111,62 @@ def _split_text_into_chunks(text: str, max_chars: int) -> list[str]:
     return chunks if chunks else [text]
 
 
-def _call_gemini(system: str, user_content: str) -> str:
-    """Call Gemini API and return text response."""
-    api_key = settings.GEMINI_API_KEY.strip()
-    if not api_key:
-        raise RuntimeError("GEMINI_API_KEY nao configurada")
+# Nomes legados: a chamada HTTP e o parsing JSON vivem em llm_client.
+_call_gemini = call_llm
+_extract_json = extract_json
 
-    url = (
-        f"https://generativelanguage.googleapis.com/v1beta/models/"
-        f"{settings.GEMINI_MODEL}:generateContent"
-    )
-    payload = {
-        "system_instruction": {"parts": [{"text": system}]},
-        "contents": [{"role": "user", "parts": [{"text": user_content}]}],
-        "generationConfig": {
-            "temperature": 0.1,
-            "maxOutputTokens": 65536,
-        },
-    }
 
-    max_attempts = max(1, settings.GEMINI_MAX_RETRIES)
-    response = None
+# Canonical keys an item may carry. The analysis LLM occasionally corrupts a key
+# name (e.g. "valor_fornecedor" -> "valor_necedor"), which silently drops the value
+# because every reader does item.get("valor_fornecedor"). We fuzzy-match stray keys
+# back onto the schema before anything reads them.
+_CANONICAL_ITEM_KEYS = (
+    "numero",
+    "requisito_numero",
+    "categoria",
+    "descricao_requisito",
+    "referencia_engenharia",
+    "referencia_fornecedor",
+    "valor_requerido",
+    "valor_fornecedor",
+    "status",
+    "justificativa_tecnica",
+    "acao_requerida",
+    "prioridade",
+    "norma_referencia",
+)
+_KEY_REPAIR_THRESHOLD = 0.75
 
-    with httpx.Client(timeout=httpx.Timeout(600.0, connect=30.0)) as client:
-        for attempt in range(1, max_attempts + 1):
-            try:
-                response = client.post(url, params={"key": api_key}, json=payload)
-            except (httpx.ReadTimeout, httpx.ConnectTimeout, httpx.PoolTimeout) as exc:
-                if attempt < max_attempts:
-                    wait_seconds = min(
-                        settings.GEMINI_RETRY_BASE_SECONDS * (2 ** (attempt - 1)),
-                        settings.GEMINI_RETRY_MAX_SECONDS,
-                    )
-                    logger.warning(
-                        "Gemini API timeout (tentativa %d/%d). Nova tentativa em %.1fs. Erro: %s",
-                        attempt,
-                        max_attempts,
-                        wait_seconds,
-                        exc,
-                    )
-                    time.sleep(wait_seconds)
-                    continue
-                raise RuntimeError(f"Gemini API timeout apos {max_attempts} tentativas: {exc}") from exc
 
-            if response.status_code < 400:
-                break
+def _is_blank(value) -> bool:
+    """True for None, empty, or dash/placeholder-only supplier values."""
+    if value is None:
+        return True
+    return str(value).strip().strip("-–—").strip().lower() in ("", "n/a", "na")
 
-            detail = _extract_error_detail(response)
-            is_retryable = response.status_code in RETRYABLE_STATUS_CODES
-            if is_retryable and attempt < max_attempts:
-                wait_seconds = _retry_delay_seconds(response, attempt)
-                logger.warning(
-                    "Gemini API erro %d (tentativa %d/%d). Nova tentativa em %.1fs. Detalhe: %s",
-                    response.status_code,
-                    attempt,
-                    max_attempts,
-                    wait_seconds,
-                    detail,
-                )
-                time.sleep(wait_seconds)
-                continue
-            break
 
-    if response is None:
-        raise RuntimeError("Falha ao inicializar chamada da Gemini API")
+def _repair_item_keys(item: dict) -> None:
+    """Remap keys the LLM corrupted (typos/truncation) back onto the canonical schema.
 
-    if response.status_code >= 400:
-        detail = _extract_error_detail(response)
-        if response.status_code == 429:
-            raise RuntimeError(
-                "Gemini API indisponivel por limite temporario (429). "
-                "Aguarde alguns instantes e tente novamente."
-            )
-        raise RuntimeError(f"Erro Gemini API ({response.status_code}): {detail}")
-
-    data = response.json()
-    candidates = data.get("candidates", [])
-    if not candidates:
-        raise RuntimeError("Gemini API retornou resposta sem candidates")
-
-    parts = candidates[0].get("content", {}).get("parts", [])
-    text = "".join(
-        part.get("text", "")
-        for part in parts
-        if isinstance(part, dict) and isinstance(part.get("text"), str)
-    ).strip()
-
-    if not text:
-        finish_reason = candidates[0].get("finishReason")
-        raise RuntimeError(
-            f"Gemini API retornou resposta vazia (finishReason={finish_reason})"
+    Only remaps a stray key when it fuzzy-matches a canonical key above the threshold
+    AND that canonical key is missing or blank — so a well-formed value is never
+    clobbered. Mutates the item in place.
+    """
+    for key in [k for k in item if k not in _CANONICAL_ITEM_KEYS]:
+        # Keys prefixed with "_" are internal pipeline annotations
+        # (e.g. _verificacao_flag) — never treat them as corrupted schema keys.
+        if key.startswith("_"):
+            continue
+        match = difflib.get_close_matches(
+            key, _CANONICAL_ITEM_KEYS, n=1, cutoff=_KEY_REPAIR_THRESHOLD
         )
-
-    finish_reason = candidates[0].get("finishReason")
-    if finish_reason == "MAX_TOKENS":
-        logger.warning(
-            "Gemini response truncated (MAX_TOKENS). Response length: %d chars. "
-            "Will attempt JSON repair.",
-            len(text),
-        )
-
-    return text
+        if not match:
+            continue
+        target = match[0]
+        if _is_blank(item.get(target)) and not _is_blank(item.get(key)):
+            item[target] = item[key]
+            item.pop(key, None)
+            logger.warning("Repaired corrupted item key '%s' -> '%s'", key, target)
 
 
 def _validate_parecer_json(data: dict) -> dict:
@@ -370,6 +203,7 @@ def _validate_parecer_json(data: dict) -> dict:
     valid_statuses = {"A", "B", "C", "D", "E"}
     valid_priorities = {"ALTA", "MEDIA", "BAIXA"}
     for i, item in enumerate(itens):
+        _repair_item_keys(item)
         item["numero"] = i + 1
         if item.get("status") not in valid_statuses:
             item["status"] = "D"
@@ -642,18 +476,14 @@ def validate_value_consistency(
                 item.get("numero"),
                 status_label,
             )
-            justificativa = (item.get("justificativa_tecnica") or "").strip()
-            consistency_note = (
-                "[VALIDACAO_CONSISTENCIA] Termos do requisito foram encontrados "
-                f"no documento do fornecedor ({found_str}), mas o item foi "
-                f"classificado como {status_label}. Revisar classificacao."
+            # Flag interno de QA: fica FORA da justificativa_tecnica (que e
+            # exportada ao cliente) — persistido em coluna propria e exibido so
+            # como badge interno na UI.
+            item["_flag_consistencia"] = (
+                "Termos do requisito encontrados no documento do fornecedor "
+                f"({found_str}), mas o item foi classificado como {status_label}. "
+                "Revisar classificacao."
             )
-            if "VALIDACAO_CONSISTENCIA" not in justificativa:
-                item["justificativa_tecnica"] = (
-                    f"{justificativa}\n\n{consistency_note}"
-                    if justificativa
-                    else consistency_note
-                )
 
             flag_details.append({
                 "numero": item.get("numero"),
@@ -772,13 +602,11 @@ def llm_self_review(
             old_status = item["status"]
             item["status"] = new_status
 
-            correction_note = (
-                f" [CORRECAO_AUTO_REVISAO: Status alterado de {old_status} para "
-                f"{new_status}. {justificativa_rev}]"
+            # Nota da correcao em coluna propria — nao suja a justificativa exportada.
+            item["_nota_revisao"] = (
+                f"Status alterado de {old_status} para {new_status} apos segunda "
+                f"verificacao IA. {justificativa_rev}".strip()
             )
-            item["justificativa_tecnica"] = (
-                item.get("justificativa_tecnica", "") + correction_note
-            ).strip()
 
             if new_status == "A":
                 item["acao_requerida"] = None
@@ -797,6 +625,275 @@ def llm_self_review(
 
 
 # ---------------------------------------------------------------------------
+# Supplier Value Recovery (Post-processing)
+# ---------------------------------------------------------------------------
+
+# Statuses that imply the supplier offered something concrete for the requirement.
+# An empty valor_fornecedor on these is a contradiction worth recovering.
+_STATUSES_IMPLYING_OFFER = frozenset({"A", "B", "C", "E"})
+
+
+def recover_missing_supplier_values(
+    data: dict, texto_fornecedor: str
+) -> tuple[dict, dict]:
+    """Refill supplier values that came back blank for items whose status implies an
+    offer (A/B/C/E). Runs AFTER the deterministic key-repair, so it only fires on
+    genuine drops — not key typos. One focused LLM pass over the supplier text covers
+    all flagged items at once; on failure or genuine absence, falls back to
+    "Nao informado." so the table never shows a blank supplier cell.
+    """
+    pt = data.get("parecer_tecnico", data)
+    itens = pt.get("itens", [])
+
+    flagged = [
+        it
+        for it in itens
+        if it.get("status") in _STATUSES_IMPLYING_OFFER
+        and _is_blank(it.get("valor_fornecedor"))
+    ]
+    summary = {
+        "items_checked": len(itens),
+        "items_flagged": len(flagged),
+        "items_recovered": 0,
+    }
+
+    if flagged and texto_fornecedor.strip():
+        try:
+            payload = [
+                {
+                    "numero": it.get("numero"),
+                    "requisito": it.get("descricao_requisito"),
+                    "valor_requerido": it.get("valor_requerido"),
+                }
+                for it in flagged
+            ]
+            user_content = (
+                "Recupere o valor ofertado pelo fornecedor para os itens abaixo.\n\n"
+                f"ITENS:\n{json.dumps(payload, ensure_ascii=False, indent=2)}\n\n"
+                f"DOCUMENTO DO FORNECEDOR:\n{texto_fornecedor}"
+            )
+            response_text = _call_gemini(
+                SUPPLIER_VALUE_RECOVERY_SYSTEM, user_content, max_output_tokens=8192
+            )
+            rec = _extract_json(response_text)
+            by_numero = {
+                r.get("numero"): r.get("valor_fornecedor")
+                for r in rec.get("itens", [])
+                if isinstance(r, dict)
+            }
+            for it in flagged:
+                novo = by_numero.get(it.get("numero"))
+                if novo and not _is_blank(novo):
+                    it["valor_fornecedor"] = str(novo).strip()
+                    summary["items_recovered"] += 1
+        except Exception as e:  # never let recovery break the pipeline
+            logger.warning("Supplier value recovery failed: %s", e)
+
+    # Deterministic guard: never persist a blank supplier cell.
+    for it in itens:
+        if _is_blank(it.get("valor_fornecedor")):
+            it["valor_fornecedor"] = "Nao informado."
+
+    logger.info(
+        "Supplier value recovery: checked=%d flagged=%d recovered=%d",
+        summary["items_checked"],
+        summary["items_flagged"],
+        summary["items_recovered"],
+    )
+    return data, summary
+
+
+# ---------------------------------------------------------------------------
+# Cross-item Verification (deterministic detector + stronger-model verifier)
+# ---------------------------------------------------------------------------
+
+# Supplier values that are generic and legitimately repeat across items — they
+# must NOT trigger the duplicate-value flag.
+_NON_DISTINCTIVE_FORN_VALUES = frozenset(
+    {
+        "nao informado",
+        "nao informado.",
+        "n/a",
+        "na",
+        "sim",
+        "nao",
+        "conforme",
+        "conforme solicitado",
+        "conforme requisito",
+        "atende",
+        "atende.",
+        "atendido",
+        "atendida",
+        "atende ao requisito",
+        "ok",
+    }
+)
+
+# Below this length a supplier value is treated as too generic to be a meaningful
+# duplicate (e.g. "4-20 mA", "IP-65").
+_MIN_DISTINCTIVE_FORN_LEN = 8
+
+
+def _supplier_value_key(value) -> str:
+    """Normalized comparison key for a supplier value, or '' if not distinctive."""
+    if _is_blank(value):
+        return ""
+    norm = _normalize_text(str(value))
+    if not norm or norm in _NON_DISTINCTIVE_FORN_VALUES:
+        return ""
+    if len(norm) < _MIN_DISTINCTIVE_FORN_LEN:
+        return ""
+    return norm
+
+
+def flag_items_for_verification(data: dict) -> tuple[dict, dict]:
+    """Deterministic detector: marks items whose supplier value is suspect so the
+    stronger verifier model re-checks only those.
+
+    Primary signal: the SAME concrete valor_fornecedor reused across two or more
+    items — typically the LLM pasting one requirement's supplier offering onto a
+    sibling requirement with a different quantity/unit/TAG. Generic supplier
+    values (Nao informado, Sim, Conforme...) are ignored. Sets the in-place
+    annotation item['_verificacao_flag'] (cleared first so re-runs are idempotent).
+    """
+    pt = data.get("parecer_tecnico", data)
+    itens = pt.get("itens", [])
+
+    buckets: dict[str, list[dict]] = {}
+    for item in itens:
+        item.pop("_verificacao_flag", None)  # idempotent re-run
+        key = _supplier_value_key(item.get("valor_fornecedor"))
+        if key:
+            buckets.setdefault(key, []).append(item)
+
+    flagged_numbers: list[int] = []
+    for grupo in buckets.values():
+        if len(grupo) < 2:
+            continue
+        nums = sorted(it.get("numero") for it in grupo if it.get("numero") is not None)
+        for item in grupo:
+            outros = [n for n in nums if n != item.get("numero")]
+            if not outros:
+                continue
+            lista = ", ".join(str(n) for n in outros)
+            item["_verificacao_flag"] = (
+                f"Mesmo valor do fornecedor presente tambem no(s) item(ns) {lista} — "
+                "verificar se a oferta foi atribuida a este requisito especifico "
+                "(quantidade/unidade distinta?)."
+            )
+            if item.get("numero") is not None:
+                flagged_numbers.append(item["numero"])
+
+    summary = {
+        "items_checked": len(itens),
+        "items_flagged": len(flagged_numbers),
+        "flagged_numbers": sorted(set(flagged_numbers)),
+    }
+    validated = _validate_parecer_json({"parecer_tecnico": pt})
+    return validated, summary
+
+
+def verify_flagged_items(
+    data: dict,
+    texto_engenharia: str,
+    texto_fornecedor: str,
+    flag_summary: dict,
+) -> tuple[dict, dict]:
+    """Stronger-model (Pro) pass over the items flagged by the deterministic
+    detector. Reads the requirement + the engineering/supplier text and decides,
+    per item, whether the supplier value was attributed correctly.
+
+    Propose-with-trace: every reviewed item gets a '_verificacao_nota' (confirming
+    or correcting); corrections also rewrite status/value/justificativa. Failures
+    never break the pipeline — the original data is returned unchanged.
+    """
+    flagged_numbers = set(flag_summary.get("flagged_numbers", []))
+    if not flagged_numbers:
+        return data, {"reviewed": 0, "corrections": 0}
+
+    pt = data.get("parecer_tecnico", data)
+    itens = pt.get("itens", [])
+    item_by_numero = {it.get("numero"): it for it in itens}
+    flagged_items = [it for it in itens if it.get("numero") in flagged_numbers]
+
+    payload = [
+        {
+            "numero": it.get("numero"),
+            "requisito": it.get("descricao_requisito"),
+            "valor_requerido": it.get("valor_requerido"),
+            "referencia_engenharia": it.get("referencia_engenharia"),
+            "status_atual": it.get("status"),
+            "valor_fornecedor_atual": it.get("valor_fornecedor"),
+            "justificativa_atual": it.get("justificativa_tecnica"),
+            "motivo_flag": it.get("_verificacao_flag"),
+        }
+        for it in flagged_items
+    ]
+
+    eng_text = texto_engenharia[:60_000]
+    forn_text = texto_fornecedor[:60_000]
+    user_content = (
+        "## ITENS SINALIZADOS PARA VERIFICACAO\n\n"
+        f"{json.dumps(payload, ensure_ascii=False, indent=2)}\n\n---\n\n"
+        f"## TEXTO DA ENGENHARIA\n\n{eng_text}\n\n---\n\n"
+        f"## TEXTO DO FORNECEDOR\n\n{forn_text}\n\n---\n\n"
+        f"## INSTRUCAO\n\nVerifique os {len(flagged_items)} itens acima conforme as "
+        "regras. Retorne SOMENTE o JSON de verificacao."
+    )
+
+    try:
+        response_text = _call_gemini(
+            VERIFIER_SYSTEM,
+            user_content,
+            model=settings.GEMINI_VERIFIER_MODEL,
+            max_output_tokens=16384,
+        )
+        review = _extract_json(response_text)
+    except Exception as e:  # never let verification break the pipeline
+        logger.warning("LLM verifier failed: %s", e)
+        return data, {"reviewed": len(flagged_items), "corrections": 0, "error": str(e)}
+
+    corrections = 0
+    for rev in review.get("itens", []):
+        if not isinstance(rev, dict):
+            continue
+        item = item_by_numero.get(rev.get("numero"))
+        if item is None:
+            continue
+        nota = (rev.get("nota") or "").strip()
+
+        if rev.get("correto", True):
+            item["_verificacao_nota"] = (
+                f"Verificado (IA Pro): {nota}"
+                if nota
+                else "Verificado (IA Pro): atribuicao confirmada."
+            )
+            continue
+
+        novo_valor = rev.get("valor_fornecedor_corrigido")
+        if novo_valor and not _is_blank(novo_valor):
+            item["valor_fornecedor"] = str(novo_valor).strip()
+        novo_status = rev.get("status_corrigido")
+        if novo_status in ("A", "B", "C", "D", "E"):
+            item["status"] = novo_status
+        nova_justif = (rev.get("justificativa_corrigida") or "").strip()
+        if nova_justif:
+            item["justificativa_tecnica"] = nova_justif
+        nova_acao = rev.get("acao_requerida_corrigida")
+        if nova_acao is not None:
+            item["acao_requerida"] = (str(nova_acao).strip() or None)
+        item["_verificacao_nota"] = (
+            f"Corrigido pela verificacao (IA Pro): {nota}"
+            if nota
+            else "Corrigido pela verificacao (IA Pro)."
+        )
+        corrections += 1
+
+    validated = _validate_parecer_json({"parecer_tecnico": pt})
+    return validated, {"reviewed": len(flagged_items), "corrections": corrections}
+
+
+# ---------------------------------------------------------------------------
 # Field Optimization (Post-processing)
 # ---------------------------------------------------------------------------
 
@@ -806,6 +903,9 @@ _FIELD_LIMITS = {
     "justificativa_tecnica": 400,
     "acao_requerida": 150,
 }
+
+# Únicos campos que a otimização reescreve — o resto do item é preservado intacto.
+_OPTIMIZABLE_FIELDS = frozenset(_FIELD_LIMITS)
 
 
 def _needs_optimization(itens: list[dict]) -> bool:
@@ -857,13 +957,97 @@ def optimize_item_fields(data: dict, idioma_relatorio: str = "pt") -> dict:
             )
             return data
 
-        pt["itens"] = optimized_itens
+        # Merge: a otimização SÓ reescreve os 4 campos de texto longos; todos os
+        # demais campos vêm do item original (preserva requisito_numero, status,
+        # numero etc. — senão a LLM os derruba e o vínculo item↔requisito quebra).
+        merged = []
+        for original, opt in zip(itens, optimized_itens):
+            novo = dict(original)
+            for campo in _OPTIMIZABLE_FIELDS:
+                if campo in opt:
+                    novo[campo] = opt[campo]
+            merged.append(novo)
+
+        pt["itens"] = merged
         result = {"parecer_tecnico": pt}
         return _validate_parecer_json(result)
 
     except Exception as e:
         logger.warning("Field optimization failed: %s — using original result", e)
         return data
+
+
+# ---------------------------------------------------------------------------
+# Reconciliação de Escopo Fechado (Post-processing)
+# ---------------------------------------------------------------------------
+
+def reconciliar_escopo_fechado(
+    data: dict, requisitos_payload: list[dict]
+) -> tuple[dict, dict]:
+    """Garante que a análise cobre EXATAMENTE os requisitos aprovados (escopo fechado).
+
+    O contrato do escopo fechado (1 item por requisito aprovado) era confiado à
+    LLM sem verificação: se o modelo devolvia menos itens (truncamento, confusão,
+    recusa/injeção), o parecer era salvo cobrindo menos do que o engenheiro
+    aprovou — em silêncio. Aqui, para cada requisito aprovado SEM item vinculado
+    (por `requisito_numero`), injetamos um placeholder status D; requisitos com
+    mais de um item são sinalizados como duplicados. Itens adicionais do
+    fornecedor (status E, `requisito_numero` nulo) são ignorados. Roda no
+    pipeline pós-cache — NÃO exige bump de PROMPT_VERSION.
+    """
+    pt = data.get("parecer_tecnico", data)
+    itens = pt.get("itens", [])
+
+    itens_por_req: dict[int, list[dict]] = {}
+    for it in itens:
+        numero = it.get("requisito_numero")
+        if isinstance(numero, int):
+            itens_por_req.setdefault(numero, []).append(it)
+
+    faltantes: list[int] = []
+    duplicados: list[int] = []
+    for r in requisitos_payload:
+        numero = r.get("numero")
+        grupo = itens_por_req.get(numero, [])
+        if not grupo:
+            faltantes.append(numero)
+            itens.append({
+                "requisito_numero": numero,
+                "numero": 0,  # renumerado por _validate_parecer_json
+                "categoria": r.get("categoria"),
+                "descricao_requisito": r.get("descricao_requisito", ""),
+                "referencia_engenharia": r.get("referencia_engenharia"),
+                "referencia_fornecedor": "Nao encontrado",
+                "valor_requerido": r.get("valor_requerido"),
+                "valor_fornecedor": "Nao informado.",
+                "status": "D",
+                "justificativa_tecnica": (
+                    "Requisito aprovado nao coberto pela analise automatica "
+                    "(possivel truncamento ou omissao do modelo). Revisar "
+                    "manualmente este item."
+                ),
+                "acao_requerida": (
+                    "Analisar manualmente este requisito contra a proposta do fornecedor."
+                ),
+                "prioridade": r.get("prioridade") or "MEDIA",
+                "norma_referencia": r.get("norma_referencia"),
+            })
+        elif len(grupo) > 1:
+            duplicados.append(numero)
+
+    summary = {
+        "requisitos_aprovados": len(requisitos_payload),
+        "itens_faltantes": len(faltantes),
+        "numeros_faltantes": sorted(faltantes),
+        "requisitos_duplicados": sorted(duplicados),
+    }
+    if faltantes or duplicados:
+        logger.warning(
+            "Reconciliacao de escopo: %d requisito(s) sem item (%s); duplicados=%s",
+            len(faltantes), sorted(faltantes), sorted(duplicados),
+        )
+    validated = _validate_parecer_json({"parecer_tecnico": pt})
+    return validated, summary
 
 
 def analyze_single(
@@ -884,7 +1068,9 @@ def analyze_single(
     # to avoid the LLM discarding approved items that exceed the profile's max count.
     profile_instruction = "" if itens_aprovados else _profile_instruction(analysis_profile)
     texto_anexos_section = (
-        f"\n\n## DOCUMENTOS COMPLEMENTARES (ENGENHARIA)\n\n{texto_anexos}\n\n"
+        "\n\n## DOCUMENTOS COMPLEMENTARES (ENGENHARIA)\n"
+        + envelopar("DOC_ANEXOS_ENGENHARIA", texto_anexos)
+        + "\n\n"
         if texto_anexos
         else ""
     )
@@ -942,7 +1128,9 @@ def analyze_chunked(
     # When itens_aprovados is set, the user already decided the scope — skip profile limit
     profile_instruction = "" if itens_aprovados else _profile_instruction(analysis_profile)
     texto_anexos_section = (
-        f"\n\n## DOCUMENTOS COMPLEMENTARES (ENGENHARIA)\n\n{texto_anexos}\n\n"
+        "\n\n## DOCUMENTOS COMPLEMENTARES (ENGENHARIA)\n"
+        + envelopar("DOC_ANEXOS_ENGENHARIA", texto_anexos)
+        + "\n\n"
         if texto_anexos
         else ""
     )
@@ -1040,7 +1228,12 @@ def analyze_documents(
     total_chars = len(texto_engenharia) + len(texto_fornecedor)
     profile = normalize_analysis_profile(analysis_profile)
 
-    if total_chars <= MAX_INPUT_CHARS:
+    # Escopo fechado (requisitos aprovados): SEMPRE chamada única. O caminho
+    # chunked gera um conjunto de itens por chunk e o reduce os concatena —
+    # com escopo fechado isso DUPLICA os itens (N chunks ≈ N× os requisitos).
+    # A chamada única produz exatamente 1 item por requisito aprovado; o contexto
+    # do Gemini comporta o documento inteiro com folga.
+    if itens_aprovados or total_chars <= MAX_INPUT_CHARS:
         return analyze_single(
             texto_engenharia,
             texto_fornecedor,

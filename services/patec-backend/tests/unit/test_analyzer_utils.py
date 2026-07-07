@@ -1,15 +1,117 @@
 from app.core.config import settings
+from app.services import analyzer
+from app.services.prompts.analise import (
+    DISCIPLINAS_SUPORTADAS,
+    SYSTEM_PROMPT_INSTRUMENTACAO,
+    get_system_prompt,
+)
 from app.services.analyzer import (
     _call_gemini,
     _extract_json,
     _extract_keywords,
+    _is_blank,
     _keyword_found_in_text,
     _normalize_text,
+    _repair_item_keys,
     _split_text_into_chunks,
     _validate_parecer_json,
+    flag_items_for_verification,
+    recover_missing_supplier_values,
+    reconciliar_escopo_fechado,
     validate_reference_grounding,
     validate_value_consistency,
+    verify_flagged_items,
 )
+
+
+def _reqs(n):
+    return [
+        {
+            "numero": i,
+            "categoria": "Processo",
+            "descricao_requisito": f"Requisito {i}",
+            "valor_requerido": f"valor {i}",
+            "prioridade": "MEDIA",
+            "norma_referencia": None,
+            "referencia_engenharia": f"Item {i}",
+        }
+        for i in range(1, n + 1)
+    ]
+
+
+def test_reconciliacao_injeta_placeholder_para_requisito_faltante():
+    # 3 requisitos aprovados, mas a LLM devolveu itens só para 1 e 3
+    data = {"parecer_tecnico": {"itens": [
+        {"numero": 1, "requisito_numero": 1, "status": "A",
+         "descricao_requisito": "R1", "valor_fornecedor": "x"},
+        {"numero": 2, "requisito_numero": 3, "status": "C",
+         "descricao_requisito": "R3", "valor_fornecedor": "y"},
+    ]}}
+    out, summary = reconciliar_escopo_fechado(data, _reqs(3))
+    itens = out["parecer_tecnico"]["itens"]
+    # todos os 3 requisitos agora cobertos
+    assert len(itens) == 3
+    assert summary["itens_faltantes"] == 1
+    assert summary["numeros_faltantes"] == [2]
+    # o requisito 2 entrou como placeholder D vinculado ao requisito
+    placeholder = next(i for i in itens if i["requisito_numero"] == 2)
+    assert placeholder["status"] == "D"
+    assert placeholder["valor_fornecedor"] == "Nao informado."
+
+
+def test_reconciliacao_sinaliza_duplicados_e_ignora_status_E():
+    data = {"parecer_tecnico": {"itens": [
+        {"numero": 1, "requisito_numero": 1, "status": "A", "descricao_requisito": "R1"},
+        {"numero": 2, "requisito_numero": 1, "status": "B", "descricao_requisito": "R1 dup"},
+        {"numero": 3, "requisito_numero": None, "status": "E",
+         "descricao_requisito": "extra do fornecedor"},
+    ]}}
+    out, summary = reconciliar_escopo_fechado(data, _reqs(1))
+    assert summary["requisitos_duplicados"] == [1]
+    assert summary["itens_faltantes"] == 0
+    # o item E (requisito_numero=None) permanece intacto
+    assert any(i["status"] == "E" for i in out["parecer_tecnico"]["itens"])
+
+
+def test_extract_json_recupera_array_truncado_sem_crashar():
+    # Resposta cortada por MAX_TOKENS no meio do 3o item — o parser deve
+    # recuperar um JSON valido (reparo ou last-resort), nunca estourar excecao.
+    truncada = (
+        '{"parecer_tecnico": {"itens": ['
+        '{"numero": 1, "status": "A", "valor_fornecedor": "x"},'
+        '{"numero": 2, "status": "C", "valor_fornecedor": "y"},'
+        '{"numero": 3, "status": "D", "descricao_requisito": "cortado no me'
+    )
+    data = _extract_json(truncada)
+    itens = data.get("parecer_tecnico", data).get("itens", [])
+    # pelo menos os itens completos sobrevivem, e o resultado e parseavel
+    assert len(itens) >= 2
+    assert itens[0]["numero"] == 1
+
+
+def test_disciplinas_suportadas_tem_persona_propria():
+    # As 5 disciplinas suportadas alinham com o seletor do frontend
+    assert DISCIPLINAS_SUPORTADAS == {
+        "instrumentacao", "eletrico", "mecanico", "processos", "civil"
+    }
+    # cada uma retorna um prompt distinto (nao caiu no fallback silencioso)
+    prompts = {d: get_system_prompt(d) for d in DISCIPLINAS_SUPORTADAS}
+    assert len(set(prompts.values())) == len(DISCIPLINAS_SUPORTADAS)
+
+
+def test_disciplina_desconhecida_cai_no_fallback_instrumentacao():
+    assert get_system_prompt("disciplina_que_nao_existe") == SYSTEM_PROMPT_INSTRUMENTACAO
+
+
+def test_reconciliacao_sem_faltantes_nao_altera_contagem():
+    data = {"parecer_tecnico": {"itens": [
+        {"numero": 1, "requisito_numero": 1, "status": "A", "descricao_requisito": "R1"},
+        {"numero": 2, "requisito_numero": 2, "status": "B", "descricao_requisito": "R2"},
+    ]}}
+    out, summary = reconciliar_escopo_fechado(data, _reqs(2))
+    assert summary["itens_faltantes"] == 0
+    assert summary["requisitos_duplicados"] == []
+    assert len(out["parecer_tecnico"]["itens"]) == 2
 
 
 def test_extract_json_with_markdown_block():
@@ -45,6 +147,74 @@ def test_validate_parecer_json_recalculates_totals():
     assert resumo["rejeitados"] == 1
     assert resumo["informacao_ausente"] == 1
     assert resumo["parecer_geral"] == "REJEITADO"
+
+
+def test_repair_item_keys_recovers_corrupted_supplier_key():
+    # The exact corruption observed in production: the LLM emitted "valor_necedor"
+    # instead of "valor_fornecedor", silently dropping the supplier value.
+    item = {
+        "numero": 3,
+        "status": "B",
+        "valor_necedor": "1 conjunto, Torre Dell T5860XL, 4 monitores 55\".",
+    }
+    _repair_item_keys(item)
+    assert item.get("valor_fornecedor") == "1 conjunto, Torre Dell T5860XL, 4 monitores 55\"."
+    assert "valor_necedor" not in item
+
+
+def test_repair_item_keys_does_not_clobber_valid_value():
+    # A stray/extra key must never overwrite a canonical key that is already filled.
+    item = {"valor_fornecedor": "valor correto", "valor_necedor": "valor errado"}
+    _repair_item_keys(item)
+    assert item["valor_fornecedor"] == "valor correto"
+
+
+def test_repair_item_keys_ignores_unrelated_keys():
+    item = {"status": "B", "observacao_extra": "nota", "valor_fornecedor": "x"}
+    _repair_item_keys(item)
+    assert item["observacao_extra"] == "nota"  # too dissimilar to remap
+    assert item["valor_fornecedor"] == "x"
+
+
+def test_validate_parecer_json_repairs_keys_in_loop():
+    data = {
+        "parecer_tecnico": {
+            "resumo_executivo": {},
+            "itens": [
+                {"status": "B", "prioridade": "MEDIA", "valor_necedor": "ofertado X"},
+            ],
+        }
+    }
+    out = _validate_parecer_json(data)
+    item = out["parecer_tecnico"]["itens"][0]
+    assert item["valor_fornecedor"] == "ofertado X"
+
+
+def test_recover_missing_supplier_values_fills_blank_without_llm():
+    # Status D with no supplier value: deterministic guard fills the blank and the
+    # status does not imply an offer, so no LLM call is attempted (empty supplier text).
+    data = {
+        "parecer_tecnico": {
+            "itens": [
+                {"numero": 1, "status": "A", "valor_fornecedor": "ok"},
+                {"numero": 2, "status": "D", "valor_fornecedor": None},
+            ]
+        }
+    }
+    out, summary = recover_missing_supplier_values(data, texto_fornecedor="")
+    itens = out["parecer_tecnico"]["itens"]
+    assert itens[0]["valor_fornecedor"] == "ok"
+    assert itens[1]["valor_fornecedor"] == "Nao informado."
+    assert summary["items_flagged"] == 0  # D does not imply an offer
+
+
+def test_is_blank_treats_dashes_as_empty():
+    assert _is_blank(None)
+    assert _is_blank("")
+    assert _is_blank("  —  ")
+    assert _is_blank("-")
+    assert _is_blank("N/A")
+    assert not _is_blank("Torre Dell T5860XL")
 
 
 def test_validate_parecer_json_populates_observation_and_action_defaults():
@@ -159,10 +329,10 @@ def test_call_gemini_retries_429_then_succeeds(monkeypatch):
     monkeypatch.setattr(settings, "GEMINI_MAX_RETRIES", 3)
     monkeypatch.setattr(settings, "GEMINI_RETRY_BASE_SECONDS", 0.01)
     monkeypatch.setattr(
-        "app.services.analyzer.httpx.Client",
+        "app.services.llm_client.httpx.Client",
         lambda timeout=180.0: fake_client,
     )
-    monkeypatch.setattr("app.services.analyzer.time.sleep", lambda s: sleep_calls.append(s))
+    monkeypatch.setattr("app.services.llm_client.time.sleep", lambda s: sleep_calls.append(s))
 
     out = _call_gemini("system", "user")
 
@@ -189,10 +359,10 @@ def test_call_gemini_429_exhausted_raises_friendly_message(monkeypatch):
     monkeypatch.setattr(settings, "GEMINI_MAX_RETRIES", 2)
     monkeypatch.setattr(settings, "GEMINI_RETRY_BASE_SECONDS", 0.01)
     monkeypatch.setattr(
-        "app.services.analyzer.httpx.Client",
+        "app.services.llm_client.httpx.Client",
         lambda timeout=180.0: fake_client,
     )
-    monkeypatch.setattr("app.services.analyzer.time.sleep", lambda _s: None)
+    monkeypatch.setattr("app.services.llm_client.time.sleep", lambda _s: None)
 
     try:
         _call_gemini("system", "user")
@@ -308,7 +478,9 @@ def test_consistency_flags_false_negative_lc_connector():
     assert len(summary["flag_details"]) == 1
 
     flagged_item = validated["parecer_tecnico"]["itens"][0]
-    assert "VALIDACAO_CONSISTENCIA" in flagged_item["justificativa_tecnica"]
+    # O flag vai para um campo interno — NUNCA polui a justificativa exportada.
+    assert flagged_item.get("_flag_consistencia")
+    assert "VALIDACAO_CONSISTENCIA" not in flagged_item["justificativa_tecnica"]
 
 
 def test_consistency_no_false_flag_when_truly_missing():
@@ -395,7 +567,8 @@ def test_consistency_flags_status_d_with_found_terms():
 
     assert summary["items_flagged"] == 1
     flagged = validated["parecer_tecnico"]["itens"][0]
-    assert "VALIDACAO_CONSISTENCIA" in flagged["justificativa_tecnica"]
+    assert flagged.get("_flag_consistencia")
+    assert "VALIDACAO_CONSISTENCIA" not in flagged["justificativa_tecnica"]
 
 
 def test_consistency_multiple_items_mixed():
@@ -444,3 +617,213 @@ def test_consistency_multiple_items_mixed():
     # Item 3 (B) - "lc", "duplex", "fibra", "otica" ARE in text -> flagged
     assert summary["items_checked"] == 2  # items 2 and 3
     assert summary["items_flagged"] >= 1  # at least item 3
+
+
+# ---------------------------------------------------------------------------
+# Cross-item verification (detector + Pro verifier)
+# ---------------------------------------------------------------------------
+
+
+def test_flag_items_for_verification_detects_duplicate_supplier_value():
+    # Two near-identical requirements (qty differs) where the LLM pasted the SAME
+    # supplier value onto both — the exact production bug (items 7/8). Items are
+    # numbered sequentially because _validate_parecer_json renumbers to 1..N.
+    data = {
+        "parecer_tecnico": {
+            "resumo_executivo": {},
+            "itens": [
+                {
+                    "numero": 1,
+                    "status": "C",
+                    "descricao_requisito": "Remote Panels (General) - 8 un",
+                    "valor_fornecedor": "8 Armarios IO Remotos DCS + 8 SIS",
+                    "justificativa_tecnica": "x",
+                },
+                {
+                    "numero": 2,
+                    "status": "C",
+                    "descricao_requisito": "Remote Panels (General) - 1 un",
+                    "valor_fornecedor": "8 Armarios IO Remotos DCS + 8 SIS",
+                    "justificativa_tecnica": "x",
+                },
+                {
+                    "numero": 3,
+                    "status": "A",
+                    "descricao_requisito": "Outro",
+                    "valor_fornecedor": "Transmissor unico modelo XPTO-500",
+                    "justificativa_tecnica": "x",
+                },
+            ],
+        }
+    }
+    out, summary = flag_items_for_verification(data)
+    itens = {i["numero"]: i for i in out["parecer_tecnico"]["itens"]}
+
+    assert summary["items_flagged"] == 2
+    assert summary["flagged_numbers"] == [1, 2]
+    # The flag survives _validate_parecer_json (underscore-key guard) and
+    # references the sibling item.
+    assert "2" in itens[1]["_verificacao_flag"]
+    assert "1" in itens[2]["_verificacao_flag"]
+    assert "_verificacao_flag" not in itens[3]
+
+
+def test_flag_items_ignores_generic_and_short_supplier_values():
+    data = {
+        "parecer_tecnico": {
+            "resumo_executivo": {},
+            "itens": [
+                {"numero": 1, "status": "D", "valor_fornecedor": "Nao informado.",
+                 "descricao_requisito": "a", "justificativa_tecnica": "x"},
+                {"numero": 2, "status": "D", "valor_fornecedor": "Nao informado.",
+                 "descricao_requisito": "b", "justificativa_tecnica": "x"},
+                {"numero": 3, "status": "A", "valor_fornecedor": "4-20 mA",
+                 "descricao_requisito": "c", "justificativa_tecnica": "x"},
+                {"numero": 4, "status": "A", "valor_fornecedor": "4-20 mA",
+                 "descricao_requisito": "d", "justificativa_tecnica": "x"},
+            ],
+        }
+    }
+    out, summary = flag_items_for_verification(data)
+    assert summary["items_flagged"] == 0
+    for item in out["parecer_tecnico"]["itens"]:
+        assert "_verificacao_flag" not in item
+
+
+def test_flag_items_is_idempotent_on_rerun():
+    data = {
+        "parecer_tecnico": {
+            "resumo_executivo": {},
+            "itens": [
+                {"numero": 1, "status": "C", "valor_fornecedor": "Modelo ABC-123 unidade",
+                 "descricao_requisito": "a", "justificativa_tecnica": "x"},
+                {"numero": 2, "status": "C", "valor_fornecedor": "Modelo ABC-123 unidade",
+                 "descricao_requisito": "b", "justificativa_tecnica": "x"},
+            ],
+        }
+    }
+    out, _ = flag_items_for_verification(data)
+    # second run: supplier values now unique would clear flags
+    out["parecer_tecnico"]["itens"][1]["valor_fornecedor"] = "Modelo XYZ-999 distinto"
+    out2, summary2 = flag_items_for_verification(out)
+    itens = out2["parecer_tecnico"]["itens"]
+    assert summary2["items_flagged"] == 0
+    assert "_verificacao_flag" not in itens[0]
+    assert "_verificacao_flag" not in itens[1]
+
+
+def test_verify_flagged_items_applies_correction(monkeypatch):
+    data = {
+        "parecer_tecnico": {
+            "resumo_executivo": {},
+            "itens": [
+                {
+                    "numero": 1,
+                    "status": "C",
+                    "descricao_requisito": "8 Remote Panels",
+                    "valor_requerido": "8 paineis",
+                    "valor_fornecedor": "8 Armarios IO Remotos",
+                    "justificativa_tecnica": "orig 1",
+                    "_verificacao_flag": "Mesmo valor do item 2",
+                },
+                {
+                    "numero": 2,
+                    "status": "C",
+                    "descricao_requisito": "1 Remote Panel",
+                    "valor_requerido": "1 painel",
+                    "valor_fornecedor": "8 Armarios IO Remotos",
+                    "justificativa_tecnica": "orig 2",
+                    "_verificacao_flag": "Mesmo valor do item 1",
+                },
+            ],
+        }
+    }
+
+    fake_json = (
+        '{"itens": ['
+        '{"numero": 1, "correto": true, "nota": "8 paineis batem com a oferta"},'
+        '{"numero": 2, "correto": false, "nota": "9o painel nao contemplado",'
+        ' "valor_fornecedor_corrigido": "Nao informado.", "status_corrigido": "D",'
+        ' "justificativa_corrigida": "Fornecedor ofertou 8 paineis (item 1); este nao."}'
+        ']}'
+    )
+    captured = {}
+
+    def fake_call(system, user_content, **kwargs):
+        captured.update(kwargs)
+        return fake_json
+
+    monkeypatch.setattr(analyzer, "_call_gemini", fake_call)
+
+    out, summary = verify_flagged_items(
+        data=data,
+        texto_engenharia="eng",
+        texto_fornecedor="forn",
+        flag_summary={"flagged_numbers": [1, 2]},
+    )
+    itens = {i["numero"]: i for i in out["parecer_tecnico"]["itens"]}
+
+    # Uses the configured Pro verifier model, not the default analysis model.
+    assert captured.get("model") == settings.GEMINI_VERIFIER_MODEL
+    assert summary["reviewed"] == 2
+    assert summary["corrections"] == 1
+    # Item 1 confirmed (trace note, no change)
+    assert itens[1]["status"] == "C"
+    assert "Verificado (IA Pro)" in itens[1]["_verificacao_nota"]
+    # Item 2 corrected
+    assert itens[2]["status"] == "D"
+    assert itens[2]["valor_fornecedor"] == "Nao informado."
+    assert "Corrigido pela verificacao" in itens[2]["_verificacao_nota"]
+
+
+def test_verify_flagged_items_noop_when_nothing_flagged():
+    data = {"parecer_tecnico": {"itens": [{"numero": 1, "status": "A"}]}}
+    out, summary = verify_flagged_items(
+        data=data, texto_engenharia="e", texto_fornecedor="f",
+        flag_summary={"flagged_numbers": []},
+    )
+    assert summary == {"reviewed": 0, "corrections": 0}
+    assert out is data
+
+
+def test_verify_flagged_items_survives_llm_failure(monkeypatch):
+    data = {
+        "parecer_tecnico": {
+            "resumo_executivo": {},
+            "itens": [
+                {"numero": 1, "status": "C", "valor_fornecedor": "X",
+                 "descricao_requisito": "a", "justificativa_tecnica": "orig"},
+            ],
+        }
+    }
+
+    def boom(*a, **k):
+        raise RuntimeError("429")
+
+    monkeypatch.setattr(analyzer, "_call_gemini", boom)
+    out, summary = verify_flagged_items(
+        data=data, texto_engenharia="e", texto_fornecedor="f",
+        flag_summary={"flagged_numbers": [1]},
+    )
+    # Pipeline must not break; original item unchanged.
+    assert summary["corrections"] == 0
+    assert out["parecer_tecnico"]["itens"][0]["justificativa_tecnica"] == "orig"
+
+
+def test_call_llm_model_override_changes_url(monkeypatch):
+    captured = {}
+
+    class _CaptureClient(_FakeClient):
+        def post(self, url, params=None, json=None):  # noqa: A002
+            captured["url"] = url
+            return super().post(url, params=params, json=json)
+
+    ok = _FakeResponse(
+        200, {"candidates": [{"content": {"parts": [{"text": "ok"}]}}]}
+    )
+    monkeypatch.setattr(settings, "GEMINI_API_KEY", "test-key")
+    monkeypatch.setattr(
+        "app.services.llm_client.httpx.Client", lambda *a, **k: _CaptureClient([ok])
+    )
+    _call_gemini("system", "user", model="gemini-3.1-pro")
+    assert "gemini-3.1-pro:generateContent" in captured["url"]

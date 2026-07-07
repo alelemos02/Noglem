@@ -1,35 +1,43 @@
 """
-Testes unitários da máquina de estados do ciclo iterativo de avaliação.
+Testes unitários das máquinas de estado do caso técnico (v2).
 
-Cobre todas as transições válidas, todas as transições inválidas relevantes,
-a conversão de classificação IA → evento, e o cálculo de status_global do parecer.
+Cobre: transições de item (incluindo decisões humanas W4 e eventos da revisão
+de spec W7), transições de fase do caso, avanço automático e resumo do ciclo.
 """
 import pytest
 
 from app.services.state_machine import (
     ABERTO,
-    AGUARDANDO_FORNECEDOR,
-    CONCLUIDO,
-    EM_ANALISE,
+    ACEITO,
+    ANALISE,
+    CICLO_FORNECEDOR,
+    DESATIVADO,
     EM_REAVALIACAO,
-    ESCALONADO,
+    FECHADO,
     PENDENTE_FORNECEDOR,
-    RESOLVIDO,
+    REPROVADO,
+    SETUP,
+    VERIFICACAO_FINAL,
+    FaseInvalidaError,
     TransicaoInvalidaError,
-    compute_status_global,
+    compute_avanco_automatico,
+    compute_resumo_ciclo,
     evento_para_classificacao,
+    evento_para_decisao,
+    todos_aceitos,
     transicionar,
+    transicionar_fase,
     validar_estado,
 )
 
 
 # ──────────────────────────────────────────────────────────────────────
-# Transições válidas
+# Transições de item válidas
 # ──────────────────────────────────────────────────────────────────────
 
-class TestTransicoesValidas:
-    def test_aberto_aprovado_vira_resolvido(self):
-        assert transicionar(ABERTO, "classificar_aprovado") == RESOLVIDO
+class TestTransicoesItem:
+    def test_aberto_aprovado_vira_aceito(self):
+        assert transicionar(ABERTO, "classificar_aprovado") == ACEITO
 
     def test_aberto_nao_aprovado_vira_pendente(self):
         assert transicionar(ABERTO, "classificar_nao_aprovado") == PENDENTE_FORNECEDOR
@@ -37,163 +45,184 @@ class TestTransicoesValidas:
     def test_pendente_respondeu_vira_em_reavaliacao(self):
         assert transicionar(PENDENTE_FORNECEDOR, "fornecedor_respondeu") == EM_REAVALIACAO
 
-    def test_pendente_escalar_vira_escalonado(self):
-        assert transicionar(PENDENTE_FORNECEDOR, "escalar") == ESCALONADO
+    def test_decidir_aceitar(self):
+        assert transicionar(EM_REAVALIACAO, "decidir_aceitar") == ACEITO
 
-    def test_em_reavaliacao_aceitar_vira_resolvido(self):
-        assert transicionar(EM_REAVALIACAO, "aceitar") == RESOLVIDO
+    def test_decidir_esclarecer_volta_ao_fornecedor(self):
+        assert transicionar(EM_REAVALIACAO, "decidir_esclarecer") == PENDENTE_FORNECEDOR
 
-    def test_em_reavaliacao_rejeitar_vira_pendente(self):
-        assert transicionar(EM_REAVALIACAO, "rejeitar") == PENDENTE_FORNECEDOR
+    def test_decidir_rejeitar_volta_ao_fornecedor(self):
+        assert transicionar(EM_REAVALIACAO, "decidir_rejeitar") == PENDENTE_FORNECEDOR
+
+    def test_decidir_reprovar_caso(self):
+        assert transicionar(EM_REAVALIACAO, "decidir_reprovar_caso") == REPROVADO
+
+    def test_desfazer_decisao_de_aceito_volta_para_reavaliacao(self):
+        assert transicionar(ACEITO, "desfazer_decisao") == EM_REAVALIACAO
+
+    def test_desfazer_decisao_de_pendente_volta_para_reavaliacao(self):
+        # ESCLARECER/REJEITAR levam o item a PENDENTE; desfazer volta à fila.
+        assert transicionar(PENDENTE_FORNECEDOR, "desfazer_decisao") == EM_REAVALIACAO
 
 
-# ──────────────────────────────────────────────────────────────────────
-# Transições inválidas — devem levantar TransicaoInvalidaError
-# ──────────────────────────────────────────────────────────────────────
+class TestEventosRevisaoSpec:
+    def test_aceito_reabre_por_revisao_spec(self):
+        assert transicionar(ACEITO, "reabrir_revisao_spec") == ABERTO
 
-class TestTransicoesInvalidas:
-    def test_resolvido_nao_aceita_eventos(self):
+    def test_pendente_reabre_por_revisao_spec(self):
+        assert transicionar(PENDENTE_FORNECEDOR, "reabrir_revisao_spec") == ABERTO
+
+    def test_desativado_nao_reabre(self):
         with pytest.raises(TransicaoInvalidaError):
-            transicionar(RESOLVIDO, "classificar_aprovado")
+            transicionar(DESATIVADO, "reabrir_revisao_spec")
 
-    def test_escalonado_nao_aceita_eventos(self):
+    def test_desativar_de_qualquer_estado(self):
+        for estado in (ABERTO, PENDENTE_FORNECEDOR, EM_REAVALIACAO, ACEITO):
+            assert transicionar(estado, "desativar") == DESATIVADO
+
+
+class TestTransicoesItemInvalidas:
+    def test_escalonamento_foi_removido(self):
         with pytest.raises(TransicaoInvalidaError):
-            transicionar(ESCALONADO, "aceitar")
+            transicionar(PENDENTE_FORNECEDOR, "escalar")
 
-    def test_aberto_nao_pode_escalar(self):
+    def test_decisoes_antigas_nao_existem(self):
         with pytest.raises(TransicaoInvalidaError):
-            transicionar(ABERTO, "escalar")
+            transicionar(EM_REAVALIACAO, "aceitar")
 
-    def test_aberto_nao_pode_aceitar(self):
+    def test_aceito_e_terminal_para_decisoes(self):
         with pytest.raises(TransicaoInvalidaError):
-            transicionar(ABERTO, "aceitar")
+            transicionar(ACEITO, "decidir_aceitar")
 
-    def test_pendente_nao_pode_aceitar(self):
+    def test_reprovado_e_terminal(self):
         with pytest.raises(TransicaoInvalidaError):
-            transicionar(PENDENTE_FORNECEDOR, "aceitar")
+            transicionar(REPROVADO, "fornecedor_respondeu")
 
-    def test_em_reavaliacao_nao_pode_escalar(self):
+    def test_aberto_nao_decide(self):
         with pytest.raises(TransicaoInvalidaError):
-            transicionar(EM_REAVALIACAO, "escalar")
-
-    def test_evento_inexistente(self):
-        with pytest.raises(TransicaoInvalidaError):
-            transicionar(ABERTO, "evento_fantasma")
-
-    def test_mensagem_de_erro_lista_eventos_validos(self):
-        with pytest.raises(TransicaoInvalidaError, match="classificar_aprovado"):
-            transicionar(ABERTO, "escalar")
+            transicionar(ABERTO, "decidir_aceitar")
 
 
-# ──────────────────────────────────────────────────────────────────────
-# Conversão classificação IA → evento
-# ──────────────────────────────────────────────────────────────────────
-
-class TestEventoParaClassificacao:
-    @pytest.mark.parametrize("classif", ["B", "C", "D", "E"])
-    def test_nao_aprovados_viram_nao_aprovado(self, classif):
-        assert evento_para_classificacao(classif) == "classificar_nao_aprovado"
-
-    def test_aprovado_vira_aprovado(self):
+class TestMapeamentos:
+    def test_classificacao_a_aprova(self):
         assert evento_para_classificacao("A") == "classificar_aprovado"
 
+    @pytest.mark.parametrize("status", ["B", "C", "D", "E"])
+    def test_classificacoes_nao_aprovadas(self, status):
+        assert evento_para_classificacao(status) == "classificar_nao_aprovado"
 
-# ──────────────────────────────────────────────────────────────────────
-# compute_status_global
-# ──────────────────────────────────────────────────────────────────────
-
-class TestComputeStatusGlobal:
-    def test_sem_itens_retorna_em_analise(self):
-        assert compute_status_global([]) == EM_ANALISE
-
-    def test_todos_abertos_retorna_em_analise(self):
-        assert compute_status_global([ABERTO, ABERTO]) == EM_ANALISE
-
-    def test_todos_resolvidos_retorna_concluido(self):
-        assert compute_status_global([RESOLVIDO, RESOLVIDO]) == CONCLUIDO
-
-    def test_todos_escalonados_retorna_concluido(self):
-        assert compute_status_global([ESCALONADO, ESCALONADO]) == CONCLUIDO
-
-    def test_mix_resolvido_e_escalonado_retorna_concluido(self):
-        assert compute_status_global([RESOLVIDO, ESCALONADO, RESOLVIDO]) == CONCLUIDO
-
-    def test_qualquer_em_reavaliacao_retorna_em_reavaliacao(self):
-        resultado = compute_status_global([RESOLVIDO, EM_REAVALIACAO, PENDENTE_FORNECEDOR])
-        assert resultado == EM_REAVALIACAO
-
-    def test_em_reavaliacao_tem_prioridade_sobre_pendente(self):
-        resultado = compute_status_global([PENDENTE_FORNECEDOR, EM_REAVALIACAO])
-        assert resultado == EM_REAVALIACAO
-
-    def test_pendente_sem_reavaliacao_retorna_aguardando(self):
-        resultado = compute_status_global([RESOLVIDO, PENDENTE_FORNECEDOR])
-        assert resultado == AGUARDANDO_FORNECEDOR
-
-    def test_so_pendente_retorna_aguardando(self):
-        assert compute_status_global([PENDENTE_FORNECEDOR]) == AGUARDANDO_FORNECEDOR
-
-    def test_mix_aberto_e_resolvido_retorna_em_analise(self):
-        assert compute_status_global([ABERTO, RESOLVIDO]) == EM_ANALISE
-
-
-# ──────────────────────────────────────────────────────────────────────
-# Ciclo completo — simula uma rodada de ponta a ponta
-# ──────────────────────────────────────────────────────────────────────
-
-class TestCicloCompleto:
-    def test_ciclo_item_rejeitado_resolve_na_segunda_rodada(self):
-        estado = ABERTO
-
-        # Análise inicial: rejeitado
-        estado = transicionar(estado, "classificar_nao_aprovado")
-        assert estado == PENDENTE_FORNECEDOR
-
-        # Fornecedor responde
-        estado = transicionar(estado, "fornecedor_respondeu")
-        assert estado == EM_REAVALIACAO
-
-        # Engenheiro aceita a resposta
-        estado = transicionar(estado, "aceitar")
-        assert estado == RESOLVIDO
-
-    def test_ciclo_item_rejeita_duas_vezes_e_escala(self):
-        estado = ABERTO
-        estado = transicionar(estado, "classificar_nao_aprovado")
-        estado = transicionar(estado, "fornecedor_respondeu")
-        estado = transicionar(estado, "rejeitar")
-        assert estado == PENDENTE_FORNECEDOR
-
-        # Segunda rodada: fornecedor tenta de novo, ainda rejeitado
-        estado = transicionar(estado, "fornecedor_respondeu")
-        estado = transicionar(estado, "rejeitar")
-        assert estado == PENDENTE_FORNECEDOR
-
-        # Decisão de escalar
-        estado = transicionar(estado, "escalar")
-        assert estado == ESCALONADO
-
-    def test_parecer_concluido_so_quando_todos_encerrados(self):
-        estados = [RESOLVIDO, PENDENTE_FORNECEDOR, ESCALONADO]
-        assert compute_status_global(estados) == AGUARDANDO_FORNECEDOR
-
-        # Resolve o pendente
-        estados[1] = RESOLVIDO
-        assert compute_status_global(estados) == CONCLUIDO
-
-
-# ──────────────────────────────────────────────────────────────────────
-# validar_estado
-# ──────────────────────────────────────────────────────────────────────
-
-class TestValidarEstado:
     @pytest.mark.parametrize(
-        "estado",
-        [ABERTO, PENDENTE_FORNECEDOR, EM_REAVALIACAO, RESOLVIDO, ESCALONADO],
+        ("decisao", "evento"),
+        [
+            ("ACEITAR", "decidir_aceitar"),
+            ("ESCLARECER", "decidir_esclarecer"),
+            ("REJEITAR", "decidir_rejeitar"),
+            ("REPROVAR_CASO", "decidir_reprovar_caso"),
+        ],
     )
-    def test_estados_validos_nao_levantam(self, estado):
-        validar_estado(estado)  # não deve levantar
+    def test_decisao_para_evento(self, decisao, evento):
+        assert evento_para_decisao(decisao) == evento
 
-    def test_estado_invalido_levanta_value_error(self):
-        with pytest.raises(ValueError, match="Estado desconhecido"):
-            validar_estado("INEXISTENTE")
+    def test_decisao_invalida(self):
+        with pytest.raises(ValueError):
+            evento_para_decisao("ATENDE")  # vocabulário antigo
+
+    def test_validar_estado_aceita_novos(self):
+        for estado in (ABERTO, ACEITO, REPROVADO, DESATIVADO):
+            validar_estado(estado)
+
+    def test_validar_estado_rejeita_antigos(self):
+        with pytest.raises(ValueError):
+            validar_estado("RESOLVIDO")
+        with pytest.raises(ValueError):
+            validar_estado("ESCALONADO")
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Fases do caso
+# ──────────────────────────────────────────────────────────────────────
+
+class TestFasesCaso:
+    def test_fluxo_feliz(self):
+        fase = transicionar_fase(SETUP, "extrair_requisitos")
+        assert fase == "REQUISITOS"
+        fase = transicionar_fase(fase, "aprovar_requisitos")
+        assert fase == ANALISE
+        fase = transicionar_fase(fase, "iniciar_ciclo")
+        assert fase == CICLO_FORNECEDOR
+        fase = transicionar_fase(fase, "todos_itens_aceitos")
+        assert fase == VERIFICACAO_FINAL
+        fase = transicionar_fase(fase, "fechar")
+        assert fase == FECHADO
+
+    def test_w1_direto_do_setup(self):
+        assert transicionar_fase(SETUP, "aprovar_requisitos") == ANALISE
+
+    def test_reaprovacao_pre_analise(self):
+        assert transicionar_fase(ANALISE, "aprovar_requisitos") == ANALISE
+
+    def test_reprovar_caso_fecha_do_ciclo(self):
+        assert transicionar_fase(CICLO_FORNECEDOR, "reprovar_caso") == FECHADO
+
+    def test_fechar_caso_travado_no_ciclo(self):
+        assert transicionar_fase(CICLO_FORNECEDOR, "fechar") == FECHADO
+
+    def test_revisao_spec_regride_para_ciclo(self):
+        assert transicionar_fase(VERIFICACAO_FINAL, "revisao_spec") == CICLO_FORNECEDOR
+        assert transicionar_fase(ANALISE, "revisao_spec") == CICLO_FORNECEDOR
+
+    def test_caso_fechado_e_terminal(self):
+        with pytest.raises(FaseInvalidaError):
+            transicionar_fase(FECHADO, "iniciar_ciclo")
+
+    def test_nao_pula_fases(self):
+        with pytest.raises(FaseInvalidaError):
+            transicionar_fase(SETUP, "iniciar_ciclo")
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Avanço automático e resumo
+# ──────────────────────────────────────────────────────────────────────
+
+class TestAvancoAutomatico:
+    def test_todos_aceitos_avanca(self):
+        estados = [ACEITO, ACEITO, ACEITO]
+        assert compute_avanco_automatico(CICLO_FORNECEDOR, estados) == VERIFICACAO_FINAL
+
+    def test_desativados_nao_bloqueiam(self):
+        estados = [ACEITO, DESATIVADO, ACEITO]
+        assert compute_avanco_automatico(CICLO_FORNECEDOR, estados) == VERIFICACAO_FINAL
+
+    def test_pendente_bloqueia(self):
+        estados = [ACEITO, PENDENTE_FORNECEDOR]
+        assert compute_avanco_automatico(CICLO_FORNECEDOR, estados) is None
+
+    def test_so_avanca_do_ciclo(self):
+        assert compute_avanco_automatico(ANALISE, [ACEITO]) is None
+
+    def test_sem_itens_nao_avanca(self):
+        assert compute_avanco_automatico(CICLO_FORNECEDOR, []) is None
+        assert compute_avanco_automatico(CICLO_FORNECEDOR, [DESATIVADO]) is None
+
+    def test_todos_aceitos_helper(self):
+        assert todos_aceitos([ACEITO, ACEITO])
+        assert todos_aceitos([ACEITO, DESATIVADO])
+        assert not todos_aceitos([ACEITO, EM_REAVALIACAO])
+        assert not todos_aceitos([])
+
+
+class TestResumoCiclo:
+    def test_contagens(self):
+        estados = [ACEITO, PENDENTE_FORNECEDOR, EM_REAVALIACAO, DESATIVADO, REPROVADO, ABERTO]
+        resumo = compute_resumo_ciclo(estados)
+        assert resumo["total_itens"] == 5  # desativado fora
+        assert resumo["aceitos"] == 1
+        assert resumo["aguardando_fornecedor"] == 1
+        assert resumo["em_reavaliacao"] == 1
+        assert resumo["reprovados"] == 1
+        assert resumo["abertos"] == 1
+        assert resumo["desativados"] == 1
+        assert resumo["todos_aceitos"] is False
+
+    def test_todos_aceitos_no_resumo(self):
+        assert compute_resumo_ciclo([ACEITO, ACEITO])["todos_aceitos"] is True
