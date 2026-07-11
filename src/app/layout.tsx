@@ -4,6 +4,7 @@ import { ptBR } from "@clerk/localizations";
 import { Suspense } from "react";
 import { PostHogProvider } from "@/components/posthog-provider";
 import { fontSans, fontMono } from "@/lib/fonts";
+import { site } from "@/lib/site";
 import "./globals.css";
 
 const fontVariables = `${fontSans.variable} ${fontMono.variable}`;
@@ -27,9 +28,25 @@ const clerkAppearance = {
 };
 
 export const metadata: Metadata = {
-  title: "Jul/IA - Engineering Intelligence",
-  description: "Plataforma centralizada de agentes de IA para engenharia - Tradução AI, Extração de PDFs, Análise e Conversão de documentos",
-  keywords: ["engenharia", "agentes", "agentes de ia", "ferramentas", "pdf", "tradução", "IA", "documentos"],
+  metadataBase: new URL(site.url),
+  title: {
+    default: site.title,
+    template: "%s | Noglem",
+  },
+  description: site.description,
+  openGraph: {
+    type: "website",
+    locale: "pt_BR",
+    url: site.url,
+    siteName: site.name,
+    title: site.title,
+    description: site.description,
+  },
+  twitter: {
+    card: "summary",
+    title: site.title,
+    description: site.description,
+  },
 };
 
 const isClerkConfigured =

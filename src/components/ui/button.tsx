@@ -88,8 +88,15 @@ function Button({
       )}
       {...props}
     >
-      {loading && <Spinner size="sm" />}
-      {children}
+      {/* Slot exige filho único — com asChild o spinner não pode ser injetado */}
+      {asChild ? (
+        children
+      ) : (
+        <>
+          {loading && <Spinner size="sm" />}
+          {children}
+        </>
+      )}
     </Comp>
   )
 }
