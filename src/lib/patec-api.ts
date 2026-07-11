@@ -33,7 +33,12 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
     throw new Error(extractErrorMessage(error, `Erro ${response.status}`));
   }
 
-  return response.json();
+  // 204 No Content (ex.: DELETE) ou corpo vazio: não há JSON para parsear.
+  // Sem isso, response.json() lança em corpo vazio e o caller trata sucesso como
+  // erro — era a causa do falso "N parecer(es) não puderam ser excluídos".
+  if (response.status === 204) return undefined as T;
+  const text = await response.text();
+  return (text ? JSON.parse(text) : undefined) as T;
 }
 
 // --- Types ---

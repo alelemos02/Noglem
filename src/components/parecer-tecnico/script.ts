@@ -1,8 +1,10 @@
 /**
  * script.ts — roteiro PT-BR da JulIA.
  *
- * Cada passo da conversa tem um template de fala. Tom: amistosa, direta,
- * conduz o engenheiro pelo processo sem jargão desnecessário.
+ * Cada passo da conversa tem um template de fala. Voz da JulIA: ela é a
+ * ENGENHEIRA que conduz o parecer (não uma "assistente"/sistema). Primeira
+ * pessoa, humana e próxima, mas técnica e precisa. Sem emojis no dia a dia —
+ * só em ocasião muito especial (ex.: o fechamento do caso).
  */
 
 import type { Snapshot, ConversationStep, StepId } from "./types";
@@ -19,9 +21,9 @@ export function saudacao(date = new Date()): string {
 export function mensagemAbertura(snapshot: Snapshot): string {
   const { parecer } = snapshot;
   return (
-    `${saudacao()}! Sou a **JulIA**, sua assistente de engenharia. ` +
-    `Vou te conduzir pelo parecer técnico **${parecer.numero_parecer}** ` +
-    `(${parecer.projeto} · ${parecer.fornecedor}).`
+    `${saudacao()}! Aqui é a **JulIA** — sou a engenheira que vai tocar com você o ` +
+    `parecer técnico **${parecer.numero_parecer}** ` +
+    `(${parecer.projeto} · ${parecer.fornecedor}). Pode contar comigo em cada etapa.`
   );
 }
 
@@ -45,90 +47,87 @@ export function mensagemDoPasso(
   const mensagens: Record<StepId, () => string> = {
     // --- Revisão de especificação (lateral) ---
     "spec.diff_decisao": () =>
-      `A comparação da nova revisão da especificação terminou. ` +
-      `Veja o que mudou e decida o que aplicar — itens alterados serão reabertos ` +
-      `e itens removidos serão desativados (nunca apagados).`,
+      `Terminei de comparar a nova revisão da especificação. Dá uma olhada no ` +
+      `que mudou e me diz o que aplicar — os itens alterados eu reabro, e os ` +
+      `removidos eu desativo (nunca apago nada).`,
     "spec.comparando": () =>
-      `Estou comparando a nova revisão da especificação contra os requisitos ` +
-      `aprovados do caso. Já te mostro o que mudou.`,
+      `Já estou comparando a nova revisão contra os requisitos que a gente ` +
+      `aprovou. Volto num instante com o que mudou.`,
     "spec.erro": () =>
-      `Tive um problema ao comparar a nova revisão da especificação. ` +
-      `Você pode tentar de novo ou descartar essa versão.`,
+      `Tropecei ao comparar a nova revisão da especificação. Podemos tentar de ` +
+      `novo, ou você descarta essa versão — como preferir.`,
 
     // --- Setup / Requisitos ---
     "setup.docs_eng": () =>
-      `Para começar, preciso do **documento principal da engenharia** — a ` +
-      `requisição/especificação técnica que será a **base de todo o parecer**. ` +
-      `Pode arrastar aqui embaixo. Depois que ele entrar, eu pergunto sobre ` +
-      `documentos complementares (referências, normas) — esses ficam para o ` +
-      `segundo momento.`,
+      `Pra gente começar, me manda o **documento principal da engenharia** — a ` +
+      `requisição/especificação que vai ser a **base de todo o parecer**. É só ` +
+      `arrastar aqui embaixo. Assim que ele entrar, eu te pergunto sobre ` +
+      `documentos complementares (referências, normas); esses ficam pra depois.`,
     "setup.docs_complementares": () =>
-      `Documento principal recebido. ✅ Antes de eu ler e extrair os requisitos: ` +
-      `você tem **documentos complementares** (referências técnicas ou normas ` +
-      `linkadas no documento principal)? Eles servem só como apoio — a análise ` +
-      `continua baseada no documento principal. Se tiver, anexe pelo clipe aqui ` +
-      `embaixo; se não tiver, é só me dizer que eu já começo a extração dos ` +
-      `requisitos.`,
+      `Recebi o documento principal. Antes de eu mergulhar nele e extrair os ` +
+      `requisitos: você tem algum **documento complementar** — uma norma, uma ` +
+      `referência citada no documento principal? Serve só de apoio; a análise ` +
+      `continua em cima do documento principal. Se tiver, anexa pelo clipe aqui ` +
+      `embaixo. Se não tiver, é só me falar que eu já começo a extração.`,
     "setup.docs_forn": () =>
-      `Perfeito. Agora me envie a **proposta do fornecedor** ` +
+      `Fechado. Agora me manda a **proposta do fornecedor** ` +
       `(${parecer.fornecedor}), por favor.`,
     "setup.extrair": () =>
-      `Recebi o documento da engenharia. Agora eu **leio a documentação e ` +
-      `extraio a lista de requisitos** que vamos verificar na proposta. ` +
-      `**Quantos requisitos você quer que eu extraia?** Me diga um número, ` +
-      `ou se preferir eu escolho os mais relevantes para uma conversa mais ` +
-      `fluida — é só responder aqui embaixo. A proposta do fornecedor a gente ` +
-      `envia depois, na hora da análise.`,
+      `Documento da engenharia recebido. Agora eu **leio tudo e levanto a lista ` +
+      `de requisitos** que a gente vai conferir na proposta. **Quantos requisitos ` +
+      `você quer que eu extraia?** Me diz um número — ou, se preferir, eu escolho ` +
+      `os mais relevantes pra deixar a conversa mais leve. A proposta do ` +
+      `fornecedor a gente vê depois, na hora da análise.`,
     "requisitos.aprovar": () =>
-      `Li os documentos e identifiquei os requisitos abaixo. Dê uma olhada: ` +
-      `você pode **editar, remover ou me pedir ajustes**. Quando estiver bom, ` +
-      `aprove — a lista aprovada vira a referência oficial da análise.`,
+      `Li os documentos e levantei os requisitos abaixo. Dá uma olhada com calma: ` +
+      `você pode **editar, remover ou me pedir ajustes**. Quando achar que está ` +
+      `bom, aprova — a lista aprovada vira a referência oficial da análise.`,
 
     // --- Análise ---
     "analise.docs_forn": () =>
-      `Requisitos aprovados! ✅ Agora me envie a **proposta do ` +
-      `${parecer.fornecedor}** para eu comparar cada requisito contra ela.`,
+      `Requisitos aprovados. Agora me manda a **proposta do ` +
+      `${parecer.fornecedor}** que eu comparo cada requisito contra ela.`,
     "analise.pronta": () =>
       `Os **${requisitos.length} requisitos** estão aprovados. ` +
-      `Posso iniciar a análise da proposta do ${parecer.fornecedor} contra eles?`,
+      `Posso já iniciar a análise da proposta do ${parecer.fornecedor} contra eles?`,
     "analise.rodando": () =>
       `Estou comparando a proposta da **${parecer.fornecedor}** contra os ` +
-      `requisitos aprovados. Isso leva alguns minutos — acompanhe o progresso abaixo.`,
+      `requisitos aprovados. Leva alguns minutos — pode acompanhar o progresso abaixo.`,
     "analise.erro": () =>
-      `A análise encontrou um erro. Podemos tentar novamente — se o problema ` +
-      `persistir, verifique os documentos enviados.`,
+      `A análise esbarrou num erro. A gente pode tentar de novo — se insistir, ` +
+      `vale conferir os documentos que foram enviados.`,
     "analise.resultado": () => {
       const a = parecer.total_aprovados;
       const b = parecer.total_aprovados_comentarios;
       const c = parecer.total_rejeitados;
       const d = parecer.total_info_ausente;
       return (
-        `Análise pronta! Dos **${parecer.total_itens} itens**: ` +
+        `Terminei a análise! Dos **${parecer.total_itens} itens**: ` +
         `${a} aprovados, ${b} com comentários, ${c} rejeitados e ${d} sem informação. ` +
-        `Veja o resumo abaixo — quando quiser, iniciamos o ciclo com o fornecedor.`
+        `Dá uma olhada no resumo abaixo — quando você quiser, a gente inicia o ciclo com o fornecedor.`
       );
     },
 
     // --- Ciclo com fornecedor ---
     "ciclo.rodada_erro": () =>
       `O processamento da última resposta do fornecedor falhou. ` +
-      `Veja o detalhe abaixo e me envie de novo, por favor.`,
+      `Dá uma olhada no detalhe abaixo e me reenvia, por favor.`,
     "ciclo.vinculando": () =>
       `Recebi a resposta do fornecedor. Estou **identificando a quais itens ` +
-      `do parecer cada trecho responde** — já te mostro as sugestões para você conferir.`,
+      `do parecer cada trecho responde** — já te mostro pra você conferir.`,
     "ciclo.vinculacao_review": () =>
-      `Aqui está o que identifiquei na resposta do fornecedor. **Confira os ` +
-      `vínculos** — você pode corrigir ou remover qualquer um antes de eu avaliar ` +
+      `Aqui está o que consegui identificar na resposta do fornecedor. **Confere ` +
+      `os vínculos** — você pode corrigir ou tirar qualquer um antes de eu avaliar ` +
       `as respostas.`,
     "ciclo.avaliando": () =>
-      `Vínculos confirmados! Estou **avaliando cada resposta** do fornecedor ` +
+      `Vínculos confirmados. Estou **avaliando cada resposta** do fornecedor ` +
       `contra o requisito correspondente. Um instante.`,
     "ciclo.decidir": () => {
       const m = itensReavaliacao.length;
       return (
         `O fornecedor respondeu **${m} ${m === 1 ? "item" : "itens"}**. ` +
-        `Vamos decidir um por um — eu mostro a resposta e a minha avaliação, ` +
-        `e **você dá a palavra final**.`
+        `Vamos decidir um por um — eu te mostro a resposta e a minha avaliação, ` +
+        `e **a palavra final é sua**.`
       );
     },
     "ciclo.aguardando_fornecedor": () => {
@@ -136,36 +135,36 @@ export function mensagemDoPasso(
         resumo?.contagem_por_estado.find((c) => c.estado === "PENDENTE_FORNECEDOR")
           ?.total ?? 0;
       return (
-        `Estamos aguardando o fornecedor responder ` +
+        `Estamos esperando o fornecedor responder ` +
         `**${pendentes} ${pendentes === 1 ? "item pendente" : "itens pendentes"}**. ` +
-        `Você pode exportar a carta de pendências para enviar a ele, e quando a ` +
+        `Se quiser, exporta a carta de pendências pra mandar pra ele; quando a ` +
         `resposta chegar, é só me entregar aqui embaixo.`
       );
     },
 
     // --- Verificação final ---
     "verificacao.dispensada": () =>
-      `Todos os itens foram resolvidos! Como a última resposta foi uma ` +
-      `**proposta totalmente revisada (Tipo 1)**, eu já analisei esse documento ` +
-      `nas rodadas — não preciso verificar de novo. Só falta a **sua validação final**.`,
+      `Todos os itens foram resolvidos! Como a última resposta já veio como ` +
+      `**proposta totalmente revisada (Tipo 1)**, eu analisei esse documento nas ` +
+      `rodadas — não preciso verificar de novo. Falta só a **sua validação final**.`,
     "verificacao.aguardando_proposta": () =>
-      `Todos os itens foram resolvidos! Para fechar o caso com segurança, ` +
-      `preciso da **proposta final consolidada** do fornecedor — vou verificar se ` +
+      `Todos os itens foram resolvidos! Pra fechar o caso com segurança, ` +
+      `preciso da **proposta final consolidada** do fornecedor — vou conferir se ` +
       `ela incorpora tudo o que foi acordado nas rodadas.`,
     "verificacao.rodando": () =>
       `Estou verificando a proposta final contra os acordos das rodadas. ` +
       `Um instante.`,
     "verificacao.validar": () =>
-      `Terminei a verificação da proposta final. Veja o resultado abaixo e ` +
-      `**valide a conformidade** — a palavra final é sua.`,
+      `Terminei a verificação da proposta final. Dá uma olhada no resultado ` +
+      `abaixo e **valida a conformidade** — a palavra final é sua.`,
 
     // --- Fechamento ---
     "caso.fechar": () =>
       `Verificação validada! Agora é só **fechar o caso** com o desfecho final.`,
     "caso.fechado": () =>
       `Caso encerrado: **${desfechoLabel(parecer.desfecho)}**. ` +
-      `Obrigada por conduzir o processo comigo! Você pode exportar o parecer ` +
-      `nos formatos abaixo ou me perguntar qualquer coisa sobre o caso.`,
+      `Obrigada por conduzir isso comigo — foi um bom trabalho! 🎉 Você pode ` +
+      `exportar o parecer nos formatos abaixo, ou me perguntar qualquer coisa sobre o caso.`,
   };
 
   return mensagens[step.id]();

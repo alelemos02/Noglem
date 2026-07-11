@@ -36,7 +36,10 @@ class Settings(BaseSettings):
 
     # Gemini API
     GEMINI_API_KEY: str = ""
-    GEMINI_MODEL: str = "gemini-3.1-pro"
+    # Modelo do CHAT/conversa (JulIA). Flash = rápido/barato; a extração (W1) e o
+    # verifier usam o Pro-preview abaixo. NB: nomes v1beta como "gemini-3.1-pro"
+    # exigem o sufixo "-preview" (sem ele dão 404) — por isso o chat usa flash.
+    GEMINI_MODEL: str = "gemini-2.5-flash"
     GEMINI_MAX_RETRIES: int = 4
     GEMINI_RETRY_BASE_SECONDS: float = 2.0
     GEMINI_RETRY_MAX_SECONDS: float = 20.0

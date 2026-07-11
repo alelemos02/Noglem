@@ -489,6 +489,7 @@ async def enviar_mensagem(
         documentos=list(documentos),
         mensagens=list(mensagens),
         nova_mensagem=payload.mensagem,
+        usuario_nome=current_user.nome,
         retrieved_chunks=chunks if chunks else None,
         retrieved_chat_memories=retrieved_chat_memories,
         audit_logs=audit_logs,

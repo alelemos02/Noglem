@@ -14,6 +14,24 @@ Oferece: traducao de documentos, extracao de tabelas PDF, conversao PDF→Word, 
 
 ---
 
+## Graphify — consulta ao grafo antes de ler arquivos
+
+Este projeto tem um grafo de conhecimento em `graphify-out/graph.json`.
+Se esse arquivo **não** existir, o grafo ainda não foi construído — avise e rode
+`/graphify .` uma vez antes de contar com ele.
+
+- **Antes de vasculhar arquivos** para responder perguntas de mapa/arquitetura/impacto
+  ("onde fica X?", "o que chama Y?", "se eu mudar Z, o que quebra?"), consulte o grafo
+  PRIMEIRO — rode `graphify query "<pergunta>"`, `graphify path "A" "B"` ou
+  `graphify explain "X"`. É mais barato que ler dezenas de arquivos.
+- **Para editar código de fato**, leia os arquivos reais que o grafo apontou — o grafo
+  localiza, não substitui a leitura na hora de alterar.
+- **O grafo envelhece.** Depois de mudanças estruturais (novos arquivos, mudança de
+  fluxo), rode `/graphify . --update` para atualizar. Se suspeitar que o mapa está
+  desatualizado, avise antes de confiar nele.
+
+---
+
 ## Arquitetura
 
 ```

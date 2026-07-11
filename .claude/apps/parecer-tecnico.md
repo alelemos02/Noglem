@@ -46,6 +46,15 @@ do estado do backend — F5 é idempotente. Tudo em `src/components/parecer-tecn
 backend filtra do stream e executa; o frontend ressincroniza. A LLM nunca despeja
 JSON/tabela no chat.
 
+**Voz da JulIA (persona)**: ela é a **engenheira** que conduz o caso (não uma
+"assistente"/sistema), em 1ª pessoa, humana e próxima, mas técnica e precisa.
+Regras no `_JULIA_PERSONA_BASE` (`services/chat.py`): explicar itens **em prosa**
+(nunca despejar campos "Categoria:/Valor Requerido:/Status:"), usar o **primeiro
+nome** com parcimônia — passado via `usuario_nome` em `build_chat_context`, vindo
+de `current_user.nome` no endpoint — e emoji só em ocasião muito especial. As
+falas fixas do onboarding seguem a mesma voz em
+`src/components/parecer-tecnico/script.ts`.
+
 ### Páginas
 - Lista: `src/app/dashboard/parecer-tecnico/page.tsx` (cards + badge de fase/desfecho)
 - Criar: `src/app/dashboard/parecer-tecnico/novo/page.tsx` (form → redireciona para a conversa)
@@ -60,6 +69,10 @@ que o `require_owner` compara com `OWNER_EMAILS` (usuários Clerk ficam gravados
 com e-mail sintético `clerk_<id>@noglem.com.br`).
 
 Cliente tipado: `src/lib/patec-api.ts` (único client autorizado).
+
+> **Quirk:** o helper `request()` em `patec-api.ts` trata `204 No Content`/corpo
+> vazio **antes** de parsear JSON — sem isso, o DELETE (que responde 204) fazia o
+> caller tratar sucesso como erro (falso "N parecer(es) não puderam ser excluídos").
 
 ## Backend — microserviço (`services/patec-backend/`, Railway, porta 8001)
 
