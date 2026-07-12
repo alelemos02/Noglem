@@ -193,21 +193,6 @@ export const tools: Tool[] = [
 
 // ── Helpers ───────────────────────────────────────────────────────────
 
-const LOCAL_DEV = process.env.NEXT_PUBLIC_LOCAL_DEV === "true";
-
-export const visibleTools = LOCAL_DEV
-  ? tools.filter((t) => t.id === "parecer-tecnico")
-  : tools;
-
-export function getToolsByCategory(): { category: Category; tools: Tool[] }[] {
-  return categories
-    .map((cat) => ({
-      category: cat,
-      tools: visibleTools.filter((t) => t.category === cat.id),
-    }))
-    .filter((group) => group.tools.length > 0);
-}
-
 /** Maps ToolStatus to Badge variant and label for consistent display */
 export function getStatusBadgeProps(status: ToolStatus): {
   variant: "success" | "info" | "secondary";

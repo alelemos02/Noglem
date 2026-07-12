@@ -61,6 +61,15 @@ falas fixas do onboarding seguem a mesma voz em
 - Caso: `src/app/dashboard/parecer-tecnico/[id]/page.tsx` (ConversationProvider + ConversationScreen, escapa o padding do Shell com `-m-6 h-[calc(100vh-3.5rem)]`)
 - Qualidade (dono): `src/app/dashboard/parecer-tecnico/qualidade/page.tsx` — métricas da IA, protegida por `OWNER_EMAILS` no backend
 
+### Entrada e navegação (dashboard PATEC-first, 2026-07)
+O PATEC é a **entrada padrão da área logada**: `/` (logado) e `/dashboard`
+redirecionam para `/dashboard/parecer-tecnico`. A grade "Agentes" foi removida
+(as demais ferramentas seguem acessíveis só por URL direta; `tools-registry.ts`
+continua existindo para o `PageHeader`). A sidebar (`src/components/layout/sidebar.tsx`)
+é dedicada ao PATEC: **Casos** (ativa na lista e em `/[id]`), **Novo parecer** e
+**Qualidade** — esta última renderizada só para `isAdminEmail` no client; o gate
+real continua sendo `OWNER_EMAILS` no backend.
+
 ### API Route (proxy)
 `src/app/api/parecer-tecnico/[...path]/route.ts` — Clerk auth + `X-Internal-API-Key`
 + `X-User-Id`; exporta **GET/POST/PUT/PATCH/DELETE**; suporta SSE (chat) e downloads.

@@ -146,7 +146,7 @@ export default async function HomePage() {
   const { userId } = await auth()
 
   if (userId) {
-    redirect("/dashboard")
+    redirect("/dashboard/parecer-tecnico")
   }
 
   return (
