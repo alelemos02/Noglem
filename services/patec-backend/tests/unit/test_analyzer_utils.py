@@ -20,6 +20,7 @@ from app.services.analyzer import (
     reconciliar_escopo_fechado,
     validate_reference_grounding,
     validate_value_consistency,
+    verify_atomic_conditions,
     verify_flagged_items,
 )
 
@@ -827,3 +828,159 @@ def test_call_llm_model_override_changes_url(monkeypatch):
     )
     _call_gemini("system", "user", model="gemini-3.1-pro")
     assert "gemini-3.1-pro:generateContent" in captured["url"]
+
+
+# ---------------------------------------------------------------------------
+# verify_atomic_conditions — verificador de condicoes atomicas (ultimo gate)
+# ---------------------------------------------------------------------------
+
+def _videowall_item(numero=3, status="B"):
+    return {
+        "numero": numero,
+        "requisito_numero": numero,
+        "status": status,
+        "descricao_requisito": (
+            "Fornecimento de Video Wall Station com workstation em rack 19 "
+            "e saida para 4 monitores"
+        ),
+        "valor_requerido": "1 UN; TAG 181-VIW-01; quatro monitores 55 com suportes",
+        "valor_fornecedor": "1 UN Estacao Flex; 4 monitores 55 Samsung QM55",
+        "justificativa_tecnica": "orig",
+        "acao_requerida": "Confirmar suportes.",
+    }
+
+
+def _atomic_data(*itens):
+    return {"parecer_tecnico": {"resumo_executivo": {}, "itens": list(itens)}}
+
+
+def test_atomic_A_parcial_vira_B_e_acao_enumera_tudo(monkeypatch):
+    data = _atomic_data(_videowall_item(status="A"))
+    fake_json = (
+        '{"itens": [{"numero": 3, "condicoes": ['
+        '{"condicao": "4 monitores 55", "veredito": "CONFIRMADA",'
+        ' "evidencia": "4 monitores 55 Samsung QM55"},'
+        '{"condicao": "rack 19", "veredito": "NAO_MENCIONADA", "evidencia": null},'
+        '{"condicao": "suportes", "veredito": "NAO_MENCIONADA", "evidencia": null}'
+        '], "status_corrigido": null, "justificativa_corrigida": null,'
+        ' "acao_corrigida": null}]}'
+    )
+    captured = {}
+
+    def fake_call(system, user_content, **kwargs):
+        captured.update(kwargs)
+        return fake_json
+
+    monkeypatch.setattr(analyzer, "_call_gemini", fake_call)
+    out, summary = verify_atomic_conditions(
+        data, "eng", "proposta: 4 monitores 55 Samsung QM55"
+    )
+    item = out["parecer_tecnico"]["itens"][0]
+
+    assert captured.get("model") == settings.GEMINI_VERIFIER_MODEL
+    assert item["status"] == "B"  # A com condicao nao confirmada nunca fica A
+    assert summary["downgrades"] == 1
+    assert summary["unconfirmed_total"] == 2
+    # a acao composta enumera TODAS as pendencias
+    acao = item["acao_requerida"].lower()
+    assert "rack 19" in acao and "suportes" in acao
+    assert item["_condicoes_verificadas"]
+
+
+def test_atomic_A_sem_nenhuma_confirmada_vira_D(monkeypatch):
+    data = _atomic_data(_videowall_item(status="A"))
+    fake_json = (
+        '{"itens": [{"numero": 3, "condicoes": ['
+        '{"condicao": "rack 19", "veredito": "NAO_MENCIONADA", "evidencia": null},'
+        '{"condicao": "suportes", "veredito": "NAO_MENCIONADA", "evidencia": null}'
+        '], "status_corrigido": null, "justificativa_corrigida": null,'
+        ' "acao_corrigida": null}]}'
+    )
+    monkeypatch.setattr(analyzer, "_call_gemini", lambda *a, **k: fake_json)
+    out, summary = verify_atomic_conditions(data, "eng", "forn")
+    assert out["parecer_tecnico"]["itens"][0]["status"] == "D"
+    assert summary["downgrades"] == 1
+
+
+def test_atomic_B_mantem_B_e_reescreve_acao_completa(monkeypatch):
+    data = _atomic_data(_videowall_item(status="B"))
+    # acao_corrigida cobre so suportes+TAG — falta rack 19: a heuristica deve
+    # descartar e compor a acao deterministica com as tres pendencias
+    fake_json = (
+        '{"itens": [{"numero": 3, "condicoes": ['
+        '{"condicao": "4 monitores 55", "veredito": "CONFIRMADA",'
+        ' "evidencia": "4 monitores 55"},'
+        '{"condicao": "rack 19", "veredito": "NAO_MENCIONADA", "evidencia": null},'
+        '{"condicao": "suportes", "veredito": "NAO_MENCIONADA", "evidencia": null},'
+        '{"condicao": "TAG 181-VIW-01", "veredito": "NAO_MENCIONADA", "evidencia": null}'
+        '], "status_corrigido": null, "justificativa_corrigida": null,'
+        ' "acao_corrigida": "Confirmar fornecimento dos suportes e incluir TAG 181-VIW-01."}]}'
+    )
+    monkeypatch.setattr(analyzer, "_call_gemini", lambda *a, **k: fake_json)
+    out, summary = verify_atomic_conditions(data, "eng", "4 monitores 55")
+    item = out["parecer_tecnico"]["itens"][0]
+    assert item["status"] == "B"
+    acao = item["acao_requerida"].lower()
+    assert "rack 19" in acao and "suportes" in acao and "tag" in acao
+
+
+def test_atomic_condicao_alucinada_e_descartada(monkeypatch):
+    data = _atomic_data(_videowall_item(status="A"))
+    # "certificacao SIL 3" nao existe no requisito — deve ser descartada e o
+    # item permanecer intocado (era a unica condicao)
+    fake_json = (
+        '{"itens": [{"numero": 3, "condicoes": ['
+        '{"condicao": "certificacao SIL 3 obrigatoria", "veredito": "NAO_MENCIONADA",'
+        ' "evidencia": null}'
+        '], "status_corrigido": "D", "justificativa_corrigida": null,'
+        ' "acao_corrigida": null}]}'
+    )
+    monkeypatch.setattr(analyzer, "_call_gemini", lambda *a, **k: fake_json)
+    out, summary = verify_atomic_conditions(data, "eng", "forn")
+    assert out["parecer_tecnico"]["itens"][0]["status"] == "A"
+    assert summary["discarded_conditions"] == 1
+    assert summary["downgrades"] == 0
+
+
+def test_atomic_upgrade_para_A_e_ignorado(monkeypatch):
+    data = _atomic_data(_videowall_item(status="B"))
+    fake_json = (
+        '{"itens": [{"numero": 3, "condicoes": ['
+        '{"condicao": "4 monitores 55", "veredito": "CONFIRMADA",'
+        ' "evidencia": "4 monitores 55"}'
+        '], "status_corrigido": "A", "justificativa_corrigida": null,'
+        ' "acao_corrigida": null}]}'
+    )
+    monkeypatch.setattr(analyzer, "_call_gemini", lambda *a, **k: fake_json)
+    out, summary = verify_atomic_conditions(data, "eng", "4 monitores 55")
+    # tudo confirmado, mas upgrade proposto e ignorado: B permanece B
+    assert out["parecer_tecnico"]["itens"][0]["status"] == "B"
+    assert summary["downgrades"] == 0
+
+
+def test_atomic_sobrevive_falha_da_llm(monkeypatch):
+    data = _atomic_data(_videowall_item(status="A"))
+
+    def boom(*a, **k):
+        raise RuntimeError("429")
+
+    monkeypatch.setattr(analyzer, "_call_gemini", boom)
+    out, summary = verify_atomic_conditions(data, "eng", "forn")
+    assert out is data  # intacto
+    assert "error" in summary
+    assert out["parecer_tecnico"]["itens"][0]["status"] == "A"
+
+
+def test_atomic_sem_itens_AB_nao_chama_llm(monkeypatch):
+    data = _atomic_data(
+        {**_videowall_item(status="C"), "numero": 1},
+        {**_videowall_item(status="D"), "numero": 2},
+    )
+
+    def boom(*a, **k):
+        raise AssertionError("LLM nao deveria ser chamada")
+
+    monkeypatch.setattr(analyzer, "_call_gemini", boom)
+    out, summary = verify_atomic_conditions(data, "eng", "forn")
+    assert summary["verified_items"] == 0
+    assert out is data

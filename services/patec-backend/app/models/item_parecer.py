@@ -55,6 +55,11 @@ class ItemParecer(Base):
     # nota_revisao: correcao do self-review (status alterado apos segunda IA).
     flag_consistencia: Mapped[str | None] = mapped_column(Text, nullable=True)
     nota_revisao: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Verificador de condicoes atomicas (ultimo gate): JSON serializado com o
+    # veredito por condicao do requisito (CONFIRMADA/NAO_MENCIONADA/DIVERGENTE,
+    # evidencia, status_original, rebaixado_para). Auditoria interna — nunca
+    # exportado no parecer.
+    condicoes_verificadas: Mapped[str | None] = mapped_column(Text, nullable=True)
     criado_em: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     atualizado_em: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow

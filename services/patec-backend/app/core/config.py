@@ -58,6 +58,14 @@ class Settings(BaseSettings):
     # "-preview" (gemini-3.1-pro sem ele retorna 404). Confirmado via ListModels.
     GEMINI_VERIFIER_MODEL: str = "gemini-3.1-pro-preview"
 
+    # Verificador de condicoes atomicas: ultimo gate antes da gravacao. Decompoe
+    # cada item A/B nas condicoes do requisito (quantidade, rack, material, TAG...)
+    # e exige evidencia explicita do fornecedor por condicao; nao-confirmadas vao
+    # TODAS para a acao_requerida e podem rebaixar o status (nunca melhorar).
+    # Nasceu do caso "video wall": analise deu B mas esqueceu o rack 19" na acao.
+    # Usa GEMINI_VERIFIER_MODEL. Desligar via env = rollback sem deploy.
+    ENABLE_ATOMIC_VERIFIER: bool = True
+
     # Extraction (W1) defines the WHOLE scope of the parecer (one call per case),
     # so it runs on the stronger Pro model — far more faithful at enumerating
     # every row of a delimited table than the cheaper analysis model.

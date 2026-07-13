@@ -115,6 +115,21 @@ confirme EXPLICITAMENTE cada condição atômica do requisito (silêncio ≠ ate
 na dúvida, cair para D/B, nunca A. Ver seção "ANTI-FALSO-POSITIVO" em
 `prompts/analise.py`. Mexeu nessa lógica? Incremente `PROMPT_VERSION` em `tasks.py`.
 
+**Verificador de condições atômicas (último gate, 2026-07-13):** passe Pro
+pós-cache (`verify_atomic_conditions` em `analyzer.py`, flag
+`ENABLE_ATOMIC_VERIFIER`, modelo `GEMINI_VERIFIER_MODEL`) que roda DEPOIS do
+`optimize_item_fields` e da reconciliação, imediatamente antes da gravação.
+Decompõe cada item A/B nas condições atômicas do requisito e exige evidência
+explícita do fornecedor por condição; toda NAO_MENCIONADA/DIVERGENTE entra na
+`acao_requerida` (campo que vira a coluna PENDÊNCIA da carta) e pode rebaixar o
+status (A→B/D, B→C/D — nunca melhora). Guardas determinísticas anti-alucinação:
+condição precisa existir no texto do requisito; DIVERGENTE exige evidência
+localizável no texto do fornecedor. Auditoria por item na coluna
+`itens_parecer.condicoes_verificadas` (JSON serializado; migration `fa0cond10`).
+Limite da `acao_requerida`: 300 chars (era 150 — forçava a LLM a cortar pendência).
+Nasceu do caso "video wall" (a ação esquecia o rack 19"). Rollback sem deploy:
+`ENABLE_ATOMIC_VERIFIER=false` no Railway.
+
 ### Carta de pendências (layout XLSX)
 Posições das colunas em `exporter.py` (`_CARTA_HEADERS`, `_CARTA_COL_RESPOSTA`,
 `_CARTA_COL_ITEM_ID`) são a fonte única — o reimport determinístico em

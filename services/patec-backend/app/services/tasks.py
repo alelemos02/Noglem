@@ -28,6 +28,7 @@ from app.services.analyzer import (
     reconciliar_escopo_fechado,
     validate_reference_grounding,
     validate_value_consistency,
+    verify_atomic_conditions,
     verify_flagged_items,
 )
 from app.services.doc_selection import eng_docs_correntes
@@ -52,7 +53,10 @@ def _get_sync_engine():
 #     requisito_numero (vinculo item<->requisito) + dedupe de docs de engenharia.
 # v10: delimitacao anti-injecao (marcadores <<<...>>> em torno do texto dos
 #      documentos + guardrail no system prompt). Muda o prompt de analise.
-PROMPT_VERSION = "11"
+# v11: analise no Pro (GEMINI_ANALYSIS_MODEL) + regra anti-falso-A no prompt.
+# v12: acao_requerida enumera TODAS as condicoes nao confirmadas (max 300 chars)
+#      + verificador de condicoes atomicas como ultimo gate.
+PROMPT_VERSION = "12"
 
 
 def _compute_docs_hash(
@@ -368,6 +372,34 @@ def run_analysis_sync(
                 reconciliacao["requisitos_duplicados"],
             )
 
+            # Verificador de condicoes atomicas: ULTIMO gate — roda depois do
+            # optimize (a acao enumerada nao pode ser recomprimida) e da
+            # reconciliacao (numeros finais). Toda condicao nao confirmada pelo
+            # fornecedor entra na acao_requerida; status so rebaixa, nunca sobe.
+            atomic = {
+                "verified_items": 0, "conditions_total": 0,
+                "unconfirmed_total": 0, "downgrades": 0,
+                "discarded_conditions": 0,
+            }
+            if getattr(settings, "ENABLE_ATOMIC_VERIFIER", True):
+                set_progress(
+                    parecer_id, 89,
+                    "Verificando condicoes atomicas dos itens A/B...",
+                    "atomic_verification",
+                )
+                result, atomic = verify_atomic_conditions(
+                    result, texto_engenharia, texto_fornecedor
+                )
+                logger.info(
+                    "Atomic verifier: items=%d conds=%d nao_conf=%d "
+                    "downgrades=%d descartadas=%d",
+                    atomic["verified_items"],
+                    atomic["conditions_total"],
+                    atomic["unconfirmed_total"],
+                    atomic["downgrades"],
+                    atomic["discarded_conditions"],
+                )
+
             set_progress(parecer_id, 90, "Salvando resultados no banco...", "saving_results")
             db.execute(
                 ItemParecer.__table__.delete().where(ItemParecer.parecer_id == parecer.id)
@@ -413,6 +445,7 @@ def run_analysis_sync(
                     verificacao_nota=item_data.get("_verificacao_nota"),
                     flag_consistencia=item_data.get("_flag_consistencia"),
                     nota_revisao=item_data.get("_nota_revisao"),
+                    condicoes_verificadas=item_data.get("_condicoes_verificadas"),
                 )
                 # W2 (parcial): rodada 1 e a base do historico por item — R2 le daqui
                 item.rodadas.append(
@@ -455,12 +488,15 @@ def run_analysis_sync(
 
             logger.info(
                 "QA pos-cache: grounding_flag=%d consistency_flag=%d verif_flag=%d "
-                "recon_faltantes=%d recon_duplicados=%s",
+                "recon_faltantes=%d recon_duplicados=%s atomic_nao_conf=%d "
+                "atomic_downgrades=%d",
                 grounding["items_flagged"],
                 consistency["items_flagged"],
                 verif_flag["items_flagged"],
                 reconciliacao["itens_faltantes"],
                 reconciliacao["requisitos_duplicados"],
+                atomic["unconfirmed_total"],
+                atomic["downgrades"],
             )
 
             db.commit()

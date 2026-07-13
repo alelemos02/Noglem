@@ -39,9 +39,39 @@
      regra de comprimento da justificativa também reforçados.
 - **Arquivos:** `app/core/config.py`, `app/services/analyzer.py`, `app/services/tasks.py`,
   `app/services/prompts/analise.py`, `app/main.py` (health expõe `analysis_model`).
-- **Reforço futuro (Alavanca 3, não feita ainda):** alargar o verificador Pro para
-  re-checar também todo item **A de requisito composto** ou cujo A não tenha citação
-  explícita — hoje ele só pega inconsistência de valor entre itens parecidos.
+- **Validação (13/07):** caso-controle reanalisado saiu B (falso-A eliminado), mas a
+  `acao_requerida` ainda esqueceu o rack 19″ → virou o Ajuste #5 abaixo.
+
+---
+
+## Ajuste #5 — Ação incompleta: sub-condição não confirmada fica fora da acao_requerida
+
+- **Status:** APLICADO em 2026-07-13 (verificador de condições atômicas) — aguardando
+  validação com o caso-controle (item do video wall deve listar rack 19″ E suportes
+  E TAG na ação, com `condicoes_verificadas` populada).
+- **Sintoma:** mesmo com a análise no Pro e a regra anti-falso-A, o item do video
+  wall saiu B com ação cobrindo só "suportes + TAG" — o rack 19″ (não confirmado
+  pelo fornecedor) ficou fora. Ação incompleta = o fornecedor só responde o que está
+  na carta; condição fora da ação passa sem cobrança.
+- **Causa-raiz:** decomposição atômica era só instrução mental no prompt (nada
+  persistido/conferido); verificador Pro antigo só re-checava valor-copiado; limite
+  de 150 chars na `acao_requerida` forçava a LLM a escolher qual pendência cortar.
+- **Correção aplicada:**
+  1. **`verify_atomic_conditions`** (analyzer.py) — último gate pós-cache, Pro,
+     itens A/B: decompõe o requisito em condições, veredito por condição
+     (CONFIRMADA com evidência / NAO_MENCIONADA / DIVERGENTE), guardas
+     anti-alucinação determinísticas, rebaixa status (nunca melhora) e força TODAS
+     as não-confirmadas na ação (compõe determinístico se a ação da LLM não cobrir).
+  2. Coluna de auditoria `itens_parecer.condicoes_verificadas` (migration `fa0cond10`).
+  3. Prompt de análise: regra 5 (ação enumera TODAS as pendências) + limite da ação
+     150→300; `FIELD_OPTIMIZATION_SYSTEM`: "comprimir pode, omitir pendência não".
+  4. `PROMPT_VERSION` 11→12 (invalida cache); flag `ENABLE_ATOMIC_VERIFIER`
+     (rollback via env, sem deploy). 7 testes unitários novos (201 passando).
+- **Fase 2 (registrada, NÃO implementada):** decomposição estruturada no W1 — campo
+  `condicoes` JSON por requisito na extração (`prompts/extracao.py` + coluna em
+  `requisitos` + tela de aprovação); o verificador atômico passaria a receber
+  condições canônicas em vez de decompor na hora. Atacar se o padrão "perde
+  condição" persistir mesmo com o gate.
 
 ---
 

@@ -16,6 +16,7 @@ from app.services.prompts.analise import (
     FIELD_OPTIMIZATION_SYSTEM,
     SUPPLIER_VALUE_RECOVERY_SYSTEM,
     VERIFIER_SYSTEM,
+    ATOMIC_VERIFIER_SYSTEM,
     APPROVED_ITEMS_CONTEXT,
     get_report_language_instruction,
     get_system_prompt,
@@ -25,6 +26,11 @@ logger = logging.getLogger(__name__)
 
 # Approximate token limit for a single API call (leaving room for system prompt + response)
 MAX_INPUT_CHARS = 80_000  # ~20k tokens, ensures response fits within output token limits
+
+# Slice dos textos de engenharia/fornecedor enviados aos passes de verificacao
+# (verifier, self-review, atomic). Condicao alem do corte vira NAO_MENCIONADA —
+# rebaixamento conservador, nunca falso-A.
+_VERIFIER_TEXT_SLICE = 60_000
 
 DEFAULT_ANALYSIS_PROFILE = "padrao"
 
@@ -563,7 +569,7 @@ def llm_self_review(
     items_json = json.dumps(flagged_items, ensure_ascii=False, indent=2)
 
     # Truncate supplier text if too long (keep first 60k chars)
-    forn_text = texto_fornecedor[:60_000] if len(texto_fornecedor) > 60_000 else texto_fornecedor
+    forn_text = texto_fornecedor[:_VERIFIER_TEXT_SLICE]
 
     user_content = (
         f"## ITENS SINALIZADOS PARA REVISAO\n\n{items_json}\n\n---\n\n"
@@ -830,8 +836,8 @@ def verify_flagged_items(
         for it in flagged_items
     ]
 
-    eng_text = texto_engenharia[:60_000]
-    forn_text = texto_fornecedor[:60_000]
+    eng_text = texto_engenharia[:_VERIFIER_TEXT_SLICE]
+    forn_text = texto_fornecedor[:_VERIFIER_TEXT_SLICE]
     user_content = (
         "## ITENS SINALIZADOS PARA VERIFICACAO\n\n"
         f"{json.dumps(payload, ensure_ascii=False, indent=2)}\n\n---\n\n"
@@ -901,7 +907,9 @@ _FIELD_LIMITS = {
     "valor_requerido": 100,
     "valor_fornecedor": 100,
     "justificativa_tecnica": 400,
-    "acao_requerida": 150,
+    # 300 (era 150): a acao deve enumerar TODAS as condicoes nao confirmadas de
+    # um requisito composto — 150 forcava a LLM a escolher qual pendencia cortar.
+    "acao_requerida": 300,
 }
 
 # Únicos campos que a otimização reescreve — o resto do item é preservado intacto.
@@ -1048,6 +1056,216 @@ def reconciliar_escopo_fechado(
         )
     validated = _validate_parecer_json({"parecer_tecnico": pt})
     return validated, summary
+
+
+# ---------------------------------------------------------------------------
+# Verificação de Condições Atômicas (Post-processing — último gate)
+# ---------------------------------------------------------------------------
+
+def _condition_tokens(text: str) -> list[str]:
+    """Tokens significativos de uma condição: len>=4 ou numéricos (ex.: '19')."""
+    return [
+        t for t in _normalize_text(text).split()
+        if len(t) >= 4 or any(ch.isdigit() for ch in t)
+    ]
+
+
+def _condition_in_text(condicao: str, source_normalized: str) -> bool:
+    """Condição é legítima se ≥1 token significativo dela aparece no texto-fonte."""
+    tokens = _condition_tokens(condicao)
+    if not tokens:
+        return False
+    return any(t in source_normalized for t in tokens)
+
+
+def verify_atomic_conditions(
+    data: dict,
+    texto_engenharia: str,
+    texto_fornecedor: str,
+) -> tuple[dict, dict]:
+    """Último gate antes da gravação: decompõe cada item A/B nas condições
+    atômicas do requisito e exige evidência explícita do fornecedor por condição.
+
+    Nasceu do caso "video wall": a análise deu B mas a acao_requerida esqueceu o
+    rack 19" — condição fora da ação = desvio sem cobrança na carta de pendências.
+    Aqui, TODA condição NAO_MENCIONADA/DIVERGENTE entra na ação, e o status pode
+    ser rebaixado (nunca melhorado). Roda DEPOIS do optimize_item_fields (a ação
+    enumerada não pode ser recomprimida) e da reconciliação (números finais).
+    Falhas nunca quebram o pipeline.
+    """
+    empty = {
+        "verified_items": 0, "conditions_total": 0, "unconfirmed_total": 0,
+        "downgrades": 0, "discarded_conditions": 0,
+    }
+    pt = data.get("parecer_tecnico", data)
+    itens = pt.get("itens", [])
+    item_by_numero = {it.get("numero"): it for it in itens}
+    alvo = [
+        it for it in itens
+        if it.get("status") in ("A", "B") and (it.get("descricao_requisito") or "").strip()
+    ]
+    if not alvo:
+        return data, empty
+
+    payload = [
+        {
+            "numero": it.get("numero"),
+            "requisito": it.get("descricao_requisito"),
+            "valor_requerido": it.get("valor_requerido"),
+            "status_atual": it.get("status"),
+            "valor_fornecedor_atual": it.get("valor_fornecedor"),
+            "justificativa_atual": it.get("justificativa_tecnica"),
+            "acao_atual": it.get("acao_requerida"),
+        }
+        for it in alvo
+    ]
+    forn_text = texto_fornecedor[:_VERIFIER_TEXT_SLICE]
+    eng_text = texto_engenharia[:_VERIFIER_TEXT_SLICE]
+    user_content = (
+        "## ITENS A/B PARA VERIFICACAO DE CONDICOES ATOMICAS\n\n"
+        f"{json.dumps(payload, ensure_ascii=False, indent=2)}\n\n---\n\n"
+        f"## TEXTO DA ENGENHARIA\n\n{eng_text}\n\n---\n\n"
+        f"## TEXTO DO FORNECEDOR\n\n{forn_text}\n\n---\n\n"
+        f"## INSTRUCAO\n\nDecomponha e verifique os {len(alvo)} itens acima conforme "
+        "o metodo. Retorne SOMENTE o JSON."
+    )
+
+    try:
+        response_text = _call_gemini(
+            ATOMIC_VERIFIER_SYSTEM,
+            user_content,
+            model=settings.GEMINI_VERIFIER_MODEL,
+            max_output_tokens=32768,
+        )
+        review = _extract_json(response_text)
+    except Exception as e:  # nunca quebra o pipeline
+        logger.warning("Atomic verifier failed: %s", e)
+        return data, {**empty, "verified_items": len(alvo), "error": str(e)}
+
+    forn_norm = _normalize_text(texto_fornecedor[:_VERIFIER_TEXT_SLICE])
+    verified_items = 0
+    conditions_total = 0
+    unconfirmed_total = 0
+    downgrades = 0
+    discarded = 0
+
+    for rev in review.get("itens", []):
+        if not isinstance(rev, dict):
+            continue
+        item = item_by_numero.get(rev.get("numero"))
+        if item is None or item.get("status") not in ("A", "B"):
+            continue
+        status_original = item.get("status")
+        req_norm = _normalize_text(
+            f"{item.get('descricao_requisito') or ''} {item.get('valor_requerido') or ''}"
+        )
+
+        # Guardas determinísticas: condição precisa existir no requisito;
+        # DIVERGENTE exige evidência localizável no texto do fornecedor.
+        condicoes: list[dict] = []
+        for c in rev.get("condicoes", []):
+            if not isinstance(c, dict):
+                continue
+            condicao = (c.get("condicao") or "").strip()
+            veredito = (c.get("veredito") or "").strip().upper()
+            evidencia = c.get("evidencia")
+            if veredito not in ("CONFIRMADA", "NAO_MENCIONADA", "DIVERGENTE"):
+                continue
+            if not condicao or not _condition_in_text(condicao, req_norm):
+                discarded += 1
+                logger.warning(
+                    "Atomic verifier: condicao descartada (fora do requisito) "
+                    "item=%s condicao=%r", rev.get("numero"), condicao,
+                )
+                continue
+            if veredito == "DIVERGENTE":
+                ev_norm = _normalize_text(str(evidencia or ""))
+                if not ev_norm or ev_norm not in forn_norm:
+                    veredito = "NAO_MENCIONADA"  # sem evidência real, o mais conservador
+                    evidencia = None
+            condicoes.append(
+                {"condicao": condicao, "veredito": veredito, "evidencia": evidencia}
+            )
+
+        if not condicoes:
+            continue
+        verified_items += 1
+        conditions_total += len(condicoes)
+        confirmadas = [c for c in condicoes if c["veredito"] == "CONFIRMADA"]
+        nao_ok = [c for c in condicoes if c["veredito"] != "CONFIRMADA"]
+        unconfirmed_total += len(nao_ok)
+
+        novo_status = None
+        if nao_ok:
+            proposto = (rev.get("status_corrigido") or "").strip().upper()
+            if status_original == "A":
+                # A nunca sobrevive a condição não confirmada: D se nada
+                # confirmado, B se parcial. Só {B, D} aceitos do modelo.
+                novo_status = "D" if not confirmadas else "B"
+                if proposto in ("B", "D"):
+                    novo_status = "D" if not confirmadas else proposto
+            else:  # B
+                novo_status = "B"
+                tem_divergente = any(c["veredito"] == "DIVERGENTE" for c in nao_ok)
+                if proposto == "C" and tem_divergente:
+                    novo_status = "C"
+                elif proposto == "D" and not confirmadas:
+                    novo_status = "D"
+            if novo_status != status_original:
+                item["status"] = novo_status
+                downgrades += 1
+
+            # Ação: a corrigida só entra se cobrir TODAS as condições não-ok;
+            # senão compomos determinístico — perder condição é o bug que
+            # estamos matando.
+            acao = (rev.get("acao_corrigida") or "").strip()
+            acao_norm = _normalize_text(acao)
+            cobre_todas = acao and all(
+                _condition_in_text(c["condicao"], acao_norm) for c in nao_ok
+            )
+            if not cobre_todas:
+                acao = "Confirmar/adequar e evidenciar: " + "; ".join(
+                    c["condicao"] for c in nao_ok
+                ) + "."
+            item["acao_requerida"] = acao
+            if len(acao) > 300:
+                logger.info(
+                    "Atomic verifier: acao_requerida longa (%d chars) item=%s",
+                    len(acao), rev.get("numero"),
+                )
+
+            justif = (rev.get("justificativa_corrigida") or "").strip()
+            if justif:
+                item["justificativa_tecnica"] = justif
+            else:
+                pendentes = "; ".join(c["condicao"] for c in nao_ok)
+                atual = (item.get("justificativa_tecnica") or "").rstrip()
+                item["justificativa_tecnica"] = (
+                    f"{atual} Condicoes nao confirmadas pelo fornecedor: {pendentes}."
+                ).strip()
+
+        item["_condicoes_verificadas"] = json.dumps(
+            {
+                "condicoes": condicoes,
+                "status_original": status_original,
+                "rebaixado_para": novo_status if novo_status != status_original else None,
+                "nota": (
+                    "Todas as condicoes confirmadas com evidencia."
+                    if not nao_ok
+                    else f"{len(nao_ok)} condicao(oes) sem confirmacao explicita do fornecedor."
+                ),
+            },
+            ensure_ascii=False,
+        )
+
+    validated = _validate_parecer_json({"parecer_tecnico": pt})
+    return validated, {
+        "verified_items": verified_items,
+        "conditions_total": conditions_total,
+        "unconfirmed_total": unconfirmed_total,
+        "downgrades": downgrades,
+        "discarded_conditions": discarded,
+    }
 
 
 def analyze_single(
