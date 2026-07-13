@@ -103,10 +103,17 @@ Endpoints novos vs. versão antiga: `requisitos.py`, `verificacao.py`,
 Além das já existentes (`DATABASE_URL*`, `REDIS_URL`, `GEMINI_API_KEY`, `SECRET_KEY`,
 `DOCUMENT_ENCRYPTION_KEY`, `INTERNAL_API_KEY`):
 - `ENV=production` — ativa fail-fast de segredos default no startup (`validate_production_secrets`)
-- `GEMINI_MODEL` (ex.: `gemini-2.5-flash`)
+- `GEMINI_MODEL` (`gemini-2.5-flash`) — modelo INCIDENTAL barato: só chamadas utilitárias que não classificam (otimização de campos, reparo de JSON, estimativa, recuperação de valor do fornecedor)
+- `GEMINI_ANALYSIS_MODEL=gemini-3.1-pro-preview` — análise item-a-item (classificação A/B/C/D, o coração). No Pro porque o flash carimbava "A" em requisito composto sem confirmar todas as condições. Entra na chave de cache (`tasks.py`)
+- `GEMINI_CHAT_MODEL=gemini-3.1-pro-preview` — chat conversacional (JulIA); Pro para obedecer a voz (prosa, não ficha)
 - `GEMINI_EXTRACTION_MODEL=gemini-3.1-pro-preview` (W1 define o escopo inteiro)
 - `GEMINI_VERIFIER_MODEL=gemini-3.1-pro-preview` + `ENABLE_LLM_VERIFIER=true`
 - `OWNER_EMAILS` — e-mails (reais, do login Clerk) com acesso ao dashboard de qualidade
+
+**Regra anti-falso-A (prompt de análise):** o status A exige que o fornecedor
+confirme EXPLICITAMENTE cada condição atômica do requisito (silêncio ≠ atendimento);
+na dúvida, cair para D/B, nunca A. Ver seção "ANTI-FALSO-POSITIVO" em
+`prompts/analise.py`. Mexeu nessa lógica? Incremente `PROMPT_VERSION` em `tasks.py`.
 
 ### Carta de pendências (layout XLSX)
 Posições das colunas em `exporter.py` (`_CARTA_HEADERS`, `_CARTA_COL_RESPOSTA`,

@@ -116,6 +116,7 @@ async def health_check(deep: bool = Query(default=False)):
         "llm": {
             "ok": llm_ok,
             "model": settings.GEMINI_MODEL,
+            "analysis_model": settings.GEMINI_ANALYSIS_MODEL,
             "chat_model": settings.GEMINI_CHAT_MODEL,
             "detalhe": detalhe,
         },

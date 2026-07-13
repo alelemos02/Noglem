@@ -52,7 +52,7 @@ def _get_sync_engine():
 #     requisito_numero (vinculo item<->requisito) + dedupe de docs de engenharia.
 # v10: delimitacao anti-injecao (marcadores <<<...>>> em torno do texto dos
 #      documentos + guardrail no system prompt). Muda o prompt de analise.
-PROMPT_VERSION = "10"
+PROMPT_VERSION = "11"
 
 
 def _compute_docs_hash(
@@ -69,7 +69,7 @@ def _compute_docs_hash(
     # MODEL entra na chave: trocar o modelo de analise (ex.: flash->pro) precisa
     # invalidar o cache, senao re-analisar devolve o resultado do modelo anterior.
     content = (
-        f"V:{PROMPT_VERSION}\nMODEL:{settings.GEMINI_MODEL}\n"
+        f"V:{PROMPT_VERSION}\nMODEL:{settings.GEMINI_ANALYSIS_MODEL}\n"
         f"DISC:{disciplina}\nLANG:{idioma_relatorio}\n"
         f"REQ:{requisitos_json}\nENG:{eng_text}\nFORN:{forn_text}\nANEXOS:{anexos_text}"
     )

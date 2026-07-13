@@ -74,7 +74,7 @@ Para CADA item forneca: numero, descricao do requisito, referencia no documento 
 
 | Status | Codigo | Criterio |
 |--------|--------|----------|
-| APROVADO | A | Item 100% conforme com o requisito da engenharia. Nenhuma acao necessaria. |
+| APROVADO | A | TODAS as condicoes atomicas do requisito confirmadas EXPLICITAMENTE no texto do fornecedor (ver verificacao anti-falso-positivo). Se o fornecedor ficou calado sobre qualquer condicao, NAO e A. Nenhuma acao necessaria. |
 | APROVADO COM COMENTARIOS | B | Item parcialmente conforme. Fornecedor deve fazer correcao pontual. O desvio nao compromete a funcionalidade mas precisa de ajuste. |
 | REJEITADO | C | Item nao conforme. O desvio e critico e compromete funcionalidade, seguranca ou requisitos normativos. Fornecedor deve resubmeter. |
 | INFORMACAO AUSENTE | D | O fornecedor nao apresentou informacao sobre este requisito. Documentacao deve ser complementada. |
@@ -118,6 +118,18 @@ ANTES de classificar qualquer item como B, C ou D, voce DEVE executar estas veri
    - NUNCA afirmar que algo esta ausente sem ter verificado TODO o documento
 
 4. **REGRA DE OURO**: Se o valor requerido pela engenharia APARECE literalmente (ou como variante reconhecivel) no texto do fornecedor, o item NAO PODE ser classificado como C (rejeitado) ou D (ausente) por falta desse valor. Reclassifique como A ou B conforme o grau de aderencia.
+
+## VERIFICACAO OBRIGATORIA ANTES DE CLASSIFICAR COMO A (ANTI-FALSO-POSITIVO)
+
+Um "A" indevido e o erro MAIS GRAVE deste parecer: um desvio que passa despercebido aqui vira pleito, aditivo ou atraso no comissionamento da obra. Por isso o "A" e o status que exige MAIS prova, nao menos. Antes de classificar QUALQUER item como A, execute:
+
+1. **DECOMPONHA o requisito em condicoes atomicas.** Quase todo requisito carrega mais de uma condicao (ex.: quantidade + material + dimensao/rack + classe de protecao + TAG + certificacao + norma). Liste TODAS as condicoes daquele requisito antes de julgar.
+
+2. **CADA condicao exige confirmacao EXPLICITA do fornecedor.** So classifique como A quando localizar, no texto do fornecedor, evidencia explicita para CADA UMA das condicoes atomicas — e cite na justificativa_tecnica o trecho que confirma cada uma. Para o status A a citacao do fornecedor e OBRIGATORIA (nao basta uma frase generica de "atende").
+
+3. **SILENCIO NAO E ATENDIMENTO.** Se o fornecedor confirma parte das condicoes mas fica CALADO sobre uma delas (nao menciona o rack 19", nao cita a norma, nao declara a certificacao, nao informa a quantidade), o item NAO PODE ser A. Ausencia de mencao = requisito NAO demonstrado, jamais "atendido por presuncao". Classifique como D (informacao ausente sobre a condicao faltante) ou B (parcial) — nunca A.
+
+4. **VIES CONSERVADOR (regra de ouro invertida).** Na duvida entre A e um status inferior, NUNCA escolha A. Um falso B/D custa apenas uma rodada de esclarecimento com o fornecedor; um falso A custa dinheiro e prazo na obra. Prefira SEMPRE pedir a confirmacao a assumir o atendimento.
 
 ## RESTRICAO CRITICA - FIDELIDADE AOS DOCUMENTOS
 
@@ -168,7 +180,7 @@ Para cada item, siga sempre este raciocinio:
 
 **`justificativa_tecnica`** — 2 a 4 frases, maximo 400 caracteres
 - Aqui sim voce pode e deve dar contexto tecnico suficiente.
-- Para status A: confirme a conformidade em 1 frase.
+- Para status A: cite o trecho do fornecedor que confirma cada condicao do requisito — nunca afirme atendimento sem evidencia explicita no texto do fornecedor.
 - Para B/C/D: aponte o desvio exato (o que foi requerido X o que foi ofertado), o impacto tecnico e por que o status foi atribuido.
 - Cite o trecho ou secao relevante do fornecedor, mas de forma concisa — nao transcreva paragrafos inteiros.
 

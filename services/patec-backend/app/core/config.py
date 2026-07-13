@@ -36,9 +36,11 @@ class Settings(BaseSettings):
 
     # Gemini API
     GEMINI_API_KEY: str = ""
-    # Modelo do CHAT/conversa (JulIA). Flash = rápido/barato; a extração (W1) e o
-    # verifier usam o Pro-preview abaixo. NB: nomes v1beta como "gemini-3.1-pro"
-    # exigem o sufixo "-preview" (sem ele dão 404) — por isso o chat usa flash.
+    # Modelo INCIDENTAL barato (flash): usado só em chamadas utilitárias que não
+    # decidem classificação — otimização de campos, reparo de JSON, estimativa de
+    # custo, recuperação de valor do fornecedor. As tarefas que exigem raciocínio
+    # (análise, extração, verifier, chat) têm cada uma seu Pro-preview abaixo.
+    # NB: nomes v1beta como "gemini-3.1-pro" exigem o sufixo "-preview" (sem ele 404).
     GEMINI_MODEL: str = "gemini-2.5-flash"
     GEMINI_MAX_RETRIES: int = 4
     GEMINI_RETRY_BASE_SECONDS: float = 2.0
@@ -61,12 +63,18 @@ class Settings(BaseSettings):
     # every row of a delimited table than the cheaper analysis model.
     GEMINI_EXTRACTION_MODEL: str = "gemini-3.1-pro-preview"
 
+    # Análise item-a-item (classificação A/B/C/D — o CORAÇÃO do produto). Roda no
+    # Pro porque é onde a capacidade de leitura vira "pegou ou não o desvio": o flash
+    # carimbava "A" (atendido) em requisitos compostos sem o fornecedor confirmar
+    # TODAS as condições (ex.: monitores OK, mas silêncio sobre o rack 19"), e um
+    # falso-A é o erro mais caro do parecer (desvio que vira pleito na obra).
+    # Custo maior é intencional e aceito. Entra na chave de cache (tasks.py) para
+    # que a troca flash->Pro invalide análises antigas.
+    GEMINI_ANALYSIS_MODEL: str = "gemini-3.1-pro-preview"
+
     # Chat (JULIA conversacional): roda no Pro para OBEDECER as instrucoes de voz
     # (prosa, nao "ficha de campos"). O flash barato ignorava a instrucao de estilo
     # (ver chat.py). Mesmo nome "-preview" ja validado pela extracao/verifier.
-    # NB: so o chat conversacional usa este modelo; a analise item-a-item continua
-    # no GEMINI_MODEL (flash) — trocar aquela para Pro multiplicaria o custo do
-    # caminho pesado e invalidaria o cache de analise.
     GEMINI_CHAT_MODEL: str = "gemini-3.1-pro-preview"
 
     # RAG - Retrieval Augmented Generation
@@ -141,6 +149,7 @@ class Settings(BaseSettings):
             m.strip()
             for m in (
                 self.GEMINI_MODEL,
+                self.GEMINI_ANALYSIS_MODEL,
                 self.GEMINI_CHAT_MODEL,
                 self.GEMINI_EXTRACTION_MODEL,
                 self.GEMINI_VERIFIER_MODEL,

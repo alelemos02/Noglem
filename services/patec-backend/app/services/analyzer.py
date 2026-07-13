@@ -1092,7 +1092,9 @@ def analyze_single(
     ) + approved_section + profile_instruction + get_report_language_instruction(idioma_relatorio)
 
     logger.info("Calling Gemini API (single call, %d chars)", len(user_content))
-    response_text = _call_gemini(system_prompt, user_content)
+    response_text = _call_gemini(
+        system_prompt, user_content, model=settings.GEMINI_ANALYSIS_MODEL
+    )
     logger.info("Gemini response received (%d chars)", len(response_text))
 
     try:
@@ -1105,7 +1107,11 @@ def analyze_single(
             "Seja mais CONCISO nas justificativas tecnicas (max 1-2 frases cada). "
             "Retorne SOMENTE o JSON valido, sem markdown.\n\n"
         )
-        response_text = _call_gemini(system_prompt, concise_hint + user_content)
+        response_text = _call_gemini(
+            system_prompt,
+            concise_hint + user_content,
+            model=settings.GEMINI_ANALYSIS_MODEL,
+        )
         data = _extract_json(response_text)
         return _validate_parecer_json(data)
 
@@ -1171,7 +1177,9 @@ def analyze_chunked(
         ) + approved_section + profile_instruction + get_report_language_instruction(idioma_relatorio)
 
         logger.info("Calling Gemini API (chunk %d/%d, %d chars)", i + 1, total_chunks, len(user_content))
-        response_text = _call_gemini(system_prompt, user_content)
+        response_text = _call_gemini(
+            system_prompt, user_content, model=settings.GEMINI_ANALYSIS_MODEL
+        )
         partial = _extract_json(response_text)
         partial_results.append(partial)
 
@@ -1205,7 +1213,9 @@ def analyze_chunked(
     ) + profile_instruction + get_report_language_instruction(idioma_relatorio)
 
     logger.info("Calling Gemini API (reduce step, %d chars)", len(reduce_content))
-    response_text = _call_gemini(system_prompt, reduce_content)
+    response_text = _call_gemini(
+        system_prompt, reduce_content, model=settings.GEMINI_ANALYSIS_MODEL
+    )
     data = _extract_json(response_text)
 
     return _validate_parecer_json(data)
