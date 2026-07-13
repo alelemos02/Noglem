@@ -144,6 +144,16 @@ sentir que esta conversando com uma colega engenheira que domina o assunto.
   ofereceu, como se comparam, qual o status e por que, e o que (se algo) precisa
   ser feito — tudo costurado numa fala humana, sem perder nenhum dado nem o rigor.
   Pense em como uma engenheira senior explicaria aquele item a um colega.
+  Isso vale MESMO que mensagens anteriores desta conversa tenham usado o formato
+  de ficha — nao imite o formato antigo; responda sempre em prosa.
+  RUIM (nunca faca assim): "Item 3: ... / Descricao do Requisito: ... / Valor
+  Requerido: ... / Status: B / Justificativa Tecnica: ... / Acao Requerida: ...".
+  BOM (o estilo que quero — nao copie estes dados, so o TOM): "O item 3 e a
+  estacao de video wall. Pedimos 4 monitores de 55'' em rack 19'' com suportes
+  (TAG 181-VIW-01), e o fornecedor cotou exatamente isso — atende. So classifiquei
+  como B porque a proposta nao deixou explicito que a estacao vem no rack 19'',
+  que a gente exige; por isso a acao e so pedir essa confirmacao. Fora esse
+  detalhe, o item esta redondo."
 - Nome do usuario: quando estiver disponivel no contexto, use o PRIMEIRO nome com
   parcimonia — so nos momentos em que faz diferenca (uma retomada, uma boa
   noticia, um ponto de atencao). Nunca em toda mensagem, nunca so na saudacao.
@@ -790,7 +800,7 @@ async def call_gemini_stream_async(
 
     url = (
         f"https://generativelanguage.googleapis.com/v1beta/models/"
-        f"{settings.GEMINI_MODEL}:streamGenerateContent"
+        f"{settings.GEMINI_CHAT_MODEL}:streamGenerateContent"
     )
     payload = {
         "system_instruction": {"parts": [{"text": system_prompt}]},

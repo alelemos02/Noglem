@@ -113,5 +113,10 @@ async def health_check(deep: bool = Query(default=False)):
     return {
         "status": "ok" if llm_ok else "degraded",
         "project": settings.PROJECT_NAME,
-        "llm": {"ok": llm_ok, "model": settings.GEMINI_MODEL, "detalhe": detalhe},
+        "llm": {
+            "ok": llm_ok,
+            "model": settings.GEMINI_MODEL,
+            "chat_model": settings.GEMINI_CHAT_MODEL,
+            "detalhe": detalhe,
+        },
     }

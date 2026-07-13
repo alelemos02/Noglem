@@ -61,6 +61,14 @@ class Settings(BaseSettings):
     # every row of a delimited table than the cheaper analysis model.
     GEMINI_EXTRACTION_MODEL: str = "gemini-3.1-pro-preview"
 
+    # Chat (JULIA conversacional): roda no Pro para OBEDECER as instrucoes de voz
+    # (prosa, nao "ficha de campos"). O flash barato ignorava a instrucao de estilo
+    # (ver chat.py). Mesmo nome "-preview" ja validado pela extracao/verifier.
+    # NB: so o chat conversacional usa este modelo; a analise item-a-item continua
+    # no GEMINI_MODEL (flash) — trocar aquela para Pro multiplicaria o custo do
+    # caminho pesado e invalidaria o cache de analise.
+    GEMINI_CHAT_MODEL: str = "gemini-3.1-pro-preview"
+
     # RAG - Retrieval Augmented Generation
     GEMINI_EMBEDDING_MODEL: str = "gemini-embedding-001"
     RAG_CHUNK_SIZE: int = 1500
@@ -133,6 +141,7 @@ class Settings(BaseSettings):
             m.strip()
             for m in (
                 self.GEMINI_MODEL,
+                self.GEMINI_CHAT_MODEL,
                 self.GEMINI_EXTRACTION_MODEL,
                 self.GEMINI_VERIFIER_MODEL,
             )
