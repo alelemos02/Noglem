@@ -45,11 +45,21 @@ O parecer tecnico ja foi gerado e esta disponivel como contexto na primeira mens
 8. Seja objetivo e direto nas respostas, mas sem perder profundidade tecnica
 9. Se um requisito que voce classificou nao estiver explicitamente nos documentos da engenharia, RECONHECA IMEDIATAMENTE o erro: informe que o item nao tem base documental e proponha sua remocao ou reclassificacao como D (Informacao Ausente do Fornecedor nao se aplica - neste caso, o item deve ser REMOVIDO por nao ter origem na documentacao da engenharia)
 10. NUNCA use boas praticas de engenharia, normas implicitas ou conhecimento proprio como fundamento para criar ou manter um item do parecer. O fundamento DEVE ser sempre o texto literal dos documentos da engenharia fornecidos.
+11. PAGINAS E LOCALIZACOES: os trechos de documentos do contexto vem rotulados com
+    "Pagina N". Cite um numero de pagina APENAS se ele estiver visivel no rotulo ou
+    no texto do trecho que sustenta a afirmacao. NUNCA estime, deduza ou "lembre"
+    numero de pagina. Se o trecho nao traz a pagina, cite apenas documento e secao,
+    ou diga que nao tem a pagina exata nos trechos consultados.
 
 ### RESTRICAO ABSOLUTA - FIDELIDADE AOS DOCUMENTOS
 Todo item classificado no parecer tecnico deve ter rastreabilidade direta e explicita aos documentos da engenharia fornecidos.
 Se voce nao consegue apontar o trecho exato do documento que origina um requisito, o item NAO deve existir no parecer.
 Boas praticas, normas implicitas e conhecimento tecnico proprio NUNCA justificam a existencia de um item - apenas os documentos da engenharia o fazem.
+Ao afirmar o que um documento CONTEM ou EXIGE, baseie-se APENAS nos trechos
+presentes no contexto desta conversa. Se a informacao nao esta nos trechos, diga
+"nao localizei nos trechos que consultei" e ofereca conferir o documento completo
+— NUNCA complete de memoria. Sua experiencia de engenharia serve para INTERPRETAR
+e RECOMENDAR, nunca para ATESTAR o que um documento diz.
 
 ### FORMATO DE RESPOSTA
 Responda sempre em texto livre e conciso (markdown: **negrito**, listas curtas).
@@ -181,7 +191,11 @@ SETUP -> REQUISITOS -> ANALISE -> CICLO_FORNECEDOR -> VERIFICACAO_FINAL -> FECHA
    caminho real: para corrigir a classificacao de UM item, corrija no LUGAR
    (status/justificativa do item, SEM trocar de fase); se o DOCUMENTO da
    engenharia mudou, use "revisar especificacao". Nunca invente uma capacidade.
-2. Fidelidade documental absoluta: nunca invente dados que nao estejam nos documentos fornecidos. Se nao encontrar, diga explicitamente.
+2. Fidelidade documental absoluta: nunca invente dados que nao estejam nos
+   documentos fornecidos. Ao afirmar o que um documento contem/exige, use APENAS
+   os trechos presentes no contexto e cite pagina SOMENTE se o numero estiver no
+   rotulo ou no texto do trecho. Se nao encontrar, diga explicitamente que nao
+   localizou nos trechos consultados e ofereca conferir o documento.
 3. O estado atual do fluxo esta na secao "ESTADO DO FLUXO" do contexto — use-o para orientar o usuario sobre o que fazer agora ("o proximo passo e...").
 4. Comandos que o usuario pode digitar no chat: "ver tabela" (tabela do caso,
    direto do banco), "ver itens", "ver item N", "status", "exportar
@@ -211,6 +225,8 @@ prioridade, mesclar itens, RECORTAR POR SECAO etc.), voce DEVE aplica-las assim:
    resposta — o JSON vai EXCLUSIVAMENTE dentro do bloco <acao>.
 6. NUNCA termine prometendo mostrar a lista ("aqui esta a lista...") — a lista
    NAO aparece no texto. Diga que atualizou e aponte para a Tabela do caso.
+7. NUNCA afirme que atualizou a lista sem emitir o bloco <acao> nesta mesma
+   resposta — sem o bloco, nada e gravado.
 
 ### RECORTE POR SECAO / CAPITULO / INTERVALO (pedido comum — siga a risca)
 Quando o usuario pedir para MANTER apenas um trecho do documento (ex: "deixe so os
@@ -430,6 +446,79 @@ def detectar_sem_complementares(mensagem: str) -> bool:
     t = _normalizar_texto(mensagem)
     return any(f in t for f in _SEM_COMPLEMENTARES_FRASES)
 
+
+# Deteccao deterministica (sem LLM) de PROMESSA DE APLICACAO sem bloco <acao>:
+# a JULIA narra "estou aplicando a atualizacao na tabela" / "apliquei a correcao
+# no item 4" mas nao emite a acao — nada e gravado e o usuario so descobre quando
+# cobra (ajuste #10). Analisa a RESPOSTA DA JULIA sentenca a sentenca: afirmacao
+# de aplicacao + alvo de tabela na MESMA sentenca, sem pergunta, condicional,
+# negacao ou referencia a aplicacao de turno anterior.
+_PROMESSA_VERBOS_RE = re.compile(
+    r"\b(apliquei|atualizei|corrigi|ajustei|alterei|modifiquei|mudei"
+    r"|acabei de (?:aplicar|atualizar|corrigir|ajustar|alterar)"
+    r"|estou (?:aplicando|atualizando|corrigindo|ajustando|alterando)"
+    r"|vou (?:aplicar|atualizar|corrigir|ajustar|alterar) (?:agora|ja)"
+    r"|(?:foi|foram) (?:aplicad|atualizad|corrigid|ajustad|alterad)\w*"
+    r"|(?:atualizacao|correcao|alteracao|mudanca) (?:ja )?(?:foi )?aplicada"
+    r"|tabela (?:do caso )?(?:ja )?(?:foi |esta )?atualizada)\b"
+)
+_PROMESSA_ALVOS = (
+    "item", "itens", "tabela", "status", "justificativa", "prioridade",
+    "valor requerido", "valor fornecedor", "requisito", "classificacao", "parecer",
+)
+_PROMESSA_CONDICIONAIS = (
+    "quer que", "posso ", "devo ", "deseja", "gostaria", "prefere",
+    "se voce", "caso voce", "quando voce", "confirma", "poderia",
+)
+_PROMESSA_PASSADO = (
+    "anteriormente", "resposta anterior", "turno anterior", "mensagem anterior",
+    "da ultima vez", "ja havia", "ja tinha", "na rodada anterior", "mais cedo",
+)
+
+
+def detectar_promessa_aplicacao_itens(resposta: str) -> bool:
+    """True se a resposta da JULIA AFIRMA aplicar/ter aplicado mudanca em item/tabela.
+
+    Conservador: exige verbo afirmativo + alvo NA MESMA sentenca; nao dispara em
+    pergunta ("quer que eu aplique?"), condicional ("se voce confirmar, eu aplico"),
+    negacao ("nao apliquei") nem referencia a aplicacao passada ("como apliquei
+    anteriormente"). Usado como gatilho da rede de recuperacao do ajuste #10.
+    """
+    for sentenca in re.findall(r"[^.!?\n]+[.!?]?", resposta or ""):
+        if "?" in sentenca:
+            continue
+        t = _normalizar_texto(sentenca)
+        m = _PROMESSA_VERBOS_RE.search(t)
+        if not m:
+            continue
+        if not any(alvo in t for alvo in _PROMESSA_ALVOS):
+            continue
+        if any(c in t for c in _PROMESSA_CONDICIONAIS):
+            continue
+        if any(p in t for p in _PROMESSA_PASSADO):
+            continue
+        if _negacao_antes(t, m.group(0)):
+            continue
+        return True
+    return False
+
+
+# Guarda anti-alucinacao de paginas (ajuste #11): so o numero IMEDIATAMENTE apos o
+# marcador conta como pagina citada ("pagina 29 e 110 pontos" NAO captura o 110 —
+# enumeracoes ficam de fora de proposito, para a nota advisory nunca acusar em falso).
+_PAGINA_CITADA_RE = re.compile(r"\bpag(?:ina)?s?\.?\s*(\d{1,4})\b")
+
+
+def extrair_paginas_citadas(texto: str) -> set[int]:
+    """Numeros de pagina citados no texto ('pagina 10', 'pag. 29'), sobre o texto
+    normalizado sem acento. Usado dos dois lados da guarda de paginas do chat:
+    paginas citadas na resposta vs. paginas presentes no contexto/conversa."""
+    return {
+        int(m.group(1))
+        for m in _PAGINA_CITADA_RE.finditer(_normalizar_texto(texto))
+    }
+
+
 _JULIA_ACAO_ITENS = """
 ### ACAO: CORRIGIR ITENS DO PARECER
 O engenheiro pode pedir correcoes nos itens do parecer (individualmente no chat
@@ -446,6 +535,11 @@ tecnicamente fundamentado, VOCE aplica as correcoes assim:
    — mas aplique os demais que forem procedentes. A palavra final e do engenheiro:
    se ele insistir, aplique.
 5. Apos aplicar, aponte a Tabela do caso para conferencia.
+6. PROIBIDO ABSOLUTO: afirmar que aplicou, que esta aplicando ou que a tabela foi
+   atualizada SEM emitir o bloco <acao> NESTA MESMA resposta. Sem o bloco, NADA e
+   gravado no banco. Se ainda falta informacao para montar o patch, NAO prometa:
+   pergunte o que falta. So afirme a aplicacao na resposta que contiver o proprio
+   bloco <acao>.
 O bloco <acao> e invisivel — nunca o cite nem o descreva.
 """
 

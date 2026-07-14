@@ -206,6 +206,19 @@ export function deriveTimeline(snapshot: Snapshot): TimelineEntry[] {
         at: msg.criado_em,
         markdown: msg.conteudo,
       });
+      if (msg.gerou_nova_tabela) {
+        // Selo de escrita no banco: vem da flag gravada pelo backend junto com a
+        // ação, nunca da prosa da JulIA. O +1s fura o desempate de compareEntries
+        // (event antes de chat) para o selo aparecer logo APÓS a fala.
+        entries.push({
+          kind: "event",
+          key: `chat-${msg.id}-tabela`,
+          at: new Date(new Date(msg.criado_em).getTime() + 1000).toISOString(),
+          title: "Tabela do caso atualizada por esta resposta",
+          detail: "Alteração gravada no banco — confira na Tabela do caso",
+          tone: "success",
+        });
+      }
     }
   }
 

@@ -781,28 +781,12 @@ export function ConversationProvider({
     async (action: { tipo: string; total?: number; perfil?: string; escopo?: string | null }) => {
       const now = new Date().toISOString();
       if (action.tipo === "atualizar_requisitos") {
-        refreshSnapshot();
-        const n = action.total ?? 0;
-        pushEphemeral({
-          kind: "event",
-          key: `acao-ok-${Date.now()}`,
-          at: now,
-          title: "Lista de requisitos atualizada no banco",
-          detail: `${n} ${n === 1 ? "item" : "itens"} — confira na Tabela do caso`,
-          tone: "success",
-        });
+        // Confirmação visual: selo derivado de gerou_nova_tabela na timeline
+        // (persiste ao F5) — o refresh abaixo já o traz; sem chip efêmero aqui.
+        await refreshSnapshot();
         setShowDataPanel(true);
       } else if (action.tipo === "atualizar_itens") {
         await refreshSnapshot();
-        const n = action.total ?? 0;
-        pushEphemeral({
-          kind: "event",
-          key: `acao-ok-${Date.now()}`,
-          at: now,
-          title: "Itens do parecer corrigidos no banco",
-          detail: `${n} ${n === 1 ? "item atualizado" : "itens atualizados"} — confira na Tabela do caso`,
-          tone: "success",
-        });
         setShowDataPanel(true);
       } else if (action.tipo === "aprovar_requisitos") {
         const n = action.total ?? 0;
@@ -995,13 +979,13 @@ export function ConversationProvider({
           {
             contexto,
             onAction: applyChatAction,
-            onActionError: () => {
+            onActionError: (detail) => {
               pushEphemeral({
                 kind: "event",
                 key: `acao-err-${Date.now()}`,
                 at: new Date().toISOString(),
-                title: "Não consegui aplicar a mudança na lista",
-                detail: "Tente pedir de novo, talvez em partes menores",
+                title: "Não consegui aplicar a mudança",
+                detail: detail || "Tente pedir de novo, talvez em partes menores",
                 tone: "warning",
               });
             },

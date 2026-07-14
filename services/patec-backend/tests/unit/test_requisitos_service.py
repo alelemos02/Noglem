@@ -8,7 +8,12 @@ from unittest.mock import patch
 
 import pytest
 
-from app.services.requisitos import _call_extracao_llm
+from app.services.requisitos import (
+    _anexos_citados,
+    _call_extracao_llm,
+    _merge_decomposicoes,
+    _resolver_amarracoes_sync,
+)
 from app.services.tasks import PROMPT_VERSION, _compute_docs_hash
 
 
@@ -169,3 +174,170 @@ class TestLlmClientExtractJson:
 
         with pytest.raises(json.JSONDecodeError):
             extract_json("nao e json")
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Ajuste #12 — passe de amarracoes (decomposicao por documento anexo)
+# ──────────────────────────────────────────────────────────────────────
+
+def _req(numero, descricao="Req", **extras):
+    base = {
+        "numero": numero,
+        "categoria": "Processo",
+        "descricao_requisito": descricao,
+        "valor_requerido": None,
+        "prioridade": "ALTA",
+        "norma_referencia": None,
+        "referencia_engenharia": f"Cap. {numero}",
+    }
+    return {**base, **extras}
+
+
+class TestMergeDecomposicoes:
+    def test_substitui_na_posicao_e_renumera(self):
+        base = [_req(1), _req(2, "Sistema CFTV conforme TK-8"), _req(3)]
+        decs = [{
+            "numero_original": 2,
+            "anexo": "TK-8.pdf",
+            "sub_requisitos": [
+                {"descricao_requisito": "Camera fixa — Area A: 12 un", "prioridade": "ALTA"},
+                {"descricao_requisito": "Camera PTZ — Area B: 4 un", "prioridade": "MEDIA"},
+            ],
+        }]
+        out = _merge_decomposicoes(base, decs)
+        assert [r["numero"] for r in out] == [1, 2, 3, 4]
+        assert out[1]["descricao_requisito"].startswith("Camera fixa")
+        assert out[2]["descricao_requisito"].startswith("Camera PTZ")
+        assert out[3]["descricao_requisito"] == "Req"  # o antigo item 3 virou 4
+
+    def test_numero_original_inexistente_ignorado(self):
+        base = [_req(1)]
+        decs = [{"numero_original": 9, "sub_requisitos": [{"descricao_requisito": "X"}]}]
+        out = _merge_decomposicoes(base, decs)
+        assert len(out) == 1
+        assert out[0]["descricao_requisito"] == "Req"
+
+    def test_subs_vazios_mantem_original(self):
+        base = [_req(1), _req(2)]
+        decs = [{"numero_original": 2, "sub_requisitos": []}]
+        assert len(_merge_decomposicoes(base, decs)) == 2
+
+    def test_acima_do_cap_mantem_original(self):
+        base = [_req(1)]
+        decs = [{
+            "numero_original": 1,
+            "sub_requisitos": [{"descricao_requisito": f"S{i}"} for i in range(81)],
+        }]
+        out = _merge_decomposicoes(base, decs)
+        assert len(out) == 1
+        assert out[0]["descricao_requisito"] == "Req"
+
+    def test_sub_sem_descricao_descartado(self):
+        base = [_req(1)]
+        decs = [{
+            "numero_original": 1,
+            "sub_requisitos": [
+                {"descricao_requisito": "Valido"},
+                {"descricao_requisito": "   "},
+                {"valor_requerido": "orfao"},
+            ],
+        }]
+        out = _merge_decomposicoes(base, decs)
+        assert len(out) == 1
+        assert out[0]["descricao_requisito"] == "Valido"
+
+    def test_heranca_prioridade_categoria_e_referencia(self):
+        base = [_req(1, prioridade="BAIXA", categoria="Eletrico")]
+        decs = [{
+            "numero_original": 1,
+            "sub_requisitos": [{"descricao_requisito": "Sub", "prioridade": "INVALIDA"}],
+        }]
+        out = _merge_decomposicoes(base, decs)
+        assert out[0]["prioridade"] == "BAIXA"
+        assert out[0]["categoria"] == "Eletrico"
+        assert out[0]["referencia_engenharia"] == "Cap. 1"
+
+    def test_decomposicao_duplicada_primeira_vence(self):
+        base = [_req(1)]
+        decs = [
+            {"numero_original": 1, "sub_requisitos": [{"descricao_requisito": "Primeira"}]},
+            {"numero_original": 1, "sub_requisitos": [{"descricao_requisito": "Segunda"}]},
+        ]
+        out = _merge_decomposicoes(base, decs)
+        assert [r["descricao_requisito"] for r in out] == ["Primeira"]
+
+
+class TestResolverAmarracoes:
+    _ANEXOS = [("TK-8.pdf", "texto do anexo com a tabela de pontos")]
+
+    def _base_data(self):
+        return {
+            "requisitos": [_req(1, "Sistema CFTV conforme TK-8")],
+            "total_itens": 1,
+            "resumo": "Resumo base.",
+        }
+
+    def test_json_invalido_mantem_base(self):
+        data = self._base_data()
+        with _mock_llm_response("isto nao e json"):
+            out = _resolver_amarracoes_sync(data, self._ANEXOS, _ParecerStub())
+        assert out["total_itens"] == 1
+        assert out["requisitos"][0]["descricao_requisito"] == "Sistema CFTV conforme TK-8"
+
+    def test_excecao_da_llm_mantem_base(self):
+        data = self._base_data()
+        with patch("app.services.requisitos.call_llm", side_effect=RuntimeError("boom")):
+            out = _resolver_amarracoes_sync(data, self._ANEXOS, _ParecerStub())
+        assert out["total_itens"] == 1
+
+    def test_caminho_feliz_decompoe_e_atualiza_total(self):
+        data = self._base_data()
+        resposta = """
+        {"decomposicoes": [{"numero_original": 1, "anexo": "TK-8.pdf",
+          "sub_requisitos": [
+            {"descricao_requisito": "Camera fixa — Area A: 12 un", "valor_requerido": "12 un",
+             "prioridade": "ALTA", "referencia_engenharia": "MR item 1.1 + TK-8 pag. 29"},
+            {"descricao_requisito": "Camera PTZ — Area B: 4 un", "valor_requerido": "4 un",
+             "prioridade": "MEDIA", "referencia_engenharia": "MR item 1.1 + TK-8 pag. 29"}
+          ]}],
+         "referencias_nao_anexadas": []}
+        """
+        with _mock_llm_response(resposta):
+            out = _resolver_amarracoes_sync(data, self._ANEXOS, _ParecerStub())
+        assert out["total_itens"] == 2
+        assert [r["numero"] for r in out["requisitos"]] == [1, 2]
+        assert "pag. 29" in out["requisitos"][0]["referencia_engenharia"]
+
+    def test_referencias_nao_anexadas_vao_para_resumo(self):
+        data = self._base_data()
+        resposta = '{"decomposicoes": [], "referencias_nao_anexadas": ["TK-9"]}'
+        with _mock_llm_response(resposta):
+            out = _resolver_amarracoes_sync(data, self._ANEXOS, _ParecerStub())
+        assert "TK-9" in out["resumo"]
+        assert "não anexado" in out["resumo"]
+
+
+class TestAnexosCitados:
+    def test_stem_do_nome_seleciona_o_anexo(self):
+        reqs = [_req(1, "Sistema de CFTV conforme TK-8", valor_requerido="conforme TK-8")]
+        anexos = [("TK-8 - CFTV.pdf", "a"), ("TK-9 Telefonia.pdf", "b")]
+        citados = _anexos_citados(reqs, anexos)
+        assert [nome for nome, _ in citados] == ["TK-8 - CFTV.pdf"]
+
+    def test_keyword_generica_inclui_todos(self):
+        reqs = [_req(1, "Painel montado de acordo com o criterio de projeto")]
+        anexos = [("XPT-100.pdf", "a"), ("ZWK-200.pdf", "b")]
+        assert _anexos_citados(reqs, anexos) == anexos
+
+    def test_sem_referencia_retorna_vazio(self):
+        reqs = [_req(1, "Transmissor de pressao 0-100 bar", valor_requerido="0-100 bar")]
+        anexos = [("XPT-555.pdf", "a")]
+        assert _anexos_citados(reqs, anexos) == []
+
+
+def test_limit_instruction_menciona_amarracoes():
+    resposta = '{"requisitos": [], "total_itens": 0, "resumo": ""}'
+    with _mock_llm_response(resposta) as mock_llm:
+        _call_extracao_llm("texto eng", _ParecerStub(), "padrao", None)
+    user_content = mock_llm.call_args.args[1]
+    assert "amarrados a documentos anexos" in user_content.lower()

@@ -3,12 +3,14 @@ import uuid
 
 import pytest
 
-from app.api.v1.endpoints.chat import _executar_acao
+from app.api.v1.endpoints.chat import _acao_valida, _executar_acao
 from app.services.chat import (
     detectar_intencao_extracao,
     detectar_intencao_revisao_spec,
     detectar_intencao_voltar_fase,
+    detectar_promessa_aplicacao_itens,
     detectar_sem_complementares,
+    extrair_paginas_citadas,
 )
 
 
@@ -199,3 +201,96 @@ def test_extrair_requisitos_perfil_invalido_cai_para_padrao():
     out = _exec({"tipo": "extrair_requisitos", "perfil": "'; DROP TABLE", "escopo": "Cap. 8"})
     assert out["perfil"] == "padrao"
     assert out["escopo"] == "Cap. 8"
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Ajuste #10 — detector de "promessa de aplicacao sem <acao>"
+# ──────────────────────────────────────────────────────────────────────
+
+@pytest.mark.parametrize(
+    "resposta",
+    [
+        "Apliquei a correção no item 4 como você pediu.",
+        "Estou aplicando a atualização na tabela do caso.",
+        "Pronto, atualizei o status do item 2 para C.",
+        "A tabela do caso foi atualizada com a nova justificativa.",
+        "Vou aplicar agora a mudança no item 7.",
+        # Caso real da transcricao que originou o ajuste #10
+        "Estou alterando agora mesmo a descrição e o valor requerido dos itens.",
+    ],
+)
+def test_detecta_promessa_aplicacao(resposta):
+    assert detectar_promessa_aplicacao_itens(resposta) is True
+
+
+@pytest.mark.parametrize(
+    "resposta",
+    [
+        # Pergunta nao e promessa
+        "Quer que eu aplique essa mudança no item 4?",
+        "Posso atualizar o item 2 para status C?",
+        "Devo corrigir a justificativa do item 3?",
+        # Condicional aguardando confirmacao
+        "Se você confirmar, eu aplico a alteração na tabela.",
+        "Quando você confirmar, atualizo o item 5.",
+        # Negacao
+        "Não apliquei nenhuma mudança na tabela ainda.",
+        "Ainda não atualizei o item 4 — preciso da sua confirmação.",
+        # Referencia a aplicacao de turno anterior
+        "Como apliquei anteriormente no item 4, o status já está em C.",
+        "Na resposta anterior atualizei o item 2 conforme combinado.",
+        # Verbo sem alvo de tabela/item
+        "Apliquei meus conhecimentos nessa avaliação.",
+    ],
+)
+def test_promessa_nao_dispara(resposta):
+    assert detectar_promessa_aplicacao_itens(resposta) is False
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Ajuste #11 — extracao de paginas citadas (guarda anti-alucinacao)
+# ──────────────────────────────────────────────────────────────────────
+
+def test_extrair_paginas_citadas_basico():
+    assert extrair_paginas_citadas("veja a página 10 e a pag. 29 do TK-8") == {10, 29}
+
+
+def test_extrair_paginas_citadas_sem_citacao():
+    assert extrair_paginas_citadas("nenhuma referência de local aqui") == set()
+
+
+def test_extrair_paginas_citadas_nao_captura_numero_solto():
+    # "110 pontos" apos a pagina NAO vira pagina citada (evita acusacao em falso)
+    assert extrair_paginas_citadas("tabela da página 29 e 110 pontos de CFTV") == {29}
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Ajuste #10 — _acao_valida estendido para atualizar_itens
+# ──────────────────────────────────────────────────────────────────────
+
+def test_acao_valida_patch_de_itens_ok():
+    assert _acao_valida(
+        {"tipo": "atualizar_itens", "itens": [{"numero": 4, "status": "B"}]}
+    ) is True
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"tipo": "atualizar_itens", "itens": []},
+        {"tipo": "atualizar_itens", "itens": [{"status": "B"}]},
+        {"tipo": "atualizar_itens", "itens": [{"numero": "4", "status": "B"}]},
+        {"tipo": "atualizar_itens", "itens": [{"numero": True}]},
+        {"tipo": "atualizar_itens", "itens": [{"numero": 1}] * 51},
+        {"tipo": None, "motivo": "sem_alteracao_nesta_resposta"},
+        {"tipo": None},
+        None,
+    ],
+)
+def test_acao_valida_rejeita_shapes_invalidos(payload):
+    assert _acao_valida(payload) is False
+
+
+def test_acao_valida_atualizar_requisitos_inalterada():
+    # O shape historico (lista, mesmo vazia) segue aceito — usado pelo repair
+    assert _acao_valida({"tipo": "atualizar_requisitos", "requisitos": []}) is True

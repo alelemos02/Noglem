@@ -6,7 +6,7 @@ from urllib.parse import unquote
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
-from sqlalchemy import select, func, delete
+from sqlalchemy import select, func, delete, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -38,8 +38,10 @@ from app.services.chat import (
     detectar_intencao_extracao,
     detectar_intencao_revisao_spec,
     detectar_intencao_voltar_fase,
+    detectar_promessa_aplicacao_itens,
     detectar_sem_complementares,
     detectar_transicao_declarada,
+    extrair_paginas_citadas,
     parse_acao_block,
 )
 from app.services.chat_memory import (
@@ -62,6 +64,27 @@ chat_rate_limiter = RedisRateLimiter(max_requests=20, window_seconds=60, prefix=
 _VALID_PROFILE_RE = re.compile(
     r"^(simples|padrao|completa|integral|triagem_tecnica|conformidade_tecnica|"
     r"auditoria_tecnica_completa|custom_\d+)$"
+)
+
+# Acoes que mutam linhas da tabela do caso: marcam gerou_nova_tabela na mensagem
+# da assistente (selo persistente "Tabela atualizada" derivado pelo frontend).
+_ACOES_QUE_MUTAM_TABELA = {"atualizar_itens", "atualizar_requisitos"}
+
+# Instrucao da chamada de recuperacao do ajuste #10: a LLM prometeu aplicar uma
+# mudanca na tabela mas nao emitiu o bloco <acao> — pede SOMENTE o JSON da acao.
+_INSTRUCAO_RECUPERAR_ACAO = (
+    "Sua ultima resposta AFIRMA que voce aplicou ou esta aplicando uma alteracao "
+    "na tabela do parecer, mas voce NAO emitiu o bloco de acao — NADA foi gravado. "
+    "Emita AGORA SOMENTE o objeto JSON da acao, no formato "
+    '{"tipo": "atualizar_itens", "itens": [{"numero": <int>, "<campo>": <valor>}]} '
+    "com APENAS os itens e campos que a sua resposta declarou ter alterado NESTA "
+    "resposta (campos permitidos: status, justificativa_tecnica, acao_requerida, "
+    "prioridade, valor_requerido, valor_fornecedor, norma_referencia, "
+    "descricao_requisito). NAO invente alteracao que a resposta nao descreveu. "
+    "Se a resposta NAO declarou nenhuma alteracao concreta NESTA resposta (ex.: so "
+    'mencionou alteracoes de turnos anteriores), responda {"tipo": null, "motivo": '
+    '"sem_alteracao_nesta_resposta"}. Se declarou alteracao mas sem dizer qual '
+    'item/valor, responda {"tipo": null, "motivo": "alteracao_sem_detalhes"}.'
 )
 
 
@@ -88,7 +111,17 @@ def _acao_valida(payload) -> bool:
     if tipo == "atualizar_requisitos":
         return isinstance(payload.get("requisitos"), list)
     if tipo == "atualizar_itens":
-        return isinstance(payload.get("itens"), list)
+        itens = payload.get("itens")
+        return (
+            isinstance(itens, list)
+            and 0 < len(itens) <= 50
+            and all(
+                isinstance(i, dict)
+                and isinstance(i.get("numero"), int)
+                and not isinstance(i.get("numero"), bool)
+                for i in itens
+            )
+        )
     return tipo in {
         "aprovar_requisitos",
         "iniciar_ciclo",
@@ -689,6 +722,87 @@ async def enviar_mensagem(
                     "escopo": payload.mensagem.strip() or None,
                 }
 
+        # Rede de seguranca (ajuste #10): a LLM AFIRMOU que aplicou/esta aplicando
+        # uma mudanca na tabela mas nao emitiu o bloco <acao> — "promete e nao
+        # faz". Recupera a acao com uma chamada JSON dedicada; se nao der, a
+        # promessa vira aviso VISIVEL e persistido na mensagem, para o usuario (e
+        # os turnos futuros) verem que nada foi gravado.
+        promessa_sem_acao = False
+        if (
+            acao_payload is None
+            and not acao_falhou
+            and response_text
+            and payload.contexto
+            and not payload.contexto.requisitos_draft
+            and parecer.total_itens > 0
+            and parecer.fase_caso in (ANALISE, CICLO_FORNECEDOR, VERIFICACAO_FINAL)
+            and detectar_promessa_aplicacao_itens(response_text)
+        ):
+            logger.info(
+                "Promessa de aplicacao sem <acao> detectada — recuperando (parecer %s)",
+                parecer_id,
+            )
+            recuperado = None
+            try:
+                recovery_contents = contents + [
+                    {"role": "model", "parts": [{"text": response_text}]},
+                    {"role": "user", "parts": [{"text": _INSTRUCAO_RECUPERAR_ACAO}]},
+                ]
+                recuperado = await call_gemini_json_async(
+                    system_prompt, recovery_contents
+                )
+            except Exception:
+                logger.exception(
+                    "Recuperacao da acao prometida falhou (parecer %s)", parecer_id
+                )
+            if (
+                isinstance(recuperado, dict)
+                and recuperado.get("tipo") == "atualizar_itens"
+                and _acao_valida(recuperado)
+            ):
+                acao_payload = recuperado
+            elif (
+                isinstance(recuperado, dict)
+                and recuperado.get("motivo") == "sem_alteracao_nesta_resposta"
+            ):
+                # Falso positivo do detector (a resposta falava de aplicacao ja
+                # feita em turno anterior) — nada a executar, nada a avisar.
+                pass
+            else:
+                promessa_sem_acao = True
+                nota = (
+                    "\n\n⚠️ **Atenção:** descrevi uma alteração acima, mas ela "
+                    "**não foi gravada** na Tabela do caso. Me diga \"aplique "
+                    "agora na tabela\", com o item e o valor desejado, que eu "
+                    "executo de verdade."
+                )
+                response_text = response_text + nota
+                yield f"event: chunk\ndata: {json.dumps({'text': nota}, ensure_ascii=False)}\n\n"
+
+        # Guarda anti-alucinacao de paginas (ajuste #11): pagina citada na
+        # resposta que nao aparece em NENHUM texto enviado ao modelo (system
+        # prompt com rotulos de chunks/referencias de itens, contexto, historico,
+        # mensagem do usuario) vira nota de cautela visivel e persistida.
+        # Advisory — nunca bloqueia nem altera classificacao.
+        if response_text:
+            paginas_citadas = extrair_paginas_citadas(response_text)
+            if paginas_citadas:
+                paginas_ok = extrair_paginas_citadas(system_prompt)
+                for turno in contents:
+                    for parte in turno.get("parts", []):
+                        paginas_ok |= extrair_paginas_citadas(parte.get("text", ""))
+                nao_confirmadas = sorted(paginas_citadas - paginas_ok)
+                if nao_confirmadas:
+                    pgs = ", ".join(str(p) for p in nao_confirmadas)
+                    rotulo = "as páginas" if len(nao_confirmadas) > 1 else "a página"
+                    nota_pg = (
+                        f"\n\n⚠️ Não consegui confirmar {rotulo} {pgs} nos trechos "
+                        "que consultei — antes de usar essa referência, confirme "
+                        "no documento original."
+                    )
+                    response_text = response_text + nota_pg
+                    yield f"event: chunk\ndata: {json.dumps({'text': nota_pg}, ensure_ascii=False)}\n\n"
+
         # Save assistant message (use a new session to avoid stale state)
         from app.core.database import async_session
         async with async_session() as save_db:
@@ -710,6 +824,7 @@ async def enviar_mensagem(
             save_db.add(assistant_msg)
             await save_db.commit()
             await save_db.refresh(assistant_msg)
+            assistant_msg_id = assistant_msg.id
             indexed_user = False
             saved_user_msg = await save_db.get(MensagemChat, user_msg.id)
             if saved_user_msg:
@@ -726,17 +841,55 @@ async def enviar_mensagem(
                     evento = await _executar_acao(
                         save_db, parecer_id, acao_payload, current_user
                     )
+                    if acao_payload.get("tipo") in _ACOES_QUE_MUTAM_TABELA:
+                        # Selo persistente (ajuste #10): o frontend deriva o badge
+                        # "Tabela do caso atualizada" desta flag ao remontar a
+                        # timeline — a confirmacao nunca depende da prosa da LLM.
+                        assistant_msg.gerou_nova_tabela = True
+                        await save_db.commit()
                     yield f"event: action\ndata: {json.dumps(evento, ensure_ascii=False)}\n\n"
-                except Exception:
+                except Exception as e:
                     logger.exception(
                         "Falha ao executar acao '%s' via chat (parecer %s)",
                         acao_payload.get("tipo"),
                         parecer_id,
                     )
-                    yield f"event: action_error\ndata: {json.dumps({'detail': 'A acao nao pode ser aplicada'}, ensure_ascii=False)}\n\n"
-            elif acao_falhou:
-                yield f"event: action_error\ndata: {json.dumps({'detail': 'A acao nao pode ser aplicada'}, ensure_ascii=False)}\n\n"
-            yield f"event: done\ndata: {json.dumps({'message_id': str(assistant_msg.id), 'table_updated': False}, ensure_ascii=False)}\n\n"
+                    # A narracao ja foi salva como se a mudanca fosse valer —
+                    # corrige o registro (UPDATE direto: pos-rollback a instancia
+                    # fica expirada) para o usuario e os turnos futuros verem que
+                    # nada foi gravado (ajuste #10).
+                    nota_falha = (
+                        "\n\n⚠️ **Atenção:** a alteração descrita acima **não foi "
+                        "gravada** na tabela."
+                    )
+                    try:
+                        await save_db.rollback()
+                        await save_db.execute(
+                            update(MensagemChat)
+                            .where(MensagemChat.id == assistant_msg_id)
+                            .values(conteudo=response_text + nota_falha)
+                        )
+                        await save_db.commit()
+                        yield f"event: chunk\ndata: {json.dumps({'text': nota_falha}, ensure_ascii=False)}\n\n"
+                    except Exception:
+                        logger.exception(
+                            "Falha ao registrar nota de acao nao aplicada (parecer %s)",
+                            parecer_id,
+                        )
+                    detail = (
+                        str(e)[:200]
+                        if isinstance(e, ValueError) and str(e)
+                        else "A ação não pôde ser aplicada"
+                    )
+                    yield f"event: action_error\ndata: {json.dumps({'detail': detail}, ensure_ascii=False)}\n\n"
+            elif acao_falhou or promessa_sem_acao:
+                detail = (
+                    'A alteração descrita não foi gravada — peça "aplique agora na tabela".'
+                    if promessa_sem_acao
+                    else "A ação não pôde ser aplicada"
+                )
+                yield f"event: action_error\ndata: {json.dumps({'detail': detail}, ensure_ascii=False)}\n\n"
+            yield f"event: done\ndata: {json.dumps({'message_id': str(assistant_msg_id), 'table_updated': False}, ensure_ascii=False)}\n\n"
 
     return StreamingResponse(
         generate_sse(),

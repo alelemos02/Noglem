@@ -250,3 +250,122 @@
 - **Arquivos:** `services/patec-backend/app/services/chat.py`.
 - **Deploy/observações:** backend-only → **patec-api** (`railway up`, sem push-to-deploy).
   O chat roda na API, não no worker.
+
+---
+
+## Ajuste #10 — JulIA "promete e não faz": narra aplicação na tabela sem emitir a ação
+
+- **Status:** APLICADO em 2026-07-14 (rede de recuperação + selo persistente + prompt).
+- **Sintoma:** em produção, a JulIA disse 2× "estou aplicando a atualização na
+  tabela" e **nada foi gravado** — admitiu só quando cobrada ("acabei não disparando
+  a atualização real na tabela. Falha minha!"). O usuário acha que o trabalho foi
+  feito; a tabela continua intacta. Matador de confiança.
+- **Causa-raiz (confirmada):** o chat só muta o banco quando o LLM emite o bloco
+  invisível `<acao>{"tipo":"atualizar_itens",...}` no fim da resposta
+  (endpoints/chat.py, split por string-find no stream). Sem o bloco, o caminho é
+  100% silencioso: as 4 redes de segurança pós-stream cobriam só transições de
+  fase e passos de setup — **nenhuma cobria `atualizar_itens`**. A narração falsa
+  ainda era salva no histórico e contaminava turnos futuros ("narrar = feito").
+- **Correção aplicada:**
+  1. Detector determinístico `detectar_promessa_aplicacao_itens` (services/chat.py):
+     sentença a sentença, verbo afirmativo de aplicação + alvo (item/tabela/status…),
+     ignorando pergunta, condicional, negação e referência a aplicação passada.
+  2. Nova rede no endpoint (última da cadeia, gate pós-análise sem draft): promessa
+     detectada → chamada JSON de recuperação re-deriva o patch prometido e o executa
+     pelo `_executar_acao` normal (evento `action` + badge). Se a recuperação não
+     render ação válida → nota visível **persistida na mensagem** ("⚠️ …não foi
+     gravada… peça 'aplique agora na tabela'") + `action_error` com detail específico.
+  3. Selo persistente sem migration: ação que muta tabela (`atualizar_itens`/
+     `atualizar_requisitos`) seta `gerou_nova_tabela=True` na mensagem; o frontend
+     (`derive-timeline.ts`) deriva o badge "Tabela do caso atualizada por esta
+     resposta" — **sobrevive a F5** e nunca depende da prosa do LLM. Os chips
+     efêmeros de sucesso do `applyChatAction` saíram (o badge derivado assume).
+  4. Falha na execução da ação também corrige o registro: nota "não foi gravada"
+     appendada à mensagem salva (UPDATE direto) + `action_error` com a mensagem
+     real do erro (ex.: "Nenhum item correspondente para atualizar.").
+  5. Prompt: regra "PROIBIDO afirmar que aplicou sem emitir o bloco <acao> NESTA
+     resposta" em `_JULIA_ACAO_ITENS` e `_JULIA_ACAO_REQUISITOS`.
+- **Arquivos:** `services/patec-backend/app/services/chat.py`,
+  `services/patec-backend/app/api/v1/endpoints/chat.py`,
+  `src/components/parecer-tecnico/derive-timeline.ts`,
+  `src/components/parecer-tecnico/conversation-provider.tsx`.
+- **Deploy/observações:** backend → **patec-api** (`railway up`, sem push-to-deploy);
+  frontend → Vercel (bump de versão no deploy). Recuperação usa o modelo JSON barato;
+  lixo é barrado pelo `_acao_valida` estendido (itens 1-50, `numero` int). A rede
+  NÃO roda com draft de requisitos em revisão (fluxo próprio `atualizar_requisitos`).
+
+---
+
+## Ajuste #11 — JulIA alucina conteúdo de documento e cita página inventada
+
+- **Status:** APLICADO em 2026-07-14 (grounding no prompt + guarda determinística de páginas).
+- **Sintoma:** perguntada sobre o escopo do TK-8, a JulIA afirmou que ele exigia
+  NVR, 2 estações de monitoramento e teclado-joystick "conforme página 10 e índice
+  na página 2" — **inventado** (retratou-se quando questionada: "essas informações
+  não constam nos documentos"). Padrão perigoso: fabricar conteúdo + número de
+  página com confiança.
+- **Causa-raiz (confirmada):** o RAG traz top-k trechos; quando o trecho exato não
+  é recuperado, o modelo preenche a lacuna com conhecimento próprio de engenharia
+  (persona sênior reforça). Os chunks têm rótulo "Pagina N", mas nada impedia citar
+  página fora dos trechos.
+- **Correção aplicada:** (1) regras novas de grounding em `_CHAT_MODO_CONVERSA`
+  (regra 11: citar página APENAS se visível no rótulo/texto do trecho; sem trecho →
+  "não localizei nos trechos que consultei" + oferecer conferir o documento;
+  experiência serve para INTERPRETAR, nunca ATESTAR) e na regra 2 da persona.
+  (2) Guarda determinística sem LLM no endpoint: página citada na resposta que não
+  aparece em NENHUM texto enviado ao modelo (system prompt, contexto, histórico,
+  mensagem) → nota advisory visível e persistida ("⚠️ Não consegui confirmar a
+  página X nos trechos que consultei…"). Nunca bloqueia.
+- **Limitações conhecidas:** intervalos ("páginas 10 a 12") validam só o primeiro
+  número após o marcador; enumeração "página 29 e 110 pontos" NÃO captura o 110
+  (de propósito — evita acusação em falso).
+- **Arquivos:** `services/patec-backend/app/services/chat.py`,
+  `services/patec-backend/app/api/v1/endpoints/chat.py`.
+- **Deploy/observações:** backend-only → **patec-api** (`railway up`).
+
+---
+
+## Ajuste #12 — Amarração MR→anexo não decomposta ("1 sistema completo" em vez do escopo real)
+
+- **Status:** APLICADO em 2026-07-14 (passe 2 de amarrações na extração W1).
+- **Sintoma:** MR item 1.1 = "Sistema de CFTV conforme TK-8" virou requisito
+  "1 sistema completo", em vez do desdobramento real do TK-8 (110 câmeras
+  distribuídas por área, tabela da pág. 29). Vale para CFTV, Controle de Acesso,
+  Telefonia e Cabeamento. Sem decompor, é impossível saber o que tem no escopo e
+  cobrar o fornecedor item a item. Exigência: decomposição **automática** na carga
+  dos documentos; "jamais 1 sistema completo".
+- **Causa-raiz (confirmada), dupla e estrutural:** (a) **os anexos `anexo_engenharia`
+  nunca entravam na extração** — `_load_eng_text` filtra só `tipo=="engenharia"`
+  (requisitos.py + doc_selection.py); o LLM não tinha o texto do TK-8 nem se
+  quisesse decompor; (b) a regra "GRANULARIDADE — NAO FRAGMENTE" do prompt de
+  extração proibia desdobrar. A análise (W2) é escopo-fechado (1 item por requisito
+  aprovado) → a decomposição TEM que acontecer no W1.
+- **Correção aplicada:** passe 2 na extração (`extrair_requisitos`, entre a extração
+  base e o `salvar_draft`): `anexo_docs_correntes` carrega os anexos (dedup por
+  nome, slice 120k/doc, ilegível <200 chars vira aviso no resumo); pré-filtro
+  determinístico `_anexos_citados` (stems do nome do arquivo — "TK-8"→"tk8" — no
+  texto dos requisitos; fallback por palavra-chave "conforme/vide/…"; nada citado →
+  passe pulado); UMA chamada batched (`AMARRACAO_SYSTEM_PROMPT`, Pro de extração)
+  decompõe cada amarração **seguindo o desdobramento do próprio documento** (linha
+  de tabela tipo/área/quantidade = um sub-requisito, `referencia_engenharia` = "MR
+  <ref> + <anexo> pag. N"); merge determinístico `_merge_decomposicoes` substitui
+  na posição e renumera (guardas: cap 80 subs/item, sub sem descrição descartado,
+  duplicada primeira vence, herança de categoria/prioridade). Falha de LLM/JSON →
+  lista base intacta (nunca pior que antes). Referência a documento NÃO anexado →
+  aviso no resumo do draft ("anexe e re-extraia"). Exceção na regra de granularidade
+  + teto de perfil: item amarrado fica UM item na extração base (com a referência
+  explícita) e não conta no limite — o desdobramento vem no passe 2, sem teto.
+- **Limitações conhecidas:** tabela-alvo além do slice de 120k sai parcial (sem
+  detecção automática); anexos citados somando >300k chars pulam o passe com aviso
+  (latência do request síncrono); a explosão de itens a jusante é o comportamento
+  pedido (110 sub-requisitos aprovados = 110 itens na análise — custo/latência do
+  R1 crescem). Caso já em CICLO_FORNECEDOR não re-extrai (fase só avança) — ajuste
+  manual via chat, agora confiável pelo #10.
+- **Arquivos:** `services/patec-backend/app/services/requisitos.py`,
+  `services/patec-backend/app/services/doc_selection.py`,
+  `services/patec-backend/app/services/prompts/extracao.py`.
+- **Deploy/observações:** a extração roda **na patec-api** (síncrona, sem Celery) →
+  `railway up --service patec-api`; worker NÃO é tocado (PROMPT_VERSION "12" e cache
+  da análise preservados). Se a extração com anexos der 504 no proxy Vercel:
+  plano B = `export const maxDuration = 60` no route.ts do proxy (300 já quebrou
+  no passado) e/ou reduzir slice para 60k.

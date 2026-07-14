@@ -23,3 +23,15 @@ def eng_docs_correntes(docs: list[Documento]) -> list[Documento]:
     for d in ordenados:
         por_nome[d.nome_arquivo] = d  # o mais recente do mesmo nome vence
     return list(por_nome.values())
+
+
+def anexo_docs_correntes(docs: list[Documento]) -> list[Documento]:
+    """Anexos da engenharia (tipo "anexo_engenharia") deduplicados por nome de
+    arquivo, mantendo o mais recente — mesmo critério de eng_docs_correntes.
+    Usado pelo passe de amarrações da extração (W1)."""
+    anexos = [d for d in docs if d.tipo == "anexo_engenharia"]
+    ordenados = sorted(anexos, key=lambda d: d.criado_em)
+    por_nome: dict[str, Documento] = {}
+    for d in ordenados:
+        por_nome[d.nome_arquivo] = d
+    return list(por_nome.values())
