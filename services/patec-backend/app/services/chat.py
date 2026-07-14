@@ -569,6 +569,10 @@ def build_chat_context(
     """
 
     eng_docs = eng_docs_correntes(list(documentos))
+    # Anexos da engenharia (criterios de projeto, normas, referencias amarradas
+    # pela MR) — lado ENGENHARIA, nunca fornecedor. Antes eram ignorados no chat:
+    # a JULIA afirmava nao ter o documento mesmo com ele anexado.
+    anexo_docs = [d for d in documentos if d.tipo == "anexo_engenharia"]
     forn_docs = [d for d in documentos if d.tipo == "fornecedor"]
 
     # Build compact items summary
@@ -594,7 +598,8 @@ def build_chat_context(
         f"Aprovados: {parecer.total_aprovados} | Com Comentarios: {parecer.total_aprovados_comentarios} | Rejeitados: {parecer.total_rejeitados} | Info Ausente: {parecer.total_info_ausente} | Adicionais: {parecer.total_itens_adicionais}",
         "",
         "## DOCUMENTOS ANALISADOS",
-        f"Engenharia: {', '.join(d.nome_arquivo for d in eng_docs) or 'nenhum ainda'}",
+        f"Engenharia (requisicao/especificacao): {', '.join(d.nome_arquivo for d in eng_docs) or 'nenhum ainda'}",
+        f"Complementares da engenharia (anexos, criterios de projeto, normas amarradas pela MR): {', '.join(d.nome_arquivo for d in anexo_docs) or 'nenhum'}",
         f"Fornecedor: {', '.join(d.nome_arquivo for d in forn_docs) or 'nenhum ainda'}",
         "",
         "## TABELA DE ITENS ATUAL",
@@ -680,7 +685,12 @@ def build_chat_context(
             "",
         ])
         for chunk in retrieved_chunks:
-            tipo_label = "Engenharia" if chunk.tipo_documento == "engenharia" else "Fornecedor"
+            if chunk.tipo_documento == "engenharia":
+                tipo_label = "Engenharia"
+            elif chunk.tipo_documento == "anexo_engenharia":
+                tipo_label = "Engenharia (complementar)"
+            else:
+                tipo_label = "Fornecedor"
             page_info = f"Pagina {chunk.page_number}" if chunk.page_number else "Pagina ?"
             chunk_label = "TABELA" if chunk.chunk_type == "table" else "TEXTO"
             header = f"### [{tipo_label}] {chunk.nome_arquivo} - {page_info} ({chunk_label})"
@@ -694,6 +704,12 @@ def build_chat_context(
                 f"### {d.nome_arquivo}\n\n{d.texto_extraido or ''}"
                 for d in eng_docs
             ),
+            "",
+            "## TEXTO COMPLETO DOS DOCUMENTOS COMPLEMENTARES DA ENGENHARIA",
+            "\n\n---\n\n".join(
+                f"### {d.nome_arquivo}\n\n{d.texto_extraido or ''}"
+                for d in anexo_docs
+            ) or "(nenhum anexo)",
             "",
             "## TEXTO COMPLETO DOS DOCUMENTOS DO FORNECEDOR",
             "\n\n---\n\n".join(

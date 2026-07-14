@@ -224,3 +224,29 @@
   patec-backend (chat/deps/model), lembrar que o **patec-api NÃO tem push-to-deploy**
   (exige `railway up` manual) e que colunas novas exigem migration — preferir a via
   Clerk-metadata + header justamente para evitar isso.
+
+---
+
+## Ajuste #9 — JulIA cega para documentos ANEXO (afirma não ter documento que está anexado)
+
+- **Status:** APLICADO em 2026-07-14 (chat trata `anexo_engenharia` como lado engenharia).
+- **Sintoma:** o usuário anexou um critério de projeto (E.DTAE001-TK1-00001) como
+  documento complementar à MR (tipo `anexo_engenharia`). Ao pedir a análise cruzada,
+  a JulIA afirmou que **só tinha a MR e as propostas** e que o TK1 "não foi carregado"
+  — mesmo com o arquivo visível na lista de Documentos carregados (badge ANEXO).
+- **Causa-raiz (confirmada):** o contexto do chat (`chat.py` `build_chat_context`)
+  só considerava `engenharia` e `fornecedor`. Os anexos eram **triplamente ignorados**:
+  (1) a seção "DOCUMENTOS ANALISADOS" (chat.py:596-598) listava só engenharia
+  (`eng_docs_correntes`, que filtra `tipo=="engenharia"`) e fornecedor — a JulIA lia
+  essa lista literalmente; (2) no modo full-text (688-703), o `texto_extraido` dos
+  anexos não entrava; (3) no modo RAG, o rótulo do chunk (683) marcava tudo que não
+  era `engenharia` como **"Fornecedor"** — anexos apareciam como se fossem do
+  fornecedor. (O retriever/indexer JÁ indexam e recuperam anexos — sem filtro de tipo;
+  e a ANÁLISE já os inclui via `texto_anexos`. O buraco era só no chat.)
+- **Correção aplicada:** `anexo_docs = [d for d in documentos if d.tipo=="anexo_engenharia"]`;
+  listados numa linha própria "Complementares da engenharia" na seção de documentos;
+  `texto_extraido` incluído no modo full-text; rótulo do chunk RAG agora
+  "Engenharia (complementar)". Sem migration, sem bump de versão do site.
+- **Arquivos:** `services/patec-backend/app/services/chat.py`.
+- **Deploy/observações:** backend-only → **patec-api** (`railway up`, sem push-to-deploy).
+  O chat roda na API, não no worker.
