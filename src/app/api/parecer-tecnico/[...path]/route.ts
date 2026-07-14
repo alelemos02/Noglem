@@ -26,13 +26,28 @@ async function handler(
       ...(INTERNAL_API_KEY && { "X-Internal-API-Key": INTERNAL_API_KEY }),
     };
 
-    // Rotas admin (dashboard de qualidade) são restritas por e-mail no backend
-    // (OWNER_EMAILS). O usuário Clerk fica gravado lá com e-mail sintético,
-    // então o e-mail real do login vai neste header confiável.
-    if (path.startsWith("v1/admin")) {
+    // Headers de identidade adicionais, buscados no Clerk só quando o backend
+    // precisa deles (uma chamada currentUser() por rota que exige).
+    // - X-User-Email: rotas admin (OWNER_EMAILS) — o usuário Clerk fica gravado
+    //   com e-mail sintético, então o e-mail real do login vai aqui.
+    // - X-User-Apelido: chat — para a JulIA chamar o usuário pelo apelido do
+    //   perfil (unsafeMetadata) em vez do nome placeholder do banco. URL-encoded
+    //   porque header HTTP não aceita acento/unicode cru.
+    const needsEmail = path.startsWith("v1/admin");
+    const needsApelido = path.includes("chat");
+    if (needsEmail || needsApelido) {
       const user = await currentUser();
-      const email = user?.primaryEmailAddress?.emailAddress;
-      if (email) headers["X-User-Email"] = email;
+      if (needsEmail) {
+        const email = user?.primaryEmailAddress?.emailAddress;
+        if (email) headers["X-User-Email"] = email;
+      }
+      if (needsApelido) {
+        const apelido = (user?.unsafeMetadata as Record<string, unknown> | undefined)
+          ?.apelido;
+        if (typeof apelido === "string" && apelido.trim()) {
+          headers["X-User-Apelido"] = encodeURIComponent(apelido.trim());
+        }
+      }
     }
 
     const contentType = request.headers.get("content-type");

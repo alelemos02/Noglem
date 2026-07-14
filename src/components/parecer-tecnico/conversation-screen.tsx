@@ -11,6 +11,7 @@ import { PhaseLine } from "./phase-line";
 import { Thread } from "./thread";
 import { InputBar } from "./input-bar";
 import { DataPanel } from "./data-panel";
+import { CaseSidebar } from "./case-sidebar";
 import { CicloTablePanel } from "./widgets/ciclo-table-panel";
 
 export function ConversationScreen() {
@@ -50,35 +51,40 @@ export function ConversationScreen() {
   const { parecer } = snapshot;
 
   return (
-    <div className="flex h-full flex-col bg-canvas">
-      {/* Header mínimo */}
-      <header className="border-b border-edge">
-        <div className="mx-auto w-full max-w-4xl px-4 pb-2 pt-3">
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex min-w-0 items-center gap-3">
-              <Link
-                href="/dashboard/parecer-tecnico"
-                className="shrink-0 text-sm text-fg-subtle transition-colors hover:text-fg"
-                title="Voltar para a lista"
-              >
-                ←
-              </Link>
-              <h1 className="truncate font-sans text-sm font-semibold text-fg">
-                {parecer.numero_parecer}
-              </h1>
-              <span className="truncate text-xs text-fg-subtle">
-                {parecer.projeto} · {parecer.fornecedor}
-              </span>
+    <div className="flex h-full bg-canvas">
+      <CaseSidebar />
+
+      <div className="flex h-full min-w-0 flex-1 flex-col">
+        {/* Header mínimo */}
+        <header className="border-b border-edge">
+          <div className="mx-auto w-full max-w-4xl px-4 pb-2 pt-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex min-w-0 items-center gap-3">
+                <Link
+                  href="/dashboard/parecer-tecnico"
+                  className="shrink-0 text-sm text-fg-subtle transition-colors hover:text-fg"
+                  title="Voltar para a lista"
+                >
+                  ←
+                </Link>
+                <h1 className="truncate font-sans text-sm font-semibold text-fg">
+                  {parecer.numero_parecer}
+                </h1>
+                <span className="truncate text-xs text-fg-subtle">
+                  {parecer.projeto} · {parecer.fornecedor}
+                </span>
+              </div>
+            </div>
+            <div className="mt-3">
+              <PhaseLine fase={parecer.fase_caso} />
             </div>
           </div>
-          <div className="mt-3">
-            <PhaseLine fase={parecer.fase_caso} />
-          </div>
-        </div>
-      </header>
+        </header>
 
-      <Thread />
-      <InputBar />
+        <Thread />
+        <InputBar />
+      </div>
+
       <DataPanel />
       <CicloTablePanel />
     </div>

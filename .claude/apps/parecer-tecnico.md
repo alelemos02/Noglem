@@ -61,6 +61,19 @@ falas fixas do onboarding seguem a mesma voz em
 - Caso: `src/app/dashboard/parecer-tecnico/[id]/page.tsx` (ConversationProvider + ConversationScreen, escapa o padding do Shell com `-m-6 h-[calc(100vh-3.5rem)]`)
 - Qualidade (dono): `src/app/dashboard/parecer-tecnico/qualidade/page.tsx` — métricas da IA, protegida por `OWNER_EMAILS` no backend
 
+### Sidebar do caso + perfil do usuário (2026-07-13)
+- **`case-sidebar.tsx`** — trilha lateral dentro do caso (`conversation-screen.tsx`,
+  `hidden md:flex`): grupo "Ver" (Tabela do caso → `setShowDataPanel`; Itens/
+  Rastreabilidade → `pushEphemeral` widget; Requisitos/Documentos → modal lendo o
+  snapshot) e grupo "Exportar" (`exportar(fmt)` / `downloadCarta`). Só religa handlers
+  do provider — os comandos de texto de `commands.ts` seguem valendo (mobile usa eles).
+- **Perfil / apelido:** vive no **Clerk `unsafeMetadata`** (`src/components/profile/`).
+  `ProfileProvider` (no Shell) força onboarding no 1º login sem apelido; header mostra
+  o apelido e reabre o perfil. Para a JulIA usar o apelido: o proxy
+  `src/app/api/parecer-tecnico/[...path]/route.ts` encaminha `X-User-Apelido`
+  (URL-encoded) nas rotas `*/chat/*`, e `endpoints/chat.py` o usa como `usuario_nome`
+  (fallback `current_user.nome`, que para login Clerk é o placeholder "Usuário Noglem").
+
 ### Entrada e navegação (dashboard PATEC-first, 2026-07)
 O PATEC é a **entrada padrão da área logada**: `/` (logado) e `/dashboard`
 redirecionam para `/dashboard/parecer-tecnico`. A grade "Agentes" foi removida

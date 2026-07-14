@@ -2,6 +2,7 @@ import json
 import logging
 import re
 import uuid
+from urllib.parse import unquote
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
@@ -481,6 +482,14 @@ async def enviar_mensagem(
             logger.exception("RAG retrieval failed for parecer %s, falling back to full text", parecer_id)
             chunks = None
 
+    # Apelido do perfil (unsafeMetadata do Clerk), encaminhado pelo proxy Next em
+    # X-User-Apelido (URL-encoded). É como a JulIA chama o usuário; fallback para
+    # o nome do banco (placeholder "Usuário Noglem" para logins Clerk).
+    apelido_header = request.headers.get("x-user-apelido")
+    usuario_nome = (
+        unquote(apelido_header) if apelido_header else current_user.nome
+    )
+
     # Build context with RAG chunks or full text fallback
     system_prompt, contents = build_chat_context(
         parecer=parecer,
@@ -489,7 +498,7 @@ async def enviar_mensagem(
         documentos=list(documentos),
         mensagens=list(mensagens),
         nova_mensagem=payload.mensagem,
-        usuario_nome=current_user.nome,
+        usuario_nome=usuario_nome,
         retrieved_chunks=chunks if chunks else None,
         retrieved_chat_memories=retrieved_chat_memories,
         audit_logs=audit_logs,

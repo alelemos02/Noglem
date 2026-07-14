@@ -7,6 +7,7 @@ import { AdminNotesWidget } from "./admin-notes-widget";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Toaster } from "@/components/ui/toast";
 import { ConfirmProvider } from "@/components/ui/confirm-dialog";
+import { ProfileProvider } from "@/components/profile/profile-provider";
 
 interface ShellProps {
   children: React.ReactNode;
@@ -17,6 +18,7 @@ export function Shell({ children }: ShellProps) {
 
   return (
     <ConfirmProvider>
+      <ProfileProvider>
       <div className="flex min-h-screen flex-col">
         <Header onMenuClick={() => setSidebarOpen(true)} />
 
@@ -43,6 +45,7 @@ export function Shell({ children }: ShellProps) {
         <AdminNotesWidget />
       </div>
       <Toaster />
+      </ProfileProvider>
     </ConfirmProvider>
   );
 }
