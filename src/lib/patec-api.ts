@@ -463,11 +463,16 @@ export type ChatAction = {
     | "iniciar_ciclo"
     | "revisar_especificacao"
     | "reanalisar"
+    | "reavaliar_itens"
     | "reabrir_requisitos"
     | "extrair_requisitos"
     | "confirmar_complementares";
   total?: number;
   fase_caso?: FaseCaso;
+  /** Reavaliação cirúrgica (#13): itens que mudaram de status. */
+  mudancas?: { numero: number; de: string; para: string }[];
+  reavaliados?: number;
+  reavaliacao_erro?: string;
   perfil?: string;
   escopo?: string | null;
 } & Record<string, unknown>;

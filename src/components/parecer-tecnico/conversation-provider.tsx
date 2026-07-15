@@ -778,7 +778,15 @@ export function ConversationProvider({
   // ressincronizamos, damos a confirmação visual concreta e disparamos os
   // passos seguintes (ex: aprovação W1 → análise R1 começa sozinha).
   const applyChatAction = useCallback(
-    async (action: { tipo: string; total?: number; perfil?: string; escopo?: string | null }) => {
+    async (action: {
+      tipo: string;
+      total?: number;
+      perfil?: string;
+      escopo?: string | null;
+      reavaliados?: number;
+      reavaliacao_erro?: string;
+      mudancas?: { numero: number; de: string; para: string }[];
+    }) => {
       const now = new Date().toISOString();
       if (action.tipo === "atualizar_requisitos") {
         // Confirmação visual: selo derivado de gerou_nova_tabela na timeline
@@ -788,6 +796,45 @@ export function ConversationProvider({
       } else if (action.tipo === "atualizar_itens") {
         await refreshSnapshot();
         setShowDataPanel(true);
+        // Reavaliação automática pós-correção de descrição/valor (#13): o chip
+        // detalha o resultado; o selo "Tabela atualizada" persiste via timeline.
+        const mudancas = action.mudancas ?? [];
+        if ((action.reavaliados ?? 0) > 0) {
+          pushEphemeral({
+            kind: "event",
+            key: `acao-reaval-auto-${Date.now()}`,
+            at: now,
+            title: "Itens reavaliados contra a proposta",
+            detail: mudancas.length
+              ? `Status alterados: ${mudancas.map((m) => `item ${m.numero}: ${m.de}→${m.para}`).join(", ")}`
+              : "Classificações confirmadas — nenhuma mudança de status",
+            tone: "success",
+          });
+        } else if (action.reavaliacao_erro) {
+          pushEphemeral({
+            kind: "event",
+            key: `acao-reaval-erro-${Date.now()}`,
+            at: now,
+            title: "Correção aplicada, mas a reavaliação falhou",
+            detail: `${action.reavaliacao_erro} — peça "reavalie os itens" para tentar de novo`,
+            tone: "warning",
+          });
+        }
+      } else if (action.tipo === "reavaliar_itens") {
+        await refreshSnapshot();
+        setShowDataPanel(true);
+        const mudancas = action.mudancas ?? [];
+        const n = action.total ?? 0;
+        pushEphemeral({
+          kind: "event",
+          key: `acao-reaval-${Date.now()}`,
+          at: now,
+          title: "Itens reavaliados contra a proposta",
+          detail: mudancas.length
+            ? `Status alterados: ${mudancas.map((m) => `item ${m.numero}: ${m.de}→${m.para}`).join(", ")}`
+            : `${n} ${n === 1 ? "item reavaliado" : "itens reavaliados"} — nenhuma mudança de status`,
+          tone: "success",
+        });
       } else if (action.tipo === "aprovar_requisitos") {
         const n = action.total ?? 0;
         pushEphemeral({

@@ -369,3 +369,50 @@
   da análise preservados). Se a extração com anexos der 504 no proxy Vercel:
   plano B = `export const maxDuration = 60` no route.ts do proxy (300 já quebrou
   no passado) e/ou reduzir slice para 60k.
+
+---
+
+## Ajuste #13 — Alteração de descrição no ciclo não reavalia os itens ("Análise indisponível na fase CICLO_FORNECEDOR")
+
+- **Status:** APLICADO em 2026-07-14 (reavaliação cirúrgica de itens + gatilho automático).
+- **Sintoma:** no caso MR271 (fase CICLO_FORNECEDOR), o usuário corrigiu via chat a
+  descrição/valor requerido dos itens 1-4 e pediu "reavalise essas descrições com a
+  proposta do fornecedor". A JulIA emitiu a ação `reanalisar` (R1 completo), que é
+  bloqueada fora da fase ANALISE → "Análise indisponível na fase CICLO_FORNECEDOR".
+  Regra do produto: **alterou descrição → a análise DEVE ser refeita**, mesmo com a
+  carta já enviada ao fornecedor.
+- **Causa-raiz (confirmada):** só existia a reanálise COMPLETA (R1), corretamente
+  proibida no ciclo (endpoints/analise.py gate) — ela regeneraria TODOS os itens a
+  partir dos REQUISITOS aprovados (descrições ANTIGAS — desfaria a correção manual)
+  e apagaria o vínculo com as rodadas. Não existia reavaliação por item.
+- **Correção aplicada:**
+  1. **Serviço novo `app/services/reavaliacao.py`** — reavaliação cirúrgica: UMA
+     chamada batched (GEMINI_ANALYSIS_MODEL, prompt `REAVALIACAO_SYSTEM_PROMPT` com
+     regras anti-falso-positivo) reclassifica SÓ os itens pedidos contra a proposta
+     original; preserva `numero`; estado por item segue a máquina legal
+     (`reabrir_revisao_spec` → ABERTO → `classificar_*`, mesmo caminho da revisão de
+     spec/R1); avanço automático CICLO→VERIFICACAO_FINAL via
+     `compute_avanco_automatico` se todos aceitos; auditoria
+     `item_reavaliado_via_julia` por item; fases permitidas: ANALISE e
+     CICLO_FORNECEDOR; máx. 15 itens por chamada.
+  2. **Gatilho automático:** patch via chat (`atualizar_itens`) que toque
+     `descricao_requisito`/`valor_requerido` dispara a reavaliação dos itens
+     alterados na sequência (falha da reavaliação NUNCA desfaz o patch — vira aviso
+     `reavaliacao_erro` no evento). Regra do usuário atendida ao pé da letra.
+  3. **Nova ação de chat `reavaliar_itens`** (`{"numeros":[...]}`): pedido explícito
+     "reavalie os itens 1 a 4" funciona no ciclo; prompt `_JULIA_ACAO_REAVALIAR_ITENS`
+     contrasta com `reanalisar` (R1 só na fase ANALISE).
+  4. **UX:** aviso no stream "(Reavaliando os itens contra a proposta — pode levar um
+     minuto...)" antes da chamada; chip com o resultado ("item 3: B→A"); selo
+     persistente "Tabela atualizada" já cobre (ação em `_ACOES_QUE_MUTAM_TABELA`).
+- **Limitações conhecidas:** reavaliação NÃO roda o verificador atômico do R1 (as
+  regras de enumeração de condições estão no próprio prompt); chamada síncrona no
+  request SSE (~30-60s para poucos itens) — se estourar timeout do proxy em lotes
+  grandes, mover para task Celery; `condicoes_verificadas` não é repopulada.
+- **Arquivos:** `services/patec-backend/app/services/reavaliacao.py` (novo),
+  `app/services/prompts/analise.py`, `app/api/v1/endpoints/chat.py`,
+  `app/services/chat.py`, `src/lib/patec-api.ts`,
+  `src/components/parecer-tecnico/conversation-provider.tsx`,
+  `tests/unit/test_reavaliacao.py` (novo).
+- **Deploy/observações:** roda na **patec-api** (`railway up`, sem push-to-deploy) +
+  frontend Vercel (bump no deploy). Worker não tocado; PROMPT_VERSION/cache intactos.

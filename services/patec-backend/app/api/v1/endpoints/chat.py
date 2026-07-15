@@ -24,6 +24,7 @@ from app.schemas.chat import ChatHistoryResponse, ChatMessageResponse, ChatMessa
 from app.api.v1.endpoints.itens import _recalculate_parecer_summary
 from app.services.audit import registrar_auditoria
 from app.services import requisitos as requisitos_service
+from app.services import reavaliacao as reavaliacao_service
 from app.services.state_machine import (
     ANALISE,
     CICLO_FORNECEDOR,
@@ -68,7 +69,12 @@ _VALID_PROFILE_RE = re.compile(
 
 # Acoes que mutam linhas da tabela do caso: marcam gerou_nova_tabela na mensagem
 # da assistente (selo persistente "Tabela atualizada" derivado pelo frontend).
-_ACOES_QUE_MUTAM_TABELA = {"atualizar_itens", "atualizar_requisitos"}
+_ACOES_QUE_MUTAM_TABELA = {"atualizar_itens", "atualizar_requisitos", "reavaliar_itens"}
+
+# Campos de item cuja alteracao muda o REQUISITO em si — dispara a reavaliacao
+# cirurgica automatica contra a proposta (ajuste #13): a classificacao nao pode
+# ficar baseada na descricao antiga.
+_CAMPOS_QUE_REAVALIAM = {"descricao_requisito", "valor_requerido"}
 
 # Instrucao da chamada de recuperacao do ajuste #10: a LLM prometeu aplicar uma
 # mudanca na tabela mas nao emitiu o bloco <acao> — pede SOMENTE o JSON da acao.
@@ -120,6 +126,15 @@ def _acao_valida(payload) -> bool:
                 and isinstance(i.get("numero"), int)
                 and not isinstance(i.get("numero"), bool)
                 for i in itens
+            )
+        )
+    if tipo == "reavaliar_itens":
+        numeros = payload.get("numeros")
+        return (
+            isinstance(numeros, list)
+            and 0 < len(numeros) <= 50
+            and all(
+                isinstance(n, int) and not isinstance(n, bool) for n in numeros
             )
         )
     return tipo in {
@@ -202,6 +217,7 @@ async def _executar_acao(
     if tipo == "atualizar_itens":
         patches = acao.get("itens") or []
         atualizados = 0
+        numeros_reavaliar: list[int] = []
         for patch in patches:
             if not isinstance(patch, dict) or "numero" not in patch:
                 continue
@@ -246,15 +262,61 @@ async def _executar_acao(
                         f"prioridade_anterior={prioridade_anterior}; prioridade_nova={item.prioridade}"
                     ),
                 )
+            if _CAMPOS_QUE_REAVALIAM & set(campos):
+                numeros_reavaliar.append(item.numero)
             atualizados += 1
         if atualizados == 0:
             raise ValueError("Nenhum item correspondente para atualizar.")
         await db.commit()
+        evento: dict = {"tipo": tipo, "total": atualizados}
+        # Ajuste #13: descricao/valor requerido corrigidos -> os itens afetados
+        # sao reavaliados automaticamente contra a proposta do fornecedor (a
+        # classificacao nao pode ficar baseada no requisito antigo). Falha da
+        # reavaliacao NUNCA desfaz o patch ja aplicado — vira aviso no evento.
+        if numeros_reavaliar:
+            parecer_result = await db.execute(
+                select(Parecer).where(Parecer.id == parecer_id)
+            )
+            parecer_obj = parecer_result.scalar_one_or_none()
+            if parecer_obj and parecer_obj.fase_caso in (ANALISE, CICLO_FORNECEDOR):
+                try:
+                    resultado = await reavaliacao_service.reavaliar_itens(
+                        parecer_id, numeros_reavaliar, db, current_user
+                    )
+                    evento["reavaliados"] = resultado["total"]
+                    evento["mudancas"] = resultado["mudancas"]
+                    evento["fase_caso"] = resultado["fase_caso"]
+                except Exception as e:
+                    logger.exception(
+                        "Reavaliacao automatica falhou (parecer %s)", parecer_id
+                    )
+                    evento["reavaliacao_erro"] = str(e)[:200]
         await _recalculate_parecer_summary(parecer_id, db)
         logger.info(
-            "%d itens corrigidos via chat (parecer %s)", atualizados, parecer_id
+            "%d itens corrigidos via chat (parecer %s, reavaliados=%s)",
+            atualizados,
+            parecer_id,
+            evento.get("reavaliados", 0),
         )
-        return {"tipo": tipo, "total": atualizados}
+        return evento
+
+    if tipo == "reavaliar_itens":
+        numeros = [
+            n
+            for n in (acao.get("numeros") or [])
+            if isinstance(n, int) and not isinstance(n, bool)
+        ]
+        resultado = await reavaliacao_service.reavaliar_itens(
+            parecer_id, numeros, db, current_user
+        )
+        await _recalculate_parecer_summary(parecer_id, db)
+        logger.info(
+            "Reavaliacao cirurgica via chat: %d itens, %d mudancas (parecer %s)",
+            resultado["total"],
+            len(resultado["mudancas"]),
+            parecer_id,
+        )
+        return {"tipo": tipo, **resultado}
 
     if tipo == "revisar_especificacao":
         # Acao de UI: nao muta o banco. O frontend abre o envio da nova revisao
@@ -837,6 +899,23 @@ async def enviar_mensagem(
             # (nunca por JSON de tabela no chat — o caminho legado destruia a
             # maquina de estados e o historico do item; ver B4).
             if acao_payload:
+                # Ajuste #13: reavaliacao cirurgica leva ~1 min (chamada Pro) —
+                # avisa ANTES de executar para o stream nao parecer travado.
+                tipo_previsto = acao_payload.get("tipo")
+                reavaliacao_prevista = tipo_previsto == "reavaliar_itens" or (
+                    tipo_previsto == "atualizar_itens"
+                    and parecer.fase_caso in (ANALISE, CICLO_FORNECEDOR)
+                    and any(
+                        isinstance(p, dict) and (_CAMPOS_QUE_REAVALIAM & set(p))
+                        for p in (acao_payload.get("itens") or [])
+                    )
+                )
+                if reavaliacao_prevista:
+                    aviso_reav = (
+                        "\n\n(Reavaliando os itens contra a proposta do "
+                        "fornecedor — isso pode levar um minuto...)"
+                    )
+                    yield f"event: chunk\ndata: {json.dumps({'text': aviso_reav}, ensure_ascii=False)}\n\n"
                 try:
                     evento = await _executar_acao(
                         save_db, parecer_id, acao_payload, current_user

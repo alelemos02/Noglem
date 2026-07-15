@@ -82,7 +82,9 @@ aprovados contra a proposta do fornecedor e mostra o progresso na conversa.
 <acao>{"tipo": "reanalisar"}</acao>
 PROIBIDO ABSOLUTO: nunca escreva/cole JSON do parecer no chat, nunca liste todos os
 itens em JSON, nunca "gere uma nova tabela" em texto. A reanalise e feita pelo
-sistema, nao por voce escrevendo o resultado. O bloco <acao> e invisivel — nunca o cite.
+sistema, nao por voce escrevendo o resultado. A reanalise completa SO roda na fase
+ANALISE — para reavaliar ITENS ESPECIFICOS (ex.: apos corrigir descricoes), use a
+acao reavaliar_itens. O bloco <acao> e invisivel — nunca o cite.
 """
 
 _JULIA_ACAO_EXTRAIR = """
@@ -540,6 +542,32 @@ tecnicamente fundamentado, VOCE aplica as correcoes assim:
    gravado no banco. Se ainda falta informacao para montar o patch, NAO prometa:
    pergunte o que falta. So afirme a aplicacao na resposta que contiver o proprio
    bloco <acao>.
+7. Se o patch alterar `descricao_requisito` ou `valor_requerido`, o sistema
+   REAVALIA automaticamente esses itens contra a proposta do fornecedor logo
+   apos aplicar (a classificacao nao pode ficar baseada no requisito antigo) —
+   avise que a reclassificacao leva cerca de um minuto.
+O bloco <acao> e invisivel — nunca o cite nem o descreva.
+"""
+
+_JULIA_ACAO_REAVALIAR_ITENS = """
+### ACAO: REAVALIAR ITENS ESPECIFICOS CONTRA A PROPOSTA
+Quando o usuario pedir para REAVALIAR/REANALISAR ITENS ESPECIFICOS contra a
+proposta do fornecedor — tipicamente depois de corrigir a descricao ou o valor
+requerido deles ("agora reavalie os itens 1 a 4 com a proposta", "refaz a
+analise desses itens", "reavalia o item 3 com a nova descricao") — voce NAO usa
+a reanalise completa: voce dispara a reavaliacao cirurgica, que reclassifica
+SOMENTE esses itens contra a proposta ja carregada, preservando o ciclo e o
+historico de rodadas. Funciona nas fases ANALISE e CICLO_FORNECEDOR.
+1. Confirme em 1 frase, natural, que vai reavaliar esses itens agora (leva
+   cerca de um minuto).
+2. Termine a resposta com o bloco (numeros = numeros dos itens na tabela do caso):
+<acao>{"tipo": "reavaliar_itens", "numeros": [1, 2, 3]}</acao>
+Maximo de 15 itens por vez — para mais que isso, proponha lotes.
+NAO CONFUNDA com "reanalisar" (R1 completo: refaz TODOS os itens a partir dos
+requisitos aprovados e SO roda na fase ANALISE — no ciclo ele falha e leria as
+descricoes antigas). Se voce mesma acabou de alterar descricao/valor requerido
+via patch de itens, a reavaliacao desses itens ja acontece AUTOMATICAMENTE —
+nao emita reavaliar_itens em seguida para os mesmos itens.
 O bloco <acao> e invisivel — nunca o cite nem o descreva.
 """
 
@@ -862,7 +890,10 @@ def build_chat_context(
             # Fluxo conversacional JULIA: NUNCA despeja JSON nem tabela; reavaliacao
             # da analise vira a acao "reanalisar" (roda R1 com barra de progresso)
             chat_system_prompt += (
-                _JULIA_PERSONA_BASE + _JULIA_ACAO_ITENS + _JULIA_ACAO_REANALISAR
+                _JULIA_PERSONA_BASE
+                + _JULIA_ACAO_ITENS
+                + _JULIA_ACAO_REANALISAR
+                + _JULIA_ACAO_REAVALIAR_ITENS
             )
             # Editar a LISTA de requisitos so faz sentido antes do ciclo (ANALISE)
             if parecer.fase_caso == ANALISE:
