@@ -32,12 +32,14 @@ from app.services.analyzer import (
     normalize_analysis_profile,
 )
 from app.services.doc_selection import anexo_docs_correntes, eng_docs_correntes
-from app.services.llm_client import call_llm, extract_json
+from app.services.llm_client import call_llm, call_openai, extract_json
 from app.services.prompts.extracao import (
     AMARRACAO_SYSTEM_PROMPT,
     AMARRACAO_USER_PROMPT_TEMPLATE,
     EXTRACAO_SYSTEM_PROMPT,
     EXTRACAO_USER_PROMPT_TEMPLATE,
+    REVISOR_EXTRACAO_SYSTEM_PROMPT,
+    REVISOR_EXTRACAO_USER_PROMPT_TEMPLATE,
 )
 from app.services.prompts.seguranca import envelopar
 from app.services.retriever import retrieve_relevant_chunks_sync
@@ -71,6 +73,28 @@ async def _load_parecer(parecer_id, db: AsyncSession) -> Parecer:
     if not parecer:
         raise ValueError("Parecer nao encontrado.")
     return parecer
+
+
+def _quer_lista_completa(normalized_profile: str, feedback: str | None) -> bool:
+    """O teto de itens do perfil continua valendo MESMO com escopo/feedback. Um
+    RECORTE ("so o capitulo 2") deve diminuir a lista, nunca explodi-la — por
+    isso o `escopo` NUNCA libera o teto. So o `feedback` (ajuste explicito do
+    usuario sobre a lista) ou o perfil `integral` liberam. Antes da separacao
+    dos campos, um recorte com a palavra "todos" virava 90+ itens."""
+    fb = (feedback or "").strip().lower()
+    return normalized_profile == "integral" or any(
+        termo in fb
+        for termo in (
+            "todos",
+            "todas as",
+            "tudo",
+            "integral",
+            "sem limite",
+            "lista completa",
+            "lista inteira",
+            "documento inteiro",
+        )
+    )
 
 
 def _load_eng_text_sync(db: Session, parecer_id) -> str:
@@ -111,25 +135,7 @@ def _call_extracao_llm(
     normalized_profile = normalize_analysis_profile(perfil_analise)
     max_itens = get_profile_max_itens(normalized_profile)
     profile_label = get_profile_label(normalized_profile)
-    # O teto de itens do perfil continua valendo MESMO com escopo/feedback. Um
-    # RECORTE ("so o capitulo 2") deve diminuir a lista, nunca explodi-la — por
-    # isso o `escopo` NUNCA libera o teto. So o `feedback` (ajuste explicito do
-    # usuario sobre a lista) ou o perfil `integral` liberam. Antes da separacao
-    # dos campos, um recorte com a palavra "todos" virava 90+ itens.
-    fb = (feedback or "").strip().lower()
-    quer_tudo = normalized_profile == "integral" or any(
-        termo in fb
-        for termo in (
-            "todos",
-            "todas as",
-            "tudo",
-            "integral",
-            "sem limite",
-            "lista completa",
-            "lista inteira",
-            "documento inteiro",
-        )
-    )
+    quer_tudo = _quer_lista_completa(normalized_profile, feedback)
     limit_instruction = (
         ""
         if quer_tudo
@@ -373,6 +379,28 @@ def _merge_decomposicoes(
     return resultado
 
 
+def _requisitos_para_json(requisitos: list[dict]) -> str:
+    """Serializacao canonica da lista para prompts (amarracoes e revisor)."""
+    return json.dumps(
+        [
+            {
+                campo: r.get(campo)
+                for campo in (
+                    "numero",
+                    "categoria",
+                    "descricao_requisito",
+                    "valor_requerido",
+                    "prioridade",
+                    "norma_referencia",
+                    "referencia_engenharia",
+                )
+            }
+            for r in requisitos
+        ],
+        ensure_ascii=False,
+    )
+
+
 def _montar_anexos_secao(anexos: list[tuple[str, str]]) -> str:
     """Secao de anexos envelopada (anti-injecao) — compartilhada entre o passe
     de amarracoes e o revisor da extracao (mesmo material para gerador e
@@ -491,24 +519,7 @@ def _resolver_amarracoes_sync(
     """
     try:
         requisitos_base = data.get("requisitos") or []
-        requisitos_json = json.dumps(
-            [
-                {
-                    campo: r.get(campo)
-                    for campo in (
-                        "numero",
-                        "categoria",
-                        "descricao_requisito",
-                        "valor_requerido",
-                        "prioridade",
-                        "norma_referencia",
-                        "referencia_engenharia",
-                    )
-                }
-                for r in requisitos_base
-            ],
-            ensure_ascii=False,
-        )
+        requisitos_json = _requisitos_para_json(requisitos_base)
         anexos_secao = _montar_anexos_secao(anexos)
         user_content = AMARRACAO_USER_PROMPT_TEMPLATE.format(
             requisitos_json=requisitos_json,
@@ -699,6 +710,97 @@ def _salvar_draft_sync(db: Session, parecer: Parecer, itens: list[dict]) -> int:
     return salvos
 
 
+def _revisar_extracao_sync(
+    texto_eng: str,
+    data: dict,
+    anexos_para_passe: list[tuple[str, str]],
+    parecer: Parecer,
+    perfil_analise: str,
+    escopo: str | None,
+    feedback: str | None,
+) -> dict | None:
+    """Auditoria da lista extraida por um segundo LLM (OpenAI GPT).
+
+    Verifica contagem vs pedido, fidelidade ao documento (dentro do escopo),
+    amarracoes vs trechos reais dos anexos e granularidade. Devolve
+    {"aprovado": bool, "problemas": [...]} ou None quando desativado/sem chave
+    ou em QUALQUER falha — a revisao nunca quebra a extracao (rollback
+    operacional: ENABLE_EXTRACTION_REVIEWER=false, sem deploy).
+    """
+    if not settings.ENABLE_EXTRACTION_REVIEWER or not settings.OPENAI_API_KEY.strip():
+        logger.info(
+            "Revisor da extracao pulado (flag off ou OPENAI_API_KEY ausente) — "
+            "parecer %s",
+            parecer.id,
+        )
+        return None
+    try:
+        normalized_profile = normalize_analysis_profile(perfil_analise)
+        max_itens = get_profile_max_itens(normalized_profile)
+        profile_label = get_profile_label(normalized_profile)
+        quer_tudo = _quer_lista_completa(normalized_profile, feedback)
+
+        escopo_section = (
+            f"- Recorte de escopo pedido pelo usuario: {escopo}\n"
+            if escopo and escopo.strip()
+            else ""
+        )
+        feedback_section = (
+            f"- Feedback do usuario incorporado: {feedback}\n"
+            if feedback and feedback.strip()
+            else ""
+        )
+        user_content = REVISOR_EXTRACAO_USER_PROMPT_TEMPLATE.format(
+            texto_engenharia=texto_eng,
+            requisitos_json=_requisitos_para_json(data.get("requisitos") or []),
+            anexos_secao=(
+                _montar_anexos_secao(anexos_para_passe)
+                if anexos_para_passe
+                else "(nenhum anexo usado no desdobramento)"
+            ),
+            perfil_label=profile_label,
+            max_itens=max_itens,
+            sem_teto_flag=(
+                " (SEM teto: usuario pediu a lista completa)" if quer_tudo else ""
+            ),
+            escopo_section=escopo_section,
+            feedback_section=feedback_section,
+            projeto=parecer.projeto,
+            numero_parecer=parecer.numero_parecer,
+        )
+        logger.info(
+            "Revisando extracao: parecer=%s, modelo=%s, %d requisitos, %d anexos",
+            parecer.id,
+            settings.OPENAI_REVIEWER_MODEL,
+            len(data.get("requisitos") or []),
+            len(anexos_para_passe),
+        )
+        resposta = call_openai(REVISOR_EXTRACAO_SYSTEM_PROMPT, user_content)
+        veredito = extract_json(resposta)
+        problemas = veredito.get("problemas")
+        if not isinstance(problemas, list):
+            problemas = []
+        problemas = [
+            p
+            for p in problemas
+            if isinstance(p, dict) and str(p.get("detalhe") or "").strip()
+        ]
+        resultado = {"aprovado": bool(veredito.get("aprovado")), "problemas": problemas}
+        logger.info(
+            "Veredito do revisor (parecer %s): aprovado=%s, %d problema(s)",
+            parecer.id,
+            resultado["aprovado"],
+            len(problemas),
+        )
+        return resultado
+    except Exception:
+        logger.exception(
+            "Revisor da extracao falhou — draft segue sem revisao (parecer %s)",
+            parecer.id,
+        )
+        return None
+
+
 def run_extracao_sync(
     parecer_id: str,
     perfil_analise: str,
@@ -736,13 +838,13 @@ def run_extracao_sync(
             # pula mais o passe: os trechos relevantes vem por busca semantica.
             anexos, ilegiveis, ids_por_nome = _load_anexos_sync(db, parecer.id)
             anexos_para_passe: list[tuple[str, str]] = []
+            avisos_anexos: list[str] = []
             if anexos and data["requisitos"]:
                 relevantes = _anexos_citados(data["requisitos"], anexos)
                 if relevantes:
                     set_progress(
                         key, 55, "Desdobrando amarrações com os anexos...", "amarracoes"
                     )
-                    avisos_anexos: list[str] = []
                     for nome, texto in relevantes:
                         texto_final, aviso = _montar_texto_anexo_sync(
                             db,
@@ -756,10 +858,67 @@ def run_extracao_sync(
                         if aviso:
                             avisos_anexos.append(aviso)
                     data = _resolver_amarracoes_sync(data, anexos_para_passe, parecer)
-                    for aviso in avisos_anexos:
-                        data["resumo"] = (
-                            (data.get("resumo") or "").strip() + f" | {aviso}"
-                        ).strip(" |")
+
+            # Revisao por um segundo LLM (auditor independente) + UMA rodada de
+            # correcao. Falha em qualquer etapa mantem o resultado que ja existia
+            # — a contagem final e garantida pelo corte em codigo dentro de
+            # _call_extracao_llm, entao nao ha re-revisao.
+            set_progress(key, 75, "Revisando a lista com o agente revisor...", "revisando")
+            veredito = _revisar_extracao_sync(
+                texto_eng, data, anexos_para_passe, parecer,
+                perfil_analise, escopo, feedback,
+            )
+            if veredito and veredito["problemas"]:
+                n_problemas = len(veredito["problemas"])
+                set_progress(
+                    key,
+                    85,
+                    f"Aplicando correções ({n_problemas} apontamento(s) do revisor)...",
+                    "corrigindo",
+                )
+                try:
+                    feedback_correcao = (
+                        (feedback or "").strip()
+                        + "\n\nREVISAO AUTOMATICA (auditor independente) encontrou "
+                        "problemas na lista anterior — corrija EXATAMENTE estes "
+                        "pontos, mantendo o restante como esta:\n"
+                        + json.dumps(veredito["problemas"], ensure_ascii=False)
+                    ).strip()
+                    data_corrigida = _call_extracao_llm(
+                        texto_eng, parecer, perfil_analise, escopo, feedback_correcao
+                    )
+                    if anexos_para_passe and data_corrigida["requisitos"]:
+                        data_corrigida = _resolver_amarracoes_sync(
+                            data_corrigida, anexos_para_passe, parecer
+                        )
+                    data = data_corrigida
+                    data["resumo"] = (
+                        (data.get("resumo") or "").strip()
+                        + f" | Lista revisada e corrigida automaticamente "
+                        f"({n_problemas} apontamento(s) do revisor)."
+                    ).strip(" |")
+                except Exception:
+                    logger.exception(
+                        "Rodada de correcao falhou — mantendo lista pre-correcao "
+                        "(parecer %s)",
+                        parecer_id,
+                    )
+                    data["resumo"] = (
+                        (data.get("resumo") or "").strip()
+                        + f" | Atenção: o revisor apontou {n_problemas} problema(s), "
+                        "mas a correção automática falhou — confira os itens "
+                        "apontados manualmente."
+                    ).strip(" |")
+            elif veredito and veredito["aprovado"]:
+                data["resumo"] = (
+                    (data.get("resumo") or "").strip()
+                    + " | Lista verificada pelo agente revisor."
+                ).strip(" |")
+
+            for aviso in avisos_anexos:
+                data["resumo"] = (
+                    (data.get("resumo") or "").strip() + f" | {aviso}"
+                ).strip(" |")
             if ilegiveis:
                 data["resumo"] = (
                     (data.get("resumo") or "").strip()

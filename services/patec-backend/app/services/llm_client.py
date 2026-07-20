@@ -261,6 +261,113 @@ def call_llm(
     return text
 
 
+def call_openai(
+    system: str,
+    user_content: str,
+    *,
+    max_output_tokens: int = 16000,
+    model: str | None = None,
+) -> str:
+    """Chamada sincrona a OpenAI Responses API (revisor da extracao W1).
+
+    Mesmo contrato de call_llm: (system, user_content) -> texto. Reusa o retry
+    com backoff e o timeout do cliente Gemini; JSON e forcado por prompt e
+    parseado/reparado por extract_json, como no restante do codebase.
+    """
+    api_key = settings.OPENAI_API_KEY.strip()
+    if not api_key:
+        raise RuntimeError("OPENAI_API_KEY nao configurada")
+
+    model_name = (model or settings.OPENAI_REVIEWER_MODEL).strip()
+    url = "https://api.openai.com/v1/responses"
+    payload = {
+        "model": model_name,
+        "instructions": system,
+        "input": user_content,
+        "max_output_tokens": max_output_tokens,
+    }
+    headers = {"Authorization": f"Bearer {api_key}"}
+
+    max_attempts = max(1, settings.GEMINI_MAX_RETRIES)
+    response = None
+
+    with httpx.Client(timeout=httpx.Timeout(600.0, connect=30.0)) as client:
+        for attempt in range(1, max_attempts + 1):
+            try:
+                response = client.post(url, headers=headers, json=payload)
+            except (httpx.ReadTimeout, httpx.ConnectTimeout, httpx.PoolTimeout) as exc:
+                if attempt < max_attempts:
+                    wait_seconds = min(
+                        settings.GEMINI_RETRY_BASE_SECONDS * (2 ** (attempt - 1)),
+                        settings.GEMINI_RETRY_MAX_SECONDS,
+                    )
+                    logger.warning(
+                        "OpenAI API timeout (tentativa %d/%d). Nova tentativa em %.1fs. Erro: %s",
+                        attempt,
+                        max_attempts,
+                        wait_seconds,
+                        exc,
+                    )
+                    time.sleep(wait_seconds)
+                    continue
+                raise RuntimeError(
+                    f"OpenAI API timeout apos {max_attempts} tentativas: {exc}"
+                ) from exc
+
+            if response.status_code < 400:
+                break
+
+            detail = _extract_error_detail(response)
+            is_retryable = response.status_code in RETRYABLE_STATUS_CODES
+            if is_retryable and attempt < max_attempts:
+                wait_seconds = _retry_delay_seconds(response, attempt)
+                logger.warning(
+                    "OpenAI API erro %d (tentativa %d/%d). Nova tentativa em %.1fs. Detalhe: %s",
+                    response.status_code,
+                    attempt,
+                    max_attempts,
+                    wait_seconds,
+                    detail,
+                )
+                time.sleep(wait_seconds)
+                continue
+            break
+
+    if response is None:
+        raise RuntimeError("Falha ao inicializar chamada da OpenAI API")
+
+    if response.status_code >= 400:
+        detail = _extract_error_detail(response)
+        raise RuntimeError(f"Erro OpenAI API ({response.status_code}): {detail}")
+
+    data = response.json()
+    # Responses API: a saida vem em output[] como itens "message" com blocos
+    # de conteudo "output_text" (itens "reasoning" nao carregam texto util).
+    partes: list[str] = []
+    for item in data.get("output") or []:
+        if not isinstance(item, dict) or item.get("type") != "message":
+            continue
+        for bloco in item.get("content") or []:
+            if isinstance(bloco, dict) and bloco.get("type") == "output_text":
+                partes.append(bloco.get("text") or "")
+    text = "".join(partes).strip()
+
+    if not text:
+        raise RuntimeError(
+            f"OpenAI API retornou resposta vazia (status={data.get('status')})"
+        )
+
+    if data.get("status") == "incomplete":
+        logger.warning(
+            "OpenAI response incompleta (%s). Response length: %d chars. "
+            "Will attempt JSON repair.",
+            (data.get("incomplete_details") or {}).get("reason"),
+            len(text),
+        )
+
+    return text
+
+
 def call_llm_multimodal(
     system: str,
     user_text: str,

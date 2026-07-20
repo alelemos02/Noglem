@@ -9,6 +9,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from app.core.config import settings
 from app.services.requisitos import (
     _ANEXO_FULLTEXT_MAX,
     _anexos_citados,
@@ -17,6 +18,7 @@ from app.services.requisitos import (
     _montar_texto_anexo_sync,
     _requisitos_citantes,
     _resolver_amarracoes_sync,
+    _revisar_extracao_sync,
 )
 from app.services.tasks import PROMPT_VERSION, _compute_docs_hash
 
@@ -535,6 +537,61 @@ class TestMontarTextoAnexo:
         mock_index.assert_called_once_with("doc-id")
         assert aviso is None
         assert "[Pagina 2]" in texto
+
+
+class TestRevisarExtracao:
+    _DATA = {
+        "requisitos": [_req(1, "Faixa 0-100 bar")],
+        "total_itens": 1,
+        "resumo": "Base.",
+    }
+
+    def _revisar(self):
+        return _revisar_extracao_sync(
+            "texto eng", self._DATA, [], _ParecerStub(), "padrao", None, None
+        )
+
+    def test_sem_api_key_devolve_none(self):
+        with patch.object(settings, "OPENAI_API_KEY", ""):
+            assert self._revisar() is None
+
+    def test_flag_off_devolve_none(self):
+        with patch.object(settings, "OPENAI_API_KEY", "sk-test"), patch.object(
+            settings, "ENABLE_EXTRACTION_REVIEWER", False
+        ):
+            assert self._revisar() is None
+
+    def test_veredito_valido_normalizado(self):
+        resposta = """
+        {"aprovado": false, "problemas": [
+          {"numero": 1, "tipo": "fidelidade", "detalhe": "Item sem origem no doc",
+           "correcao_sugerida": "Remover o item 1"},
+          {"numero": null, "tipo": "contagem", "detalhe": "   "},
+          "nao-e-dict"
+        ]}
+        """
+        with patch.object(settings, "OPENAI_API_KEY", "sk-test"), patch(
+            "app.services.requisitos.call_openai", return_value=resposta
+        ):
+            veredito = self._revisar()
+
+        assert veredito is not None
+        assert veredito["aprovado"] is False
+        # Problema sem detalhe e entrada nao-dict sao descartados
+        assert len(veredito["problemas"]) == 1
+        assert veredito["problemas"][0]["tipo"] == "fidelidade"
+
+    def test_json_invalido_devolve_none(self):
+        with patch.object(settings, "OPENAI_API_KEY", "sk-test"), patch(
+            "app.services.requisitos.call_openai", return_value="nao e json"
+        ):
+            assert self._revisar() is None
+
+    def test_excecao_da_api_devolve_none(self):
+        with patch.object(settings, "OPENAI_API_KEY", "sk-test"), patch(
+            "app.services.requisitos.call_openai", side_effect=RuntimeError("boom")
+        ):
+            assert self._revisar() is None
 
 
 def test_limit_instruction_menciona_amarracoes():

@@ -85,6 +85,17 @@ class Settings(BaseSettings):
     # (ver chat.py). Mesmo nome "-preview" ja validado pela extracao/verifier.
     GEMINI_CHAT_MODEL: str = "gemini-3.1-pro-preview"
 
+    # Revisor da extracao (W1): um segundo LLM (OpenAI GPT) audita a lista
+    # extraida pelo Gemini — contagem vs pedido, fidelidade ao documento,
+    # amarracoes vs anexos e granularidade — e devolve problemas para UMA
+    # rodada de correcao. Sem OPENAI_API_KEY (ou flag off) a extracao roda
+    # normalmente sem revisao (degradacao graciosa; rollback sem deploy).
+    OPENAI_API_KEY: str = ""
+    # gpt-5.6-terra: tier intermediario da familia GPT-5.6 (US$2,50/M in) —
+    # forte em raciocinio de auditoria; alternativa mais barata: gpt-5.6-luna.
+    OPENAI_REVIEWER_MODEL: str = "gpt-5.6-terra"
+    ENABLE_EXTRACTION_REVIEWER: bool = True
+
     # RAG - Retrieval Augmented Generation
     GEMINI_EMBEDDING_MODEL: str = "gemini-embedding-001"
     RAG_CHUNK_SIZE: int = 1500
