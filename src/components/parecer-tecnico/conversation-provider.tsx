@@ -87,6 +87,13 @@ export const STAGE_LABELS: Record<string, string> = {
   completed: "Concluído",
   error: "Erro",
   processing: "Processando",
+  // Extração de requisitos (task extrair_requisitos no worker)
+  lendo_documento: "Lendo documentos",
+  extraindo: "Extraindo requisitos",
+  amarracoes: "Desdobrando amarrações",
+  revisando: "Revisando a lista",
+  corrigindo: "Aplicando correções",
+  salvando: "Salvando rascunho",
 };
 
 interface ConversationContextValue {
@@ -349,7 +356,29 @@ export function ConversationProvider({
 
     let poll: Poll | null = null;
 
-    if (step.id === "analise.rodando") {
+    if (extracting) {
+      // Extração de requisitos no worker — condicionado ao estado local (não ao
+      // step): a re-extração com feedback acontece já no passo requisitos.aprovar.
+      poll = async () => {
+        const p = await patecApi.requisitos.extracaoProgresso(parecerId);
+        const terminou = p.stage === "completed" || p.stage === "error";
+        if (terminou) {
+          setExtracting(false);
+          if (p.stage === "completed") {
+            // O resumo da extração viaja na mensagem do stage completed
+            setRequisitosResumo(p.message ?? "");
+          } else {
+            setActionError(p.message ?? "Erro ao extrair requisitos");
+          }
+        }
+        return {
+          percent: p.percent,
+          message: p.message,
+          stage: p.stage,
+          terminou,
+        };
+      };
+    } else if (step.id === "analise.rodando") {
       poll = async () => {
         const s = await patecApi.analise.status(parecerId);
         return {
@@ -446,7 +475,28 @@ export function ConversationProvider({
       // limpa o progresso ao sair do passo (evita barra "fantasma" no próximo)
       setTaskProgress(null);
     };
-  }, [parecerId, snapshot, step, refreshSnapshot]);
+  }, [parecerId, snapshot, step, extracting, refreshSnapshot]);
+
+  // Recuperação pós-reload: se o usuário der F5 com a extração rodando no
+  // worker, o estado local `extracting` se perde — re-liga a partir do
+  // progresso ativo no Redis (stage não-terminal). Roda uma vez, ao montar.
+  const extracaoRecoveryChecked = useRef(false);
+  useEffect(() => {
+    if (!snapshot || extracaoRecoveryChecked.current) return;
+    extracaoRecoveryChecked.current = true;
+    const fase = snapshot.parecer.fase_caso;
+    if (fase !== "SETUP" && fase !== "REQUISITOS" && fase !== "ANALISE") return;
+    void patecApi.requisitos
+      .extracaoProgresso(parecerId)
+      .then((p) => {
+        if (p.stage && p.stage !== "completed" && p.stage !== "error") {
+          setExtracting(true);
+        }
+      })
+      .catch(() => {
+        // sem progresso ativo (ou erro transitório) — segue sem recuperação
+      });
+  }, [parecerId, snapshot]);
 
   // --- Helpers de ação ---
 
@@ -498,23 +548,22 @@ export function ConversationProvider({
       setActionError("");
       setExtracting(true);
       try {
-        const result = await patecApi.requisitos.extrair(
+        // 202: a extração roda no worker. `extracting=true` liga o polling de
+        // progresso, que desliga no stage completed/error, recupera o resumo
+        // (mensagem do completed) e ressincroniza o snapshot (draft no BD).
+        await patecApi.requisitos.extrair(
           parecerId,
           (opts?.perfil as PerfilAnalise | undefined) ?? resolvedPerfil,
           { escopo: opts?.escopo, feedback: opts?.feedback }
         );
-        setRequisitosResumo(result.resumo);
-        // O backend persiste o rascunho no BD — o snapshot o traz de volta
-        await refreshSnapshot();
       } catch (err) {
+        setExtracting(false);
         setActionError(
           err instanceof Error ? err.message : "Erro ao extrair requisitos"
         );
-      } finally {
-        setExtracting(false);
       }
     },
-    [parecerId, resolvedPerfil, refreshSnapshot]
+    [parecerId, resolvedPerfil]
   );
 
   // Substitui o rascunho persistido (edição manual no widget/tabela)
@@ -910,35 +959,24 @@ export function ConversationProvider({
           tone: "success",
         });
       } else if (action.tipo === "extrair_requisitos") {
-        // Ação de UI (passo setup.extrair): dispara a extração com o perfil que a
-        // JulIA escolheu na conversa, mostrando o progresso. Ao terminar, o
-        // snapshot avança para a revisão dos requisitos.
-        try {
-          // O `escopo` que a JulIA capturou (ex.: "só o Cap. 2, todos os itens da
-          // tabela") vai como ESCOPO da extração — ativa o recorte por seção e a
-          // enumeração linha-a-linha SEM liberar o teto de itens do perfil.
-          await extrairRequisitos({
-            escopo: typeof action.escopo === "string" ? action.escopo : undefined,
-            perfil: typeof action.perfil === "string" ? action.perfil : undefined,
-          });
-          pushEphemeral({
-            kind: "event",
-            key: `acao-extrair-${Date.now()}`,
-            at: now,
-            title: "Lista de requisitos extraída",
-            detail: "Revise abaixo — edite ou peça ajustes; ao aprovar vira a referência da análise",
-            tone: "success",
-          });
-        } catch {
-          pushEphemeral({
-            kind: "event",
-            key: `acao-extrair-erro-${Date.now()}`,
-            at: now,
-            title: "Não consegui extrair os requisitos",
-            detail: "Tente de novo em instantes.",
-            tone: "error",
-          });
-        }
+        // Ação de UI (passo setup.extrair): dispara a extração no worker com o
+        // perfil que a JulIA escolheu na conversa. O polling de progresso conduz
+        // até o fim; ao concluir, o snapshot avança para a revisão dos requisitos.
+        // O `escopo` que a JulIA capturou (ex.: "só o Cap. 2, todos os itens da
+        // tabela") vai como ESCOPO da extração — ativa o recorte por seção e a
+        // enumeração linha-a-linha SEM liberar o teto de itens do perfil.
+        await extrairRequisitos({
+          escopo: typeof action.escopo === "string" ? action.escopo : undefined,
+          perfil: typeof action.perfil === "string" ? action.perfil : undefined,
+        });
+        pushEphemeral({
+          kind: "event",
+          key: `acao-extrair-${Date.now()}`,
+          at: now,
+          title: "Extração de requisitos iniciada",
+          detail: "Acompanhe o progresso abaixo — a lista aparece para revisão ao concluir",
+          tone: "success",
+        });
       } else if (action.tipo === "confirmar_complementares") {
         // Backend já marcou os complementares como resolvidos; ressincroniza para
         // o fluxo avançar para a proposta do fornecedor.

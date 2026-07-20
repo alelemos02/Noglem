@@ -42,6 +42,23 @@ def processar_parecer_task(self, parecer_id: str, analysis_profile: str):
     return result
 
 
+@celery_app.task(bind=True, name="extrair_requisitos")
+def extrair_requisitos_task(
+    self,
+    parecer_id: str,
+    perfil_analise: str,
+    escopo: str | None = None,
+    feedback: str | None = None,
+):
+    """Blocos 8-9 do fluxo: extrai a lista candidata de requisitos e salva o rascunho."""
+    logger.info(
+        "Starting extracao for parecer %s with profile %s", parecer_id, perfil_analise
+    )
+    from app.services.requisitos import run_extracao_sync
+
+    return run_extracao_sync(parecer_id, perfil_analise, escopo, feedback)
+
+
 @celery_app.task(bind=True, name="processar_vinculacao")
 def processar_vinculacao_task(self, rodada_id: str):
     """Bloco 23 do fluxo: LLM sugere vínculos resposta→item (provisórios até W3)."""

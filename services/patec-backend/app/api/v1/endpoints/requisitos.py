@@ -1,16 +1,22 @@
 import re
+import time
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.deps import get_current_user, require_role
+from app.core.progress import get_progress, set_progress
+from app.models.documento import Documento
+from app.models.parecer import Parecer
 from app.models.usuario import Usuario
 from app.schemas.requisito import (
     AprovarRequisitosRequest,
+    ExtracaoAsyncResponse,
+    ExtracaoProgressoResponse,
     ExtracaoRequest,
-    ExtracaoResponse,
     RequisitoResponse,
     RequisitosAprovadosResponse,
     RequisitoUpdate,
@@ -25,18 +31,28 @@ _VALID_PROFILE_RE = re.compile(
     r"auditoria_tecnica_completa|custom_\d+)$"
 )
 
+# Progresso sem stage terminal e mais novo que isso bloqueia um novo disparo
+# (409). Mais velho = task morta (worker caiu sem gravar stage error) — libera.
+_EXTRACAO_STALE_SECONDS = 15 * 60
+_STAGES_TERMINAIS = {"completed", "error"}
 
-@router.post("/extrair", response_model=ExtracaoResponse)
+
+@router.post(
+    "/extrair",
+    response_model=ExtracaoAsyncResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
 async def extrair(
     parecer_id: uuid.UUID,
+    request: Request,
     payload: ExtracaoRequest | None = None,
     db: AsyncSession = Depends(get_db),
     current_user: Usuario = Depends(require_role("admin", "analista")),
 ):
     """
-    Extrai a lista candidata de requisitos dos documentos de engenharia via LLM
-    (blocos 8-9 do fluxo). Sincrono; nada e persistido — a lista so entra no BD
-    central na aprovacao (W1).
+    Inicia a extracao assincrona da lista candidata de requisitos (blocos 8-9)
+    via worker Celery. A lista e persistida como RASCUNHO ao final; acompanhe
+    pelo GET /extracao/progresso (stage completed/error encerra).
     """
     perfil = payload.perfil_analise if payload else "padrao"
     if not _VALID_PROFILE_RE.match(perfil):
@@ -44,16 +60,84 @@ async def extrair(
     escopo = payload.escopo if payload else None
     feedback = payload.feedback if payload else None
 
-    try:
-        data = await requisitos_service.extrair_requisitos(
-            parecer_id, db, perfil, escopo, feedback
-        )
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=str(e))
+    result = await db.execute(select(Parecer).where(Parecer.id == parecer_id))
+    parecer = result.scalar_one_or_none()
+    if not parecer:
+        raise HTTPException(status_code=404, detail="Parecer nao encontrado")
 
-    return ExtracaoResponse(**data)
+    if parecer.fase_caso not in requisitos_service._FASES_APROVACAO:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Extracao de requisitos indisponivel na fase {parecer.fase_caso}. "
+                "Apos a analise, use a revisao de especificacao."
+            ),
+        )
+
+    docs_result = await db.execute(
+        select(Documento).where(
+            Documento.parecer_id == parecer_id, Documento.tipo == "engenharia"
+        )
+    )
+    if not docs_result.scalars().first():
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Faca upload de pelo menos um documento de engenharia antes de "
+                "extrair requisitos."
+            ),
+        )
+
+    key = requisitos_service.progress_key_extracao(parecer_id)
+    progresso = get_progress(key)
+    if progresso and progresso.get("stage") not in _STAGES_TERMINAIS:
+        updated_at = progresso.get("updated_at")
+        if updated_at and (time.time() - float(updated_at)) < _EXTRACAO_STALE_SECONDS:
+            raise HTTPException(
+                status_code=409,
+                detail="Ja existe uma extracao de requisitos em andamento para este caso.",
+            )
+
+    set_progress(key, 2, "Extração enfileirada para processamento...", "queued")
+    task_id = requisitos_service.start_extracao_in_background(
+        str(parecer_id), perfil, escopo, feedback
+    )
+
+    await registrar_auditoria(
+        db, current_user, "extrair_requisitos", "parecer",
+        recurso_id=str(parecer_id),
+        detalhes=(
+            f"Extracao enfileirada no worker, perfil={perfil}, "
+            f"escopo={'sim' if escopo else 'nao'}, task_id={task_id}"
+        ),
+        request=request,
+    )
+    await db.commit()
+
+    return ExtracaoAsyncResponse(
+        task_id=task_id,
+        message="Extração iniciada. Use o endpoint de progresso para acompanhar.",
+    )
+
+
+@router.get("/extracao/progresso", response_model=ExtracaoProgressoResponse)
+async def progresso_extracao(
+    parecer_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    _current_user: Usuario = Depends(get_current_user),
+):
+    """Progresso da extracao em background (stage completed/error = terminou;
+    a mensagem do stage completed carrega o resumo da extracao)."""
+    result = await db.execute(select(Parecer.id).where(Parecer.id == parecer_id))
+    if not result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Parecer nao encontrado")
+
+    progresso = get_progress(requisitos_service.progress_key_extracao(parecer_id)) or {}
+    return ExtracaoProgressoResponse(
+        percent=progresso.get("percent"),
+        message=progresso.get("message"),
+        stage=progresso.get("stage"),
+    )
 
 
 @router.get("", response_model=list[RequisitoResponse])

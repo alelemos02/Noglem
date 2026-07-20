@@ -8,16 +8,18 @@ recargas. So na aprovacao (W1) os registros ganham `aprovado_em` e viram a
 fonte unica de verdade. A analise (R1) le exclusivamente os aprovados.
 """
 
-import asyncio
 import json
 import logging
 import re
+import uuid
 from datetime import datetime
 
-from sqlalchemy import delete, select
+from sqlalchemy import create_engine, delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.progress import set_progress
 from app.models.documento import Documento
 from app.models.parecer import Parecer
 from app.models.requisito import Requisito
@@ -65,11 +67,10 @@ async def _load_parecer(parecer_id, db: AsyncSession) -> Parecer:
     return parecer
 
 
-async def _load_eng_text(parecer_id, db: AsyncSession) -> str:
-    docs_result = await db.execute(
+def _load_eng_text_sync(db: Session, parecer_id) -> str:
+    docs = db.execute(
         select(Documento).where(Documento.parecer_id == parecer_id)
-    )
-    docs = docs_result.scalars().all()
+    ).scalars().all()
     # Só a revisão mais recente de cada arquivo (evita duplicar revisões de spec)
     eng_docs = eng_docs_correntes(list(docs))
 
@@ -203,15 +204,14 @@ def _call_extracao_llm(
     }
 
 
-async def _load_anexos_texto(
-    parecer_id, db: AsyncSession
+def _load_anexos_sync(
+    db: Session, parecer_id
 ) -> tuple[list[tuple[str, str]], list[str]]:
     """Anexos da engenharia legiveis [(nome, texto ate _ANEXO_TEXT_SLICE)] e a
     lista de nomes ilegiveis (texto ausente/curto demais — upload sem OCR util)."""
-    docs_result = await db.execute(
+    docs = db.execute(
         select(Documento).where(Documento.parecer_id == parecer_id)
-    )
-    docs = docs_result.scalars().all()
+    ).scalars().all()
     legiveis: list[tuple[str, str]] = []
     ilegiveis: list[str] = []
     for d in anexo_docs_correntes(list(docs)):
@@ -502,62 +502,152 @@ async def listar_draft(parecer_id, db: AsyncSession) -> list[Requisito]:
     return list(result.scalars().all())
 
 
-async def extrair_requisitos(
-    parecer_id,
-    db: AsyncSession,
+# ─────────────────────────────────────────────────────────────────────────────
+# Extracao em background (Celery) — a cadeia de chamadas LLM (extracao +
+# amarracoes + revisao) nao pode segurar uma request HTTP. O corpo sync roda no
+# worker (app/worker.py, task "extrair_requisitos") e publica progresso em
+# Redis na chave `extracao:{parecer_id}` (via set_progress — sem colisao com a
+# chave da analise R1, que usa o parecer_id cru).
+# ─────────────────────────────────────────────────────────────────────────────
+
+_sync_engine = None
+
+
+def _get_sync_engine():
+    global _sync_engine
+    if _sync_engine is None:
+        _sync_engine = create_engine(settings.DATABASE_URL_SYNC)
+    return _sync_engine
+
+
+def progress_key_extracao(parecer_id) -> str:
+    """Chave de progresso da extracao — compartilhada entre endpoint e worker."""
+    return f"extracao:{parecer_id}"
+
+
+def _salvar_draft_sync(db: Session, parecer: Parecer, itens: list[dict]) -> int:
+    """Espelho sync de salvar_draft para o worker (fase ja validada no corpo)."""
+    db.execute(
+        delete(Requisito).where(
+            Requisito.parecer_id == parecer.id,
+            Requisito.aprovado_em.is_(None),
+        )
+    )
+    salvos = 0
+    for i, item in enumerate(itens):
+        descricao = (item.get("descricao_requisito") or "").strip()
+        if not descricao:
+            continue
+        prioridade = item.get("prioridade")
+        db.add(
+            Requisito(
+                parecer_id=parecer.id,
+                numero=i + 1,
+                categoria=item.get("categoria"),
+                descricao_requisito=descricao,
+                referencia_engenharia=item.get("referencia_engenharia"),
+                valor_requerido=item.get("valor_requerido"),
+                prioridade=prioridade if prioridade in _PRIORIDADES_VALIDAS else "MEDIA",
+                norma_referencia=item.get("norma_referencia"),
+                aprovado_por=None,
+                aprovado_em=None,
+            )
+        )
+        salvos += 1
+    return salvos
+
+
+def run_extracao_sync(
+    parecer_id: str,
     perfil_analise: str,
     escopo: str | None = None,
     feedback: str | None = None,
 ) -> dict:
-    """Extrai a lista candidata de requisitos (blocos 8-9) e persiste como rascunho."""
-    parecer = await _load_parecer(parecer_id, db)
-    if parecer.fase_caso not in _FASES_APROVACAO:
-        raise ValueError(
-            f"Extracao de requisitos indisponivel na fase {parecer.fase_caso}. "
-            "Apos a analise, use a revisao de especificacao."
-        )
+    """Extrai a lista candidata de requisitos (blocos 8-9) e persiste como rascunho.
 
-    texto_eng = await _load_eng_text(parecer_id, db)
-    data = await asyncio.to_thread(
-        _call_extracao_llm, texto_eng, parecer, perfil_analise, escopo, feedback
-    )
+    Corpo da task Celery `extrair_requisitos`. O resumo da extracao viaja na
+    mensagem do stage `completed` — e por ele que o frontend o recupera.
+    """
+    key = progress_key_extracao(parecer_id)
+    try:
+        with Session(_get_sync_engine()) as db:
+            parecer = db.execute(
+                select(Parecer).where(Parecer.id == uuid.UUID(parecer_id))
+            ).scalar_one_or_none()
+            if not parecer:
+                raise ValueError("Parecer nao encontrado.")
+            if parecer.fase_caso not in _FASES_APROVACAO:
+                raise ValueError(
+                    f"Extracao de requisitos indisponivel na fase {parecer.fase_caso}. "
+                    "Apos a analise, use a revisao de especificacao."
+                )
 
-    # Passe 2 (ajuste #12): requisitos amarrados a documentos ANEXOS da engenharia
-    # ("Sistema CFTV conforme TK-8") sao decompostos no desdobramento real do
-    # documento referenciado — nunca ficam como "1 sistema completo".
-    anexos, ilegiveis = await _load_anexos_texto(parecer_id, db)
-    if anexos and data["requisitos"]:
-        relevantes = _anexos_citados(data["requisitos"], anexos)
-        total_chars = sum(len(texto) for _, texto in relevantes)
-        if relevantes and total_chars <= _ANEXOS_MAX_TOTAL:
-            data = await asyncio.to_thread(
-                _resolver_amarracoes_sync, data, relevantes, parecer
+            set_progress(key, 5, "Lendo documentos de engenharia...", "lendo_documento")
+            texto_eng = _load_eng_text_sync(db, parecer.id)
+
+            set_progress(key, 20, "Extraindo requisitos do documento...", "extraindo")
+            data = _call_extracao_llm(texto_eng, parecer, perfil_analise, escopo, feedback)
+
+            # Passe 2 (ajuste #12): requisitos amarrados a documentos ANEXOS da
+            # engenharia ("Sistema CFTV conforme TK-8") sao decompostos no
+            # desdobramento real do documento referenciado.
+            anexos, ilegiveis = _load_anexos_sync(db, parecer.id)
+            if anexos and data["requisitos"]:
+                relevantes = _anexos_citados(data["requisitos"], anexos)
+                total_chars = sum(len(texto) for _, texto in relevantes)
+                if relevantes and total_chars <= _ANEXOS_MAX_TOTAL:
+                    set_progress(
+                        key, 55, "Desdobrando amarrações com os anexos...", "amarracoes"
+                    )
+                    data = _resolver_amarracoes_sync(data, relevantes, parecer)
+                elif relevantes:
+                    logger.warning(
+                        "Amarracoes puladas: anexos citados somam %d chars (parecer %s)",
+                        total_chars,
+                        parecer_id,
+                    )
+                    data["resumo"] = (
+                        (data.get("resumo") or "").strip()
+                        + " | Atenção: anexos muito extensos — a decomposição "
+                        "automática de amarrações não foi executada."
+                    ).strip(" |")
+            if ilegiveis:
+                data["resumo"] = (
+                    (data.get("resumo") or "").strip()
+                    + f" | Atenção: anexo(s) sem texto legível: {', '.join(ilegiveis)}."
+                ).strip(" |")
+
+            if parecer.fase_caso == "SETUP":
+                parecer.fase_caso = "REQUISITOS"
+
+            # Persiste o rascunho: sobrevive a recargas e fica visivel na tabela
+            set_progress(key, 95, "Salvando rascunho de requisitos...", "salvando")
+            salvos = _salvar_draft_sync(db, parecer, data["requisitos"])
+            db.commit()
+
+            logger.info(
+                "Draft de requisitos salvo: %d itens (parecer %s)", salvos, parecer_id
             )
-        elif relevantes:
-            logger.warning(
-                "Amarracoes puladas: anexos citados somam %d chars (parecer %s)",
-                total_chars,
-                parecer_id,
-            )
-            data["resumo"] = (
-                (data.get("resumo") or "").strip()
-                + " | Atenção: anexos muito extensos — a decomposição automática "
-                "de amarrações não foi executada."
-            ).strip(" |")
-    if ilegiveis:
-        data["resumo"] = (
-            (data.get("resumo") or "").strip()
-            + f" | Atenção: anexo(s) sem texto legível: {', '.join(ilegiveis)}."
-        ).strip(" |")
+            resumo_final = (data.get("resumo") or "").strip() or "Extração concluída."
+            set_progress(key, 100, resumo_final, "completed")
+            return {"total_itens": salvos, "resumo": resumo_final}
+    except Exception as e:
+        logger.exception("Extracao de requisitos falhou (parecer %s)", parecer_id)
+        set_progress(key, 100, str(e)[:500] or "Erro na extração.", "error")
+        return {"error": str(e)[:500]}
 
-    if parecer.fase_caso == "SETUP":
-        parecer.fase_caso = "REQUISITOS"
-        await db.commit()
 
-    # Persiste o rascunho: sobrevive a recargas e fica visivel na tabela do caso
-    await salvar_draft(parecer_id, db, data["requisitos"])
+def start_extracao_in_background(
+    parecer_id: str,
+    perfil_analise: str,
+    escopo: str | None = None,
+    feedback: str | None = None,
+) -> str:
+    """Enfileira a extracao no Celery e devolve o task id."""
+    from app.worker import extrair_requisitos_task
 
-    return data
+    task = extrair_requisitos_task.delay(parecer_id, perfil_analise, escopo, feedback)
+    return task.id
 
 
 async def aprovar_requisitos(

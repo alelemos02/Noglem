@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import type { RequisitoBase, RequisitoResponse } from "@/lib/patec-api";
 import { useConversation } from "../conversation-provider";
 import { WidgetFrame } from "./widget-frame";
+import { ProgressWidget } from "./progress-widget";
 
 const PRIORIDADE_VARIANT: Record<string, "error" | "warning" | "secondary"> = {
   ALTA: "error",
@@ -105,6 +106,12 @@ export function RequisitosWidget() {
       setApproving(false);
     }
   };
+
+  // Re-extração com feedback rodando no worker: mostra a barra de progresso no
+  // lugar da lista (o rascunho será substituído ao concluir).
+  if (extracting) {
+    return <ProgressWidget />;
+  }
 
   return (
     <WidgetFrame

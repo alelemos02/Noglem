@@ -2,6 +2,7 @@
 
 import json
 import logging
+import time
 
 import redis
 
@@ -20,7 +21,16 @@ def _get_redis():
 
 def set_progress(parecer_id: str, percent: int, message: str, stage: str = ""):
     """Store analysis progress for a parecer."""
-    data = json.dumps({"percent": percent, "message": message, "stage": stage})
+    # `updated_at` (epoch) permite detectar progresso "morto" (task que caiu
+    # sem gravar stage terminal) e liberar um novo disparo apos tolerancia.
+    data = json.dumps(
+        {
+            "percent": percent,
+            "message": message,
+            "stage": stage,
+            "updated_at": time.time(),
+        }
+    )
     try:
         _get_redis().setex(f"analysis_progress:{parecer_id}", 3600, data)
     except Exception:

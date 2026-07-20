@@ -6,7 +6,6 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Spinner } from "@/components/ui/spinner";
 import { useConversation } from "./conversation-provider";
 import { WidgetFrame } from "./widgets/widget-frame";
 import { UploadWidget } from "./widgets/upload-widget";
@@ -61,18 +60,12 @@ function ComplementaresWidget() {
 
 // Passo setup.extrair: a escolha de quantos requisitos extrair acontece na
 // conversa (não mais num card de perfis). Aqui só mostramos o progresso da
-// extração enquanto ela roda; fora disso, nada — o chat conduz.
+// extração enquanto ela roda (barra por stages, vinda do worker via polling);
+// fora disso, nada — o chat conduz.
 function ExtrairRequisitosWidget() {
   const { extracting } = useConversation();
   if (!extracting) return null;
-  return (
-    <WidgetFrame>
-      <div className="flex items-center gap-3 text-sm text-fg-muted">
-        <Spinner size="xs" className="text-accent" />
-        Lendo o documento e extraindo os requisitos…
-      </div>
-    </WidgetFrame>
-  );
+  return <ProgressWidget />;
 }
 
 function RetryAnaliseWidget() {

@@ -389,10 +389,18 @@ export interface RequisitoResponse extends RequisitoBase {
   criado_em: string;
 }
 
-export interface ExtracaoRequisitosResponse {
-  requisitos: RequisitoBase[];
-  total_itens: number;
-  resumo: string;
+// A extração roda em background (Celery): o POST devolve 202 + task_id e o
+// andamento sai no endpoint de progresso (stage completed/error encerra; a
+// mensagem do stage completed carrega o resumo da extração).
+export interface ExtracaoAsyncResponse {
+  task_id: string;
+  message: string;
+}
+
+export interface ExtracaoProgressoResponse {
+  percent: number | null;
+  message: string | null;
+  stage: string | null;
 }
 
 export interface RequisitosAprovadosResponse {
@@ -618,7 +626,7 @@ export const patecApi = {
       perfilAnalise: PerfilAnalise = "padrao",
       opts?: { escopo?: string; feedback?: string }
     ) {
-      return request<ExtracaoRequisitosResponse>(
+      return request<ExtracaoAsyncResponse>(
         `/v1/pareceres/${parecerId}/requisitos/extrair`,
         {
           method: "POST",
@@ -628,6 +636,11 @@ export const patecApi = {
             ...(opts?.feedback ? { feedback: opts.feedback } : {}),
           }),
         }
+      );
+    },
+    extracaoProgresso(parecerId: string) {
+      return request<ExtracaoProgressoResponse>(
+        `/v1/pareceres/${parecerId}/requisitos/extracao/progresso`
       );
     },
     list(parecerId: string) {

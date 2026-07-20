@@ -35,10 +35,18 @@ class ExtracaoRequest(BaseModel):
     feedback: str | None = None
 
 
-class ExtracaoResponse(BaseModel):
-    requisitos: list[RequisitoBase]
-    total_itens: int
-    resumo: str
+class ExtracaoAsyncResponse(BaseModel):
+    """Resposta 202 do POST /extrair — a extracao roda em background (Celery);
+    acompanhe pelo GET /extracao/progresso (stage completed/error encerra)."""
+
+    task_id: str
+    message: str
+
+
+class ExtracaoProgressoResponse(BaseModel):
+    percent: int | None = None
+    message: str | None = None
+    stage: str | None = None
 
 
 class AprovarRequisitosRequest(BaseModel):
