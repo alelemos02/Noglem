@@ -41,10 +41,13 @@ async def extrair(
     perfil = payload.perfil_analise if payload else "padrao"
     if not _VALID_PROFILE_RE.match(perfil):
         raise HTTPException(status_code=422, detail="perfil_analise invalido.")
+    escopo = payload.escopo if payload else None
     feedback = payload.feedback if payload else None
 
     try:
-        data = await requisitos_service.extrair_requisitos(parecer_id, db, perfil, feedback)
+        data = await requisitos_service.extrair_requisitos(
+            parecer_id, db, perfil, escopo, feedback
+        )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:

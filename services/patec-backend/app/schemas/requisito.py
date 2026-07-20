@@ -27,6 +27,11 @@ class RequisitoBase(BaseModel):
 
 class ExtracaoRequest(BaseModel):
     perfil_analise: str = "padrao"
+    # Recorte do documento pedido pelo usuario ("so o capitulo 2", "a tabela de
+    # escopo"). Restringe a extracao; NUNCA levanta o teto de itens do perfil.
+    escopo: str | None = None
+    # Ajustes pedidos pelo usuario sobre uma lista ja extraida ("inclua X",
+    # "quero a lista completa"). E o unico campo que pode liberar o teto.
     feedback: str | None = None
 
 

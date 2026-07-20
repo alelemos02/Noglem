@@ -108,7 +108,11 @@ interface ConversationContextValue {
   // Draft de requisitos (W1) — persistido no BD (snapshot.requisitosDraft)
   requisitosResumo: string;
   extracting: boolean;
-  extrairRequisitos: (feedback?: string, perfilOverride?: string) => Promise<void>;
+  extrairRequisitos: (opts?: {
+    escopo?: string;
+    feedback?: string;
+    perfil?: string;
+  }) => Promise<void>;
   salvarDraft: (requisitos: RequisitoBase[]) => Promise<void>;
   reabrirRequisitos: () => Promise<void>;
   confirmarComplementares: () => Promise<void>;
@@ -490,14 +494,14 @@ export function ConversationProvider({
   // --- Requisitos (W1) ---
 
   const extrairRequisitos = useCallback(
-    async (feedback?: string, perfilOverride?: string) => {
+    async (opts?: { escopo?: string; feedback?: string; perfil?: string }) => {
       setActionError("");
       setExtracting(true);
       try {
         const result = await patecApi.requisitos.extrair(
           parecerId,
-          perfilOverride ?? resolvedPerfil,
-          feedback
+          (opts?.perfil as PerfilAnalise | undefined) ?? resolvedPerfil,
+          { escopo: opts?.escopo, feedback: opts?.feedback }
         );
         setRequisitosResumo(result.resumo);
         // O backend persiste o rascunho no BD — o snapshot o traz de volta
@@ -911,12 +915,12 @@ export function ConversationProvider({
         // snapshot avança para a revisão dos requisitos.
         try {
           // O `escopo` que a JulIA capturou (ex.: "só o Cap. 2, todos os itens da
-          // tabela") vai como feedback da extração — é o que ativa o recorte por
-          // seção e a enumeração linha-a-linha no backend.
-          await extrairRequisitos(
-            typeof action.escopo === "string" ? action.escopo : undefined,
-            typeof action.perfil === "string" ? action.perfil : undefined
-          );
+          // tabela") vai como ESCOPO da extração — ativa o recorte por seção e a
+          // enumeração linha-a-linha SEM liberar o teto de itens do perfil.
+          await extrairRequisitos({
+            escopo: typeof action.escopo === "string" ? action.escopo : undefined,
+            perfil: typeof action.perfil === "string" ? action.perfil : undefined,
+          });
           pushEphemeral({
             kind: "event",
             key: `acao-extrair-${Date.now()}`,

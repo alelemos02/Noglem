@@ -87,7 +87,9 @@ export function RequisitosWidget() {
 
   const handleRegenerate = async () => {
     if (!feedback.trim()) return;
-    await extrairRequisitos(feedback);
+    // Ajuste pedido pelo engenheiro sobre a lista já extraída — feedback real
+    // (pode liberar o teto se ele pedir a lista completa).
+    await extrairRequisitos({ feedback });
     setFeedback("");
     setShowFeedback(false);
     setEditingIdx(null);

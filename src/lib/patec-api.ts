@@ -613,14 +613,19 @@ export const patecApi = {
     },
   },
   requisitos: {
-    extrair(parecerId: string, perfilAnalise: PerfilAnalise = "padrao", feedback?: string) {
+    extrair(
+      parecerId: string,
+      perfilAnalise: PerfilAnalise = "padrao",
+      opts?: { escopo?: string; feedback?: string }
+    ) {
       return request<ExtracaoRequisitosResponse>(
         `/v1/pareceres/${parecerId}/requisitos/extrair`,
         {
           method: "POST",
           body: JSON.stringify({
             perfil_analise: perfilAnalise,
-            ...(feedback ? { feedback } : {}),
+            ...(opts?.escopo ? { escopo: opts.escopo } : {}),
+            ...(opts?.feedback ? { feedback: opts.feedback } : {}),
           }),
         }
       );

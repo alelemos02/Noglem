@@ -45,7 +45,7 @@ class TestExtracaoNormalizacao:
         }
         """
         with _mock_llm_response(resposta):
-            data = _call_extracao_llm("texto eng", _ParecerStub(), "padrao", None)
+            data = _call_extracao_llm("texto eng", _ParecerStub(), "padrao", None, None)
 
         assert data["total_itens"] == 1
         # Renumera sequencialmente a partir de 1, ignorando numeração da LLM
@@ -59,7 +59,7 @@ class TestExtracaoNormalizacao:
          "total_itens": 1, "resumo": ""}
         """
         with _mock_llm_response(resposta):
-            data = _call_extracao_llm("texto", _ParecerStub(), "padrao", None)
+            data = _call_extracao_llm("texto", _ParecerStub(), "padrao", None, None)
 
         assert data["requisitos"][0]["prioridade"] == "MEDIA"
 
@@ -69,7 +69,7 @@ class TestExtracaoNormalizacao:
          "total_itens": 1, "resumo": ""}
         """
         with _mock_llm_response(resposta):
-            data = _call_extracao_llm("texto", _ParecerStub(), "padrao", None)
+            data = _call_extracao_llm("texto", _ParecerStub(), "padrao", None, None)
 
         item = data["requisitos"][0]
         assert item["valor_requerido"] is None
@@ -83,14 +83,16 @@ class TestExtracaoNormalizacao:
          "total_itens": 1, "resumo": "legado"}
         """
         with _mock_llm_response(resposta):
-            data = _call_extracao_llm("texto", _ParecerStub(), "padrao", None)
+            data = _call_extracao_llm("texto", _ParecerStub(), "padrao", None, None)
 
         assert len(data["requisitos"]) == 1
 
     def test_feedback_remove_limite_de_perfil(self):
         resposta = '{"requisitos": [], "total_itens": 0, "resumo": ""}'
         with _mock_llm_response(resposta) as mocked:
-            _call_extracao_llm("texto", _ParecerStub(), "simples", "incluir tudo de eletrica")
+            _call_extracao_llm(
+                "texto", _ParecerStub(), "simples", None, "incluir tudo de eletrica"
+            )
 
         user_content = mocked.call_args[0][1]
         assert "RESTRICAO DE VOLUME" not in user_content
@@ -99,10 +101,41 @@ class TestExtracaoNormalizacao:
     def test_sem_feedback_aplica_limite_de_perfil(self):
         resposta = '{"requisitos": [], "total_itens": 0, "resumo": ""}'
         with _mock_llm_response(resposta) as mocked:
-            _call_extracao_llm("texto", _ParecerStub(), "simples", None)
+            _call_extracao_llm("texto", _ParecerStub(), "simples", None, None)
 
         user_content = mocked.call_args[0][1]
         assert "NO MAXIMO 10" in user_content
+
+    def test_escopo_nao_remove_limite_de_perfil(self):
+        # Bug histórico: escopo com "todos" derrubava o teto (incidente 90+ itens).
+        # Escopo restringe o recorte; só feedback/integral liberam o teto.
+        resposta = '{"requisitos": [], "total_itens": 0, "resumo": ""}'
+        with _mock_llm_response(resposta) as mocked:
+            _call_extracao_llm(
+                "texto",
+                _ParecerStub(),
+                "simples",
+                "todos os itens da tabela do capitulo 2",
+                None,
+            )
+
+        user_content = mocked.call_args[0][1]
+        assert "NO MAXIMO 10" in user_content
+        assert "RECORTE DE ESCOPO" in user_content
+        assert "todos os itens da tabela do capitulo 2" in user_content
+
+    def test_escopo_e_feedback_sao_secoes_separadas(self):
+        resposta = '{"requisitos": [], "total_itens": 0, "resumo": ""}'
+        with _mock_llm_response(resposta) as mocked:
+            _call_extracao_llm(
+                "texto", _ParecerStub(), "padrao", "so o capitulo 8", "remova o item 3"
+            )
+
+        user_content = mocked.call_args[0][1]
+        assert "RECORTE DE ESCOPO" in user_content
+        assert "so o capitulo 8" in user_content
+        assert "FEEDBACK DO USUARIO" in user_content
+        assert "remova o item 3" in user_content
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -338,6 +371,6 @@ class TestAnexosCitados:
 def test_limit_instruction_menciona_amarracoes():
     resposta = '{"requisitos": [], "total_itens": 0, "resumo": ""}'
     with _mock_llm_response(resposta) as mock_llm:
-        _call_extracao_llm("texto eng", _ParecerStub(), "padrao", None)
+        _call_extracao_llm("texto eng", _ParecerStub(), "padrao", None, None)
     user_content = mock_llm.call_args.args[1]
     assert "amarrados a documentos anexos" in user_content.lower()

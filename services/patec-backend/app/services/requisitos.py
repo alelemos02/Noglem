@@ -84,8 +84,18 @@ async def _load_eng_text(parecer_id, db: AsyncSession) -> str:
 
 
 def _call_extracao_llm(
-    texto_engenharia: str, parecer: Parecer, perfil_analise: str, feedback: str | None
+    texto_engenharia: str,
+    parecer: Parecer,
+    perfil_analise: str,
+    escopo: str | None,
+    feedback: str | None,
 ) -> dict:
+    escopo_section = (
+        "\nRECORTE DE ESCOPO PEDIDO PELO USUARIO (aplicar a REGRA FORTE de "
+        f"escopo por secao/capitulo/tabela):\n{escopo}\n\n"
+        if escopo and escopo.strip()
+        else ""
+    )
     feedback_section = (
         f"\nFEEDBACK DO USUARIO (incorporar obrigatoriamente):\n{feedback}\n\n"
         if feedback and feedback.strip()
@@ -94,10 +104,11 @@ def _call_extracao_llm(
     normalized_profile = normalize_analysis_profile(perfil_analise)
     max_itens = get_profile_max_itens(normalized_profile)
     profile_label = get_profile_label(normalized_profile)
-    # O teto de itens do perfil continua valendo MESMO com feedback. Feedback que
-    # RESTRINGE o escopo ("so o capitulo 2") deve diminuir a lista, nunca explodi-la
-    # — so liberamos o teto quando o usuario pede explicitamente a lista inteira (ou
-    # no perfil integral). Sem isso, um recorte mal interpretado virava 90+ itens.
+    # O teto de itens do perfil continua valendo MESMO com escopo/feedback. Um
+    # RECORTE ("so o capitulo 2") deve diminuir a lista, nunca explodi-la — por
+    # isso o `escopo` NUNCA libera o teto. So o `feedback` (ajuste explicito do
+    # usuario sobre a lista) ou o perfil `integral` liberam. Antes da separacao
+    # dos campos, um recorte com a palavra "todos" virava 90+ itens.
     fb = (feedback or "").strip().lower()
     quer_tudo = normalized_profile == "integral" or any(
         termo in fb
@@ -124,6 +135,7 @@ def _call_extracao_llm(
     )
     user_content = EXTRACAO_USER_PROMPT_TEMPLATE.format(
         texto_engenharia=texto_engenharia,
+        escopo_section=escopo_section,
         feedback_section=feedback_section,
         projeto=parecer.projeto,
         numero_parecer=parecer.numero_parecer,
@@ -131,12 +143,12 @@ def _call_extracao_llm(
 
     logger.info(
         "Extracao de requisitos via LLM: parecer=%s, modelo=%s, eng_chars=%d, "
-        "quer_tudo=%s, has_feedback=%s, escopo=%r",
+        "quer_tudo=%s, escopo=%r, feedback=%r",
         parecer.id,
         settings.GEMINI_EXTRACTION_MODEL,
         len(texto_engenharia),
         quer_tudo,
-        bool(feedback),
+        (escopo or "")[:140],
         (feedback or "")[:140],
     )
     response_text = call_llm(
@@ -471,6 +483,7 @@ async def extrair_requisitos(
     parecer_id,
     db: AsyncSession,
     perfil_analise: str,
+    escopo: str | None = None,
     feedback: str | None = None,
 ) -> dict:
     """Extrai a lista candidata de requisitos (blocos 8-9) e persiste como rascunho."""
@@ -483,7 +496,7 @@ async def extrair_requisitos(
 
     texto_eng = await _load_eng_text(parecer_id, db)
     data = await asyncio.to_thread(
-        _call_extracao_llm, texto_eng, parecer, perfil_analise, feedback
+        _call_extracao_llm, texto_eng, parecer, perfil_analise, escopo, feedback
     )
 
     # Passe 2 (ajuste #12): requisitos amarrados a documentos ANEXOS da engenharia

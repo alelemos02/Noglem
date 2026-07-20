@@ -110,7 +110,7 @@ EXTRACAO_USER_PROMPT_TEMPLATE = """## DOCUMENTOS DA ENGENHARIA (CONTRATANTE)
 ## INSTRUCAO
 
 Identifique e liste todos os requisitos tecnicos relevantes dos documentos acima que deverao ser verificados contra a proposta do fornecedor.
-{feedback_section}Projeto: {projeto}
+{escopo_section}{feedback_section}Projeto: {projeto}
 Numero do Parecer: {numero_parecer}
 """
 

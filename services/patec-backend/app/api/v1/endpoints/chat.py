@@ -333,8 +333,8 @@ async def _executar_acao(
         # Acao de UI (passo setup.extrair): o frontend dispara a extracao com o
         # perfil escolhido na conversa e mostra o progresso. Nao muta o banco aqui.
         # `escopo` carrega o recorte que o usuario pediu (capitulo/tabela/faixa) e
-        # vira o feedback da extracao — e o que ativa a "REGRA FORTE" de recorte
-        # por secao e a enumeracao linha-a-linha. Sem ele a extracao pega o doc todo.
+        # vira o campo `escopo` da extracao — ativa a "REGRA FORTE" de recorte por
+        # secao SEM liberar o teto de itens (isso e papel do `feedback`/`integral`).
         perfil = str(acao.get("perfil") or "padrao").strip()
         if not _VALID_PROFILE_RE.match(perfil):
             perfil = "padrao"
