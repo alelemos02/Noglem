@@ -175,15 +175,55 @@ requisitos aprovados (descrições antigas) e apagaria o vínculo com rodadas.
 que remete a documento ANEXO ("Sistema CFTV conforme TK-8") é decomposto
 automaticamente no desdobramento real do anexo (linha de tabela tipo/área/qtd = um
 sub-requisito; `referencia_engenharia` = "MR <ref> + <anexo> pag. N"). Vive em
-`requisitos.py` (`_load_anexos_texto` → `_anexos_citados` pré-filtro determinístico
-por stems do nome do arquivo → UMA chamada batched `AMARRACAO_SYSTEM_PROMPT` no
-`GEMINI_EXTRACTION_MODEL` → `_merge_decomposicoes` substitui na posição e renumera),
-entre a extração base e o `salvar_draft`. Falha de LLM/JSON → lista base intacta.
-Anexo ilegível, muito extenso (>300k chars citados) ou referenciado-mas-não-anexado →
-aviso no `resumo` do draft (aparece no RequisitosWidget). Sub-requisitos NÃO contam
-no teto do perfil. **A extração roda na patec-api (síncrona)** — mexeu aqui, deploy
-é `railway up --service patec-api`, não o worker. Antes deste passe os anexos NUNCA
-entravam na extração (`_load_eng_text` filtra só `tipo=="engenharia"`).
+`requisitos.py` (`_load_anexos_sync` → `_anexos_citados` pré-filtro determinístico
+por stems do nome do arquivo → `_montar_texto_anexo_sync` por anexo → UMA chamada
+batched `AMARRACAO_SYSTEM_PROMPT` no `GEMINI_EXTRACTION_MODEL` →
+`_merge_decomposicoes` substitui na posição e renumera), entre a extração base e o
+salvamento do draft. Falha de LLM/JSON → lista base intacta. Anexo ilegível ou
+referenciado-mas-não-anexado → aviso no `resumo` do draft. Sub-requisitos NÃO
+contam no teto do perfil.
+
+**Anexo grande usa RAG, não corte cego (2026-07-20):** anexo ≤120k chars
+(`_ANEXO_FULLTEXT_MAX`) vai inteiro no prompt; acima disso,
+`_montar_texto_anexo_sync` recupera os trechos relevantes do índice pgvector
+(`retrieve_relevant_chunks_sync` com filtro `documento_ids`, top-8 por requisito
+citante via `_requisitos_citantes`, dedupe, cap 40 chunks, ordenados por página).
+Anexo recém-subido sem chunks → `index_document_sync` inline no worker (resolve a
+corrida com a indexação do upload). Falha/vazio → fallback `texto[:120k]` + aviso.
+O gate antigo de 300k que PULAVA o passe foi removido.
+
+**Extração assíncrona no worker (2026-07-20):** `POST /requisitos/extrair` devolve
+**202** `{task_id, message}` (409 se progresso ativo não-terminal <15min) e a task
+Celery `extrair_requisitos` (worker.py) roda `run_extracao_sync` — progresso em
+Redis `extracao:{parecer_id}` (via `set_progress`; payload agora carrega
+`updated_at`), stages `queued → lendo_documento → extraindo → amarracoes →
+revisando → corrigindo → salvando → completed/error`. **O resumo da extração viaja
+na mensagem do stage `completed`.** Frontend: `requisitos.extracaoProgresso()` no
+poller consolidado (ramo condicionado ao estado `extracting`, não ao step),
+ProgressWidget no lugar do spinner, recuperação pós-F5 lendo o progresso ativo.
+**Mexeu na extração = deploy do worker** (`railway up` no serviço worker), não só
+da patec-api.
+
+**Escopo ≠ feedback (2026-07-20):** `ExtracaoRequest` tem `escopo` (recorte
+"só o capítulo 2" — ativa a REGRA FORTE, NUNCA libera o teto) e `feedback`
+(ajuste explícito — único que pode liberar via `_quer_lista_completa`, junto com
+perfil `integral`). A fusão antiga escopo→feedback causava o incidente dos 90+
+itens ("todos os itens da tabela X" derrubava o teto).
+
+**Trava dura do teto (2026-07-20):** a RESTRICAO DE VOLUME do prompt é pedido; a
+garantia é o corte em código dentro de `_call_extracao_llm` (lista-base cortada em
+`max_itens` com nota no resumo; `integral`/feedback-lista-completa não cortam; o
+passe de amarrações expande livremente depois).
+
+**Revisor da extração (2026-07-20):** segundo LLM (OpenAI `gpt-5.6-terra`,
+`call_openai` em `llm_client.py` — Responses API via httpx, mesmo retry do Gemini)
+audita a lista pós-amarrações (`_revisar_extracao_sync` + prompts
+`REVISOR_EXTRACAO_*`): contagem (subs não contam), fidelidade no escopo,
+amarrações vs os MESMOS trechos de anexo do gerador (`_montar_anexos_secao`),
+granularidade. Problemas → UMA rodada de correção (viram feedback estruturado
+para re-extração + re-amarração). Qualquer falha → draft salvo sem revisão
+(warning). Config: `OPENAI_API_KEY` (Railway: web E worker), `OPENAI_REVIEWER_MODEL`,
+`ENABLE_EXTRACTION_REVIEWER` (kill-switch sem deploy).
 
 ### Carta de pendências (layout XLSX)
 Posições das colunas em `exporter.py` (`_CARTA_HEADERS`, `_CARTA_COL_RESPOSTA`,
@@ -192,9 +232,12 @@ Posições das colunas em `exporter.py` (`_CARTA_HEADERS`, `_CARTA_COL_RESPOSTA`
 
 ## Perfis de análise (governam só a extração W1)
 
-`simples` (10) / `padrao` (15) / `completa` (20) / `integral` (todos) / `custom_N`.
-Sub-requisitos gerados pelo passe de amarrações (#12) não contam no teto do perfil
-— o desdobramento reflete o documento anexo, não a escolha de volume.
+`simples` (10) / `padrao` (15) / `completa` (20) / `integral` (todos) / `custom_N`
+(clamp 1..100). O teto é aplicado em CÓDIGO na lista-base (`_call_extracao_llm`,
+não só no prompt); só `integral` ou feedback explícito de lista completa liberam
+(`_quer_lista_completa` — o `escopo` nunca libera). Sub-requisitos gerados pelo
+passe de amarrações (#12) não contam no teto do perfil — o desdobramento reflete
+o documento anexo, não a escolha de volume.
 
 ## Fluxo de dados
 
