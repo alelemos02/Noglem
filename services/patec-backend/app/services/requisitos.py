@@ -173,10 +173,33 @@ def _call_extracao_llm(
         item.setdefault("referencia_engenharia", "")
         item.setdefault("categoria", None)
 
+    resumo = data.get("resumo", "")
+    # Trava dura do teto de itens: a RESTRICAO DE VOLUME no prompt e um pedido,
+    # nao uma garantia — o modelo pode devolver 12 quando pedimos 10. Cortamos
+    # aqui, na lista-base do passe 1 (ja ordenada por relevancia pelo prompt);
+    # o passe de amarracoes expande depois livremente (item desdobrado continua
+    # sendo UM item detalhado — subs nao contam no teto).
+    if not quer_tudo and len(requisitos) > max_itens:
+        total_original = len(requisitos)
+        logger.warning(
+            "Extracao excedeu o teto: %d > %d itens (parecer %s) — cortando",
+            total_original,
+            max_itens,
+            parecer.id,
+        )
+        requisitos = requisitos[:max_itens]
+        for i, item in enumerate(requisitos):
+            item["numero"] = i + 1
+        resumo = (
+            resumo.strip()
+            + f" | Modelo retornou {total_original} itens; mantidos os "
+            f"{max_itens} mais relevantes (perfil {profile_label})."
+        ).strip(" |")
+
     return {
         "requisitos": requisitos,
         "total_itens": len(requisitos),
-        "resumo": data.get("resumo", ""),
+        "resumo": resumo,
     }
 
 

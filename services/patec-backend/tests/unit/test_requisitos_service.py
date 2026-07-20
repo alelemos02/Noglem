@@ -124,6 +124,65 @@ class TestExtracaoNormalizacao:
         assert "RECORTE DE ESCOPO" in user_content
         assert "todos os itens da tabela do capitulo 2" in user_content
 
+    @staticmethod
+    def _resposta_com_n_itens(n: int) -> str:
+        import json as _json
+
+        return _json.dumps(
+            {
+                "requisitos": [
+                    {"numero": i + 1, "descricao_requisito": f"Req {i + 1}",
+                     "prioridade": "ALTA"}
+                    for i in range(n)
+                ],
+                "total_itens": n,
+                "resumo": "Base.",
+            }
+        )
+
+    def test_trava_dura_corta_excedente_e_anota_resumo(self):
+        # O prompt pede "NO MAXIMO N", mas isso e um pedido — a garantia e o corte
+        # em codigo. custom_5 com 8 itens devolvidos → exatamente 5, renumerados.
+        with _mock_llm_response(self._resposta_com_n_itens(8)):
+            data = _call_extracao_llm("texto", _ParecerStub(), "custom_5", None, None)
+
+        assert data["total_itens"] == 5
+        assert [r["numero"] for r in data["requisitos"]] == [1, 2, 3, 4, 5]
+        assert "Modelo retornou 8 itens" in data["resumo"]
+        assert "5 mais relevantes" in data["resumo"]
+
+    def test_trava_dura_nao_corta_no_perfil_integral(self):
+        with _mock_llm_response(self._resposta_com_n_itens(30)):
+            data = _call_extracao_llm("texto", _ParecerStub(), "integral", None, None)
+
+        assert data["total_itens"] == 30
+        assert "mais relevantes" not in data["resumo"]
+
+    def test_trava_dura_nao_corta_com_feedback_lista_completa(self):
+        with _mock_llm_response(self._resposta_com_n_itens(30)):
+            data = _call_extracao_llm(
+                "texto", _ParecerStub(), "simples", None, "quero a lista completa"
+            )
+
+        assert data["total_itens"] == 30
+
+    def test_trava_dura_corta_mesmo_com_escopo_contendo_todos(self):
+        # Escopo nao libera o teto (M2) e o corte em codigo o garante (M1).
+        with _mock_llm_response(self._resposta_com_n_itens(30)):
+            data = _call_extracao_llm(
+                "texto", _ParecerStub(), "custom_10",
+                "todos os itens da tabela do capitulo 2", None,
+            )
+
+        assert data["total_itens"] == 10
+
+    def test_dentro_do_teto_nao_anota_resumo(self):
+        with _mock_llm_response(self._resposta_com_n_itens(3)):
+            data = _call_extracao_llm("texto", _ParecerStub(), "custom_5", None, None)
+
+        assert data["total_itens"] == 3
+        assert data["resumo"] == "Base."
+
     def test_escopo_e_feedback_sao_secoes_separadas(self):
         resposta = '{"requisitos": [], "total_itens": 0, "resumo": ""}'
         with _mock_llm_response(resposta) as mocked:
