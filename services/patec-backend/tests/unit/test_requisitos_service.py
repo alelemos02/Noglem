@@ -4,14 +4,18 @@ normalização da saída da LLM e hash de cache baseado em requisitos (R1).
 
 Nenhum teste toca banco ou rede — a chamada LLM é mockada.
 """
-from unittest.mock import patch
+from types import SimpleNamespace
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from app.services.requisitos import (
+    _ANEXO_FULLTEXT_MAX,
     _anexos_citados,
     _call_extracao_llm,
     _merge_decomposicoes,
+    _montar_texto_anexo_sync,
+    _requisitos_citantes,
     _resolver_amarracoes_sync,
 )
 from app.services.tasks import PROMPT_VERSION, _compute_docs_hash
@@ -425,6 +429,112 @@ class TestAnexosCitados:
         reqs = [_req(1, "Transmissor de pressao 0-100 bar", valor_requerido="0-100 bar")]
         anexos = [("XPT-555.pdf", "a")]
         assert _anexos_citados(reqs, anexos) == []
+
+
+class TestRequisitosCitantes:
+    def test_stem_do_nome_seleciona_os_citantes(self):
+        reqs = [
+            _req(1, "Sistema de CFTV conforme TK-8", valor_requerido="conforme TK-8"),
+            _req(2, "Transmissor de pressao 0-100 bar"),
+        ]
+        citantes = _requisitos_citantes(reqs, "TK-8 - CFTV.pdf")
+        assert [r["numero"] for r in citantes] == [1]
+
+    def test_fallback_keyword_generica(self):
+        # Nome sem stem presente nos requisitos ("ZWK"/"XYZ" não aparecem) →
+        # cai no fallback por palavra-chave genérica ("de acordo com").
+        reqs = [
+            _req(1, "Painel montado de acordo com o criterio de projeto"),
+            _req(2, "Transmissor de pressao tipo capacitivo"),
+        ]
+        citantes = _requisitos_citantes(reqs, "ZWK-XYZ.pdf")
+        assert [r["numero"] for r in citantes] == [1]
+
+    def test_stem_numerico_e_match_frouxo_por_design(self):
+        # "XPT-100" casa com "0-100 bar" pelo stem "100" — falso positivo barato
+        # (só adiciona queries de retrieval), mesmo critério do _anexos_citados.
+        reqs = [_req(2, "Transmissor de pressao 0-100 bar")]
+        citantes = _requisitos_citantes(reqs, "XPT-100.pdf")
+        assert [r["numero"] for r in citantes] == [2]
+
+
+def _chunk(id_, page, index, tipo="text", conteudo="conteudo"):
+    return SimpleNamespace(
+        id=id_, page_number=page, chunk_index=index, chunk_type=tipo, conteudo=conteudo
+    )
+
+
+class TestMontarTextoAnexo:
+    _REQS = [_req(1, "Sistema de CFTV conforme TK-8", valor_requerido="conforme TK-8")]
+
+    def test_anexo_pequeno_vai_inteiro_sem_tocar_o_banco(self):
+        texto, aviso = _montar_texto_anexo_sync(
+            None, "pid", "TK-8.pdf", "texto curto", None, self._REQS
+        )
+        assert texto == "texto curto"
+        assert aviso is None
+
+    def test_anexo_grande_sem_doc_id_cai_no_corte_com_aviso(self):
+        grande = "x" * (_ANEXO_FULLTEXT_MAX + 10)
+        texto, aviso = _montar_texto_anexo_sync(
+            None, "pid", "TK-8.pdf", grande, None, self._REQS
+        )
+        assert len(texto) == _ANEXO_FULLTEXT_MAX
+        assert aviso and "muito extenso" in aviso
+
+    def test_anexo_grande_usa_retrieval_dedupe_e_ordena_por_pagina(self):
+        grande = "x" * (_ANEXO_FULLTEXT_MAX + 10)
+        db = MagicMock()
+        db.execute.return_value.scalar.return_value = 3  # chunks já indexados
+        # Mesmo chunk (id=1) devolvido duas vezes → dedupe; ordenação por página
+        chunks = [
+            _chunk(2, page=29, index=5, tipo="table", conteudo="tabela de cameras"),
+            _chunk(1, page=3, index=1, conteudo="secao inicial"),
+            _chunk(1, page=3, index=1, conteudo="secao inicial"),
+        ]
+        with patch(
+            "app.services.requisitos.retrieve_relevant_chunks_sync",
+            return_value=chunks,
+        ):
+            texto, aviso = _montar_texto_anexo_sync(
+                db, "pid", "TK-8.pdf", grande, "doc-id", self._REQS
+            )
+        assert aviso is None
+        assert "busca semantica" in texto
+        # Ordem de documento: página 3 antes da 29; marcadores presentes
+        assert texto.index("[Pagina 3]") < texto.index("[Pagina 29]")
+        assert "(TABELA)" in texto
+        assert texto.count("secao inicial") == 1  # dedupe por id
+
+    def test_retrieval_vazio_cai_no_corte_com_aviso(self):
+        grande = "y" * (_ANEXO_FULLTEXT_MAX + 10)
+        db = MagicMock()
+        db.execute.return_value.scalar.return_value = 3
+        with patch(
+            "app.services.requisitos.retrieve_relevant_chunks_sync", return_value=[]
+        ):
+            texto, aviso = _montar_texto_anexo_sync(
+                db, "pid", "TK-8.pdf", grande, "doc-id", self._REQS
+            )
+        assert len(texto) == _ANEXO_FULLTEXT_MAX
+        assert aviso and "muito extenso" in aviso
+
+    def test_sem_chunks_indexa_inline(self):
+        grande = "z" * (_ANEXO_FULLTEXT_MAX + 10)
+        db = MagicMock()
+        db.execute.return_value.scalar.return_value = 0  # corrida de indexação
+        with patch(
+            "app.services.indexer.index_document_sync", return_value=5
+        ) as mock_index, patch(
+            "app.services.requisitos.retrieve_relevant_chunks_sync",
+            return_value=[_chunk(1, page=2, index=0)],
+        ):
+            texto, aviso = _montar_texto_anexo_sync(
+                db, "pid", "TK-8.pdf", grande, "doc-id", self._REQS
+            )
+        mock_index.assert_called_once_with("doc-id")
+        assert aviso is None
+        assert "[Pagina 2]" in texto
 
 
 def test_limit_instruction_menciona_amarracoes():

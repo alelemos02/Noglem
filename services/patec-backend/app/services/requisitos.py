@@ -14,13 +14,14 @@ import re
 import uuid
 from datetime import datetime
 
-from sqlalchemy import create_engine, delete, select
+from sqlalchemy import create_engine, delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.progress import set_progress
 from app.models.documento import Documento
+from app.models.documento_chunk import DocumentoChunk
 from app.models.parecer import Parecer
 from app.models.requisito import Requisito
 from app.models.usuario import Usuario
@@ -39,6 +40,7 @@ from app.services.prompts.extracao import (
     EXTRACAO_USER_PROMPT_TEMPLATE,
 )
 from app.services.prompts.seguranca import envelopar
+from app.services.retriever import retrieve_relevant_chunks_sync
 
 logger = logging.getLogger(__name__)
 
@@ -48,10 +50,14 @@ _FASES_APROVACAO = {"SETUP", "REQUISITOS", "ANALISE"}
 
 # Passe de amarracoes (ajuste #12): requisitos que remetem a documentos ANEXOS
 # ("Sistema CFTV conforme TK-8") sao decompostos no desdobramento real do anexo.
-_ANEXO_TEXT_SLICE = 120_000   # chars por anexo (a tabela-alvo pode estar funda)
-_ANEXOS_MAX_TOTAL = 300_000   # acima disso o passe e pulado (request sincrono)
-_ANEXO_MIN_CHARS = 200        # abaixo disso o texto e ilegivel (OCR vazio)
-_MAX_SUBS_POR_ITEM = 80       # sanity cap por requisito decomposto
+# Anexo ate _ANEXO_FULLTEXT_MAX vai INTEIRO no prompt; acima disso os trechos
+# relevantes sao recuperados por busca semantica (pgvector) por requisito
+# citante — nada de corte cego que perde a tabela-alvo no fim do documento.
+_ANEXO_FULLTEXT_MAX = 120_000  # chars: limiar de "anexo pequeno" (vai inteiro)
+_ANEXO_MIN_CHARS = 200         # abaixo disso o texto e ilegivel (OCR vazio)
+_MAX_SUBS_POR_ITEM = 80        # sanity cap por requisito decomposto
+_RAG_TOP_K_POR_REQUISITO = 8   # chunks recuperados por requisito citante
+_RAG_MAX_CHUNKS_POR_ANEXO = 40 # bound do prompt por anexo grande
 _PRIORIDADES_VALIDAS = {"ALTA", "MEDIA", "BAIXA"}
 _REF_KEYWORDS = (
     "conforme", "especificacao", "criterio de projeto", "anexo",
@@ -206,21 +212,48 @@ def _call_extracao_llm(
 
 def _load_anexos_sync(
     db: Session, parecer_id
-) -> tuple[list[tuple[str, str]], list[str]]:
-    """Anexos da engenharia legiveis [(nome, texto ate _ANEXO_TEXT_SLICE)] e a
-    lista de nomes ilegiveis (texto ausente/curto demais — upload sem OCR util)."""
+) -> tuple[list[tuple[str, str]], list[str], dict[str, uuid.UUID]]:
+    """Anexos da engenharia legiveis [(nome, texto COMPLETO)], a lista de nomes
+    ilegiveis (texto ausente/curto demais — upload sem OCR util) e o mapa
+    nome→documento_id (para o retrieval por anexo quando o texto e extenso)."""
     docs = db.execute(
         select(Documento).where(Documento.parecer_id == parecer_id)
     ).scalars().all()
     legiveis: list[tuple[str, str]] = []
     ilegiveis: list[str] = []
+    ids_por_nome: dict[str, uuid.UUID] = {}
     for d in anexo_docs_correntes(list(docs)):
         texto = (d.texto_extraido or "").strip()
         if len(texto) < _ANEXO_MIN_CHARS:
             ilegiveis.append(d.nome_arquivo)
         else:
-            legiveis.append((d.nome_arquivo, texto[:_ANEXO_TEXT_SLICE]))
-    return legiveis, ilegiveis
+            legiveis.append((d.nome_arquivo, texto))
+            ids_por_nome[d.nome_arquivo] = d.id
+    return legiveis, ilegiveis, ids_por_nome
+
+
+_CAMPOS_CITACAO = (
+    "descricao_requisito",
+    "valor_requerido",
+    "referencia_engenharia",
+    "norma_referencia",
+)
+
+
+def _stems_do_nome(nome: str) -> set[str]:
+    """Stems do nome do arquivo (tokens alfanumericos len>=3 do nome sem
+    extensao, incluindo pares adjacentes e o nome colado: "TK-8" vira "tk8")."""
+    base = _normalize_text(nome.rsplit(".", 1)[0])
+    partes = [p for p in re.split(r"[^a-z0-9]+", base) if p]
+    stems = {p for p in partes if len(p) >= 3}
+    stems.update(a + b for a, b in zip(partes, partes[1:]) if len(a + b) >= 3)
+    return stems
+
+
+def _texto_de_citacao(requisito: dict) -> str:
+    return _normalize_text(
+        " ".join(str(requisito.get(campo) or "") for campo in _CAMPOS_CITACAO)
+    )
 
 
 def _anexos_citados(
@@ -228,24 +261,15 @@ def _anexos_citados(
 ) -> list[tuple[str, str]]:
     """Pre-filtro deterministico (zero LLM) do passe de amarracoes.
 
-    Um anexo e candidato quando algum stem do nome do arquivo (tokens
-    alfanumericos len>=3 do nome sem extensao, incluindo pares adjacentes e o
-    nome colado: "TK-8" vira "tk8") aparece no texto dos requisitos. Sem stem
-    citado mas com palavra-chave generica de referencia em algum requisito,
-    todos os anexos entram (o LLM decide). Sem nada: passe pulado. Falso
-    positivo aqui e barato — so inclui o anexo na chamada batched.
+    Um anexo e candidato quando algum stem do nome do arquivo aparece no texto
+    dos requisitos. Sem stem citado mas com palavra-chave generica de
+    referencia em algum requisito, todos os anexos entram (o LLM decide). Sem
+    nada: passe pulado. Falso positivo aqui e barato — so inclui o anexo na
+    chamada batched.
     """
     texto_reqs = _normalize_text(
         " | ".join(
-            " ".join(
-                str(r.get(campo) or "")
-                for campo in (
-                    "descricao_requisito",
-                    "valor_requerido",
-                    "referencia_engenharia",
-                    "norma_referencia",
-                )
-            )
+            " ".join(str(r.get(campo) or "") for campo in _CAMPOS_CITACAO)
             for r in requisitos
         )
     )
@@ -253,18 +277,32 @@ def _anexos_citados(
 
     citados: list[tuple[str, str]] = []
     for nome, texto in anexos:
-        base = _normalize_text(nome.rsplit(".", 1)[0])
-        partes = [p for p in re.split(r"[^a-z0-9]+", base) if p]
-        stems = {p for p in partes if len(p) >= 3}
-        stems.update(
-            a + b for a, b in zip(partes, partes[1:]) if len(a + b) >= 3
-        )
+        stems = _stems_do_nome(nome)
         if any(s in texto_reqs or s in texto_reqs_colado for s in stems):
             citados.append((nome, texto))
 
     if not citados and any(k in texto_reqs for k in _REF_KEYWORDS):
         return list(anexos)
     return citados
+
+
+def _requisitos_citantes(requisitos: list[dict], nome_anexo: str) -> list[dict]:
+    """Requisitos que citam o anexo pelo stem do nome (mesma regra do
+    pre-filtro _anexos_citados, por requisito). Sem match por stem, caem no
+    fallback: requisitos com palavra-chave generica de referencia. Guia as
+    queries do retrieval quando o anexo e extenso demais para ir inteiro."""
+    stems = _stems_do_nome(nome_anexo)
+    citantes = []
+    for r in requisitos:
+        texto = _texto_de_citacao(r)
+        colado = re.sub(r"[^a-z0-9]+", "", texto)
+        if any(s in texto or s in colado for s in stems):
+            citantes.append(r)
+    if not citantes:
+        citantes = [
+            r for r in requisitos if any(k in _texto_de_citacao(r) for k in _REF_KEYWORDS)
+        ]
+    return citantes
 
 
 def _merge_decomposicoes(
@@ -335,6 +373,113 @@ def _merge_decomposicoes(
     return resultado
 
 
+def _montar_anexos_secao(anexos: list[tuple[str, str]]) -> str:
+    """Secao de anexos envelopada (anti-injecao) — compartilhada entre o passe
+    de amarracoes e o revisor da extracao (mesmo material para gerador e
+    auditor)."""
+    return "\n\n".join(
+        f"### ANEXO: {nome}\n" + envelopar("DOC_ANEXO_ENGENHARIA", texto)
+        for nome, texto in anexos
+    )
+
+
+def _montar_texto_anexo_sync(
+    db: Session,
+    parecer_id,
+    nome: str,
+    texto: str,
+    doc_id,
+    requisitos: list[dict],
+) -> tuple[str, str | None]:
+    """Texto do anexo que vai ao prompt de amarracoes: inteiro quando pequeno;
+    quando extenso, os trechos relevantes recuperados por busca semantica
+    (pgvector, filtrada pelo documento) guiada pelos requisitos citantes.
+
+    Devolve (texto_final, aviso|None). Qualquer falha degrada para o corte no
+    inicio do texto + aviso — nunca pior do que o comportamento antigo.
+    """
+    if len(texto) <= _ANEXO_FULLTEXT_MAX:
+        return texto, None
+
+    aviso_corte = (
+        f"Atenção: anexo {nome} muito extenso — a busca semântica não estava "
+        "disponível e apenas o início do texto foi usado na decomposição."
+    )
+    fallback = texto[:_ANEXO_FULLTEXT_MAX]
+    if doc_id is None:
+        return fallback, aviso_corte
+
+    try:
+        n_chunks = db.execute(
+            select(func.count())
+            .select_from(DocumentoChunk)
+            .where(DocumentoChunk.documento_id == doc_id)
+        ).scalar()
+        if not n_chunks:
+            # Corrida de indexacao: o upload enfileira a indexacao RAG, que pode
+            # nao ter terminado. Estamos no worker — indexar inline resolve.
+            from app.services.indexer import index_document_sync
+
+            logger.info(
+                "Anexo %s sem chunks — indexando inline antes do retrieval", nome
+            )
+            n_chunks = index_document_sync(str(doc_id))
+        if not n_chunks:
+            return fallback, aviso_corte
+
+        citantes = _requisitos_citantes(requisitos, nome)
+        vistos: set = set()
+        selecionados: list[DocumentoChunk] = []
+        for r in citantes:
+            query = (
+                f"{r.get('descricao_requisito') or ''} "
+                f"{r.get('valor_requerido') or ''}"
+            ).strip()
+            if not query:
+                continue
+            chunks = retrieve_relevant_chunks_sync(
+                query,
+                parecer_id,
+                db,
+                documento_ids=[doc_id],
+                top_k=_RAG_TOP_K_POR_REQUISITO,
+            )
+            for c in chunks:
+                if c.id in vistos:
+                    continue
+                vistos.add(c.id)
+                selecionados.append(c)
+            if len(selecionados) >= _RAG_MAX_CHUNKS_POR_ANEXO:
+                break
+
+        if not selecionados:
+            return fallback, aviso_corte
+
+        # Apresentacao em ordem de documento (pagina/posicao) — os marcadores de
+        # pagina alimentam a regra "pag. N" do prompt de amarracao.
+        selecionados = selecionados[:_RAG_MAX_CHUNKS_POR_ANEXO]
+        selecionados.sort(key=lambda c: (c.page_number or 0, c.chunk_index))
+        blocos = []
+        for c in selecionados:
+            rotulo = "TABELA" if c.chunk_type == "table" else "TEXTO"
+            pagina = f"[Pagina {c.page_number}] " if c.page_number else ""
+            blocos.append(f"{pagina}({rotulo})\n{c.conteudo}")
+        cabecalho = (
+            f"(Anexo extenso — {len(selecionados)} trechos relevantes "
+            "recuperados por busca semantica; paginas nos marcadores)"
+        )
+        logger.info(
+            "Anexo %s: %d trechos recuperados por RAG para %d requisitos citantes",
+            nome,
+            len(selecionados),
+            len(citantes),
+        )
+        return cabecalho + "\n\n" + "\n\n".join(blocos), None
+    except Exception:
+        logger.exception("Retrieval do anexo %s falhou — usando corte inicial", nome)
+        return fallback, aviso_corte
+
+
 def _resolver_amarracoes_sync(
     data: dict, anexos: list[tuple[str, str]], parecer: Parecer
 ) -> dict:
@@ -364,10 +509,7 @@ def _resolver_amarracoes_sync(
             ],
             ensure_ascii=False,
         )
-        anexos_secao = "\n\n".join(
-            f"### ANEXO: {nome}\n" + envelopar("DOC_ANEXO_ENGENHARIA", texto)
-            for nome, texto in anexos
-        )
+        anexos_secao = _montar_anexos_secao(anexos)
         user_content = AMARRACAO_USER_PROMPT_TEMPLATE.format(
             requisitos_json=requisitos_json,
             anexos_secao=anexos_secao,
@@ -590,27 +732,34 @@ def run_extracao_sync(
 
             # Passe 2 (ajuste #12): requisitos amarrados a documentos ANEXOS da
             # engenharia ("Sistema CFTV conforme TK-8") sao decompostos no
-            # desdobramento real do documento referenciado.
-            anexos, ilegiveis = _load_anexos_sync(db, parecer.id)
+            # desdobramento real do documento referenciado. Anexo extenso nao
+            # pula mais o passe: os trechos relevantes vem por busca semantica.
+            anexos, ilegiveis, ids_por_nome = _load_anexos_sync(db, parecer.id)
+            anexos_para_passe: list[tuple[str, str]] = []
             if anexos and data["requisitos"]:
                 relevantes = _anexos_citados(data["requisitos"], anexos)
-                total_chars = sum(len(texto) for _, texto in relevantes)
-                if relevantes and total_chars <= _ANEXOS_MAX_TOTAL:
+                if relevantes:
                     set_progress(
                         key, 55, "Desdobrando amarrações com os anexos...", "amarracoes"
                     )
-                    data = _resolver_amarracoes_sync(data, relevantes, parecer)
-                elif relevantes:
-                    logger.warning(
-                        "Amarracoes puladas: anexos citados somam %d chars (parecer %s)",
-                        total_chars,
-                        parecer_id,
-                    )
-                    data["resumo"] = (
-                        (data.get("resumo") or "").strip()
-                        + " | Atenção: anexos muito extensos — a decomposição "
-                        "automática de amarrações não foi executada."
-                    ).strip(" |")
+                    avisos_anexos: list[str] = []
+                    for nome, texto in relevantes:
+                        texto_final, aviso = _montar_texto_anexo_sync(
+                            db,
+                            parecer.id,
+                            nome,
+                            texto,
+                            ids_por_nome.get(nome),
+                            data["requisitos"],
+                        )
+                        anexos_para_passe.append((nome, texto_final))
+                        if aviso:
+                            avisos_anexos.append(aviso)
+                    data = _resolver_amarracoes_sync(data, anexos_para_passe, parecer)
+                    for aviso in avisos_anexos:
+                        data["resumo"] = (
+                            (data.get("resumo") or "").strip() + f" | {aviso}"
+                        ).strip(" |")
             if ilegiveis:
                 data["resumo"] = (
                     (data.get("resumo") or "").strip()
