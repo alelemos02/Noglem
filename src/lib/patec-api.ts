@@ -401,6 +401,9 @@ export interface ExtracaoProgressoResponse {
   percent: number | null;
   message: string | null;
   stage: string | null;
+  // Epoch (s) do último update — o worker mantém fresco via heartbeat (60s);
+  // usado para detectar progresso morto (worker caiu sem stage terminal).
+  updated_at: number | null;
 }
 
 export interface RequisitosAprovadosResponse {

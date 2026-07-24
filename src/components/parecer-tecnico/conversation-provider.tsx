@@ -74,6 +74,10 @@ export const PERFIL_OPTIONS: Array<{
   },
 ];
 
+// Progresso da extração sem update há mais que isto = task morta (o worker
+// bate heartbeat a cada 60s; 5 batidas perdidas não é atraso, é óbito).
+const EXTRACAO_STALE_S = 300;
+
 export const STAGE_LABELS: Record<string, string> = {
   queued: "Na fila",
   starting: "Iniciando",
@@ -119,7 +123,7 @@ interface ConversationContextValue {
     escopo?: string;
     feedback?: string;
     perfil?: string;
-  }) => Promise<void>;
+  }) => Promise<boolean>;
   salvarDraft: (requisitos: RequisitoBase[]) => Promise<void>;
   reabrirRequisitos: () => Promise<void>;
   confirmarComplementares: () => Promise<void>;
@@ -361,12 +365,24 @@ export function ConversationProvider({
       // step): a re-extração com feedback acontece já no passo requisitos.aprovar.
       poll = async () => {
         const p = await patecApi.requisitos.extracaoProgresso(parecerId);
-        const terminou = p.stage === "completed" || p.stage === "error";
+        // Progresso "morto": chave sumiu (TTL) ou worker parou de bater o
+        // heartbeat (60s) — sem isto, worker morto = barra eterna.
+        const idadeS =
+          typeof p.updated_at === "number"
+            ? Date.now() / 1000 - p.updated_at
+            : null;
+        const morto =
+          !p.stage || (idadeS !== null && idadeS > EXTRACAO_STALE_S);
+        const terminou = p.stage === "completed" || p.stage === "error" || morto;
         if (terminou) {
           setExtracting(false);
           if (p.stage === "completed") {
             // O resumo da extração viaja na mensagem do stage completed
             setRequisitosResumo(p.message ?? "");
+          } else if (morto) {
+            setActionError(
+              "A extração parou de responder. Tente extrair novamente."
+            );
           } else {
             setActionError(p.message ?? "Erro ao extrair requisitos");
           }
@@ -479,7 +495,9 @@ export function ConversationProvider({
 
   // Recuperação pós-reload: se o usuário der F5 com a extração rodando no
   // worker, o estado local `extracting` se perde — re-liga a partir do
-  // progresso ativo no Redis (stage não-terminal). Roda uma vez, ao montar.
+  // progresso ativo no Redis (stage não-terminal E fresco: o heartbeat do
+  // worker bate a cada 60s; sem frescor seria re-engatar um estado morto).
+  // Roda uma vez, ao montar.
   const extracaoRecoveryChecked = useRef(false);
   useEffect(() => {
     if (!snapshot || extracaoRecoveryChecked.current) return;
@@ -489,7 +507,12 @@ export function ConversationProvider({
     void patecApi.requisitos
       .extracaoProgresso(parecerId)
       .then((p) => {
-        if (p.stage && p.stage !== "completed" && p.stage !== "error") {
+        const idadeS =
+          typeof p.updated_at === "number"
+            ? Date.now() / 1000 - p.updated_at
+            : null;
+        const fresco = idadeS !== null && idadeS <= EXTRACAO_STALE_S;
+        if (p.stage && p.stage !== "completed" && p.stage !== "error" && fresco) {
           setExtracting(true);
         }
       })
@@ -543,24 +566,41 @@ export function ConversationProvider({
 
   // --- Requisitos (W1) ---
 
+  // Perfil da última extração disparada nesta sessão: a re-extração com
+  // feedback ("Pedir ajustes") não passa perfil, e sem esta memória ela caía
+  // no default "padrao" — cortando em 15 uma lista pedida como completa/custom.
+  const lastPerfilRef = useRef<PerfilAnalise | null>(null);
+
   const extrairRequisitos = useCallback(
-    async (opts?: { escopo?: string; feedback?: string; perfil?: string }) => {
+    async (opts?: {
+      escopo?: string;
+      feedback?: string;
+      perfil?: string;
+    }): Promise<boolean> => {
       setActionError("");
-      setExtracting(true);
+      const perfilEfetivo =
+        (opts?.perfil as PerfilAnalise | undefined) ??
+        lastPerfilRef.current ??
+        resolvedPerfil;
       try {
-        // 202: a extração roda no worker. `extracting=true` liga o polling de
-        // progresso, que desliga no stage completed/error, recupera o resumo
-        // (mensagem do completed) e ressincroniza o snapshot (draft no BD).
-        await patecApi.requisitos.extrair(
-          parecerId,
-          (opts?.perfil as PerfilAnalise | undefined) ?? resolvedPerfil,
-          { escopo: opts?.escopo, feedback: opts?.feedback }
-        );
+        await patecApi.requisitos.extrair(parecerId, perfilEfetivo, {
+          escopo: opts?.escopo,
+          feedback: opts?.feedback,
+        });
+        lastPerfilRef.current = perfilEfetivo;
+        // Só liga o polling APÓS o 202: o endpoint grava o stage "queued" no
+        // Redis antes de responder, então o primeiro tick nunca lê o stage
+        // terminal velho da extração anterior (corrida que encerrava a nova
+        // extração na hora com o resumo/draft antigos).
+        setExtracting(true);
+        return true;
       } catch (err) {
-        setExtracting(false);
+        // NÃO mexe em `extracting` aqui: um 409 significa que OUTRA extração
+        // está rodando — desligar mataria a barra de progresso dela.
         setActionError(
           err instanceof Error ? err.message : "Erro ao extrair requisitos"
         );
+        return false;
       }
     },
     [parecerId, resolvedPerfil]
@@ -965,18 +1005,31 @@ export function ConversationProvider({
         // O `escopo` que a JulIA capturou (ex.: "só o Cap. 2, todos os itens da
         // tabela") vai como ESCOPO da extração — ativa o recorte por seção e a
         // enumeração linha-a-linha SEM liberar o teto de itens do perfil.
-        await extrairRequisitos({
+        const iniciou = await extrairRequisitos({
           escopo: typeof action.escopo === "string" ? action.escopo : undefined,
           perfil: typeof action.perfil === "string" ? action.perfil : undefined,
         });
-        pushEphemeral({
-          kind: "event",
-          key: `acao-extrair-${Date.now()}`,
-          at: now,
-          title: "Extração de requisitos iniciada",
-          detail: "Acompanhe o progresso abaixo — a lista aparece para revisão ao concluir",
-          tone: "success",
-        });
+        pushEphemeral(
+          iniciou
+            ? {
+                kind: "event",
+                key: `acao-extrair-${Date.now()}`,
+                at: now,
+                title: "Extração de requisitos iniciada",
+                detail:
+                  "Acompanhe o progresso abaixo — a lista aparece para revisão ao concluir",
+                tone: "success",
+              }
+            : {
+                kind: "event",
+                key: `acao-extrair-erro-${Date.now()}`,
+                at: now,
+                title: "Não consegui iniciar a extração",
+                detail:
+                  "Veja o aviso acima — pode já haver uma extração em andamento.",
+                tone: "error",
+              }
+        );
       } else if (action.tipo === "confirmar_complementares") {
         // Backend já marcou os complementares como resolvidos; ressincroniza para
         // o fluxo avançar para a proposta do fornecedor.

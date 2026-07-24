@@ -11,6 +11,7 @@ fonte unica de verdade. A analise (R1) le exclusivamente os aprovados.
 import json
 import logging
 import re
+import threading
 import uuid
 from datetime import datetime
 
@@ -120,6 +121,8 @@ def _call_extracao_llm(
     perfil_analise: str,
     escopo: str | None,
     feedback: str | None,
+    *,
+    forcar_quer_tudo: bool | None = None,
 ) -> dict:
     escopo_section = (
         "\nRECORTE DE ESCOPO PEDIDO PELO USUARIO (aplicar a REGRA FORTE de "
@@ -135,7 +138,14 @@ def _call_extracao_llm(
     normalized_profile = normalize_analysis_profile(perfil_analise)
     max_itens = get_profile_max_itens(normalized_profile)
     profile_label = get_profile_label(normalized_profile)
-    quer_tudo = _quer_lista_completa(normalized_profile, feedback)
+    # `forcar_quer_tudo` congela a decisao do teto quando o feedback NAO vem do
+    # usuario (rodada de correcao do revisor): o texto do revisor pode conter
+    # "todos"/"tudo" e nao pode liberar o teto por substring.
+    quer_tudo = (
+        forcar_quer_tudo
+        if forcar_quer_tudo is not None
+        else _quer_lista_completa(normalized_profile, feedback)
+    )
     limit_instruction = (
         ""
         if quer_tudo
@@ -505,6 +515,13 @@ def _montar_texto_anexo_sync(
         return cabecalho + "\n\n" + "\n\n".join(blocos), None
     except Exception:
         logger.exception("Retrieval do anexo %s falhou — usando corte inicial", nome)
+        # Falha de SQL aborta a transacao da Session compartilhada — sem o
+        # rollback, o PROXIMO db.execute do fluxo falharia e derrubaria a
+        # extracao inteira em vez de degradar para o corte.
+        try:
+            db.rollback()
+        except Exception:
+            logger.exception("Rollback pos-falha de retrieval falhou (anexo %s)", nome)
         return fallback, aviso_corte
 
 
@@ -678,6 +695,36 @@ def progress_key_extracao(parecer_id) -> str:
     return f"extracao:{parecer_id}"
 
 
+class _ProgressoHeartbeat:
+    """Reemite o ultimo progresso a cada 60s enquanto uma etapa longa (chamada
+    LLM de varios minutos) roda sem novos set_progress. Mantem o `updated_at`
+    do payload fresco no Redis: o gate de re-disparo do endpoint (15min) e a
+    deteccao de progresso morto no frontend passam a ser confiaveis — task
+    viva nunca parece morta; task morta (SIGKILL/OOM) para de bater e expira
+    a tolerancia. Pare SEMPRE (stop) antes de gravar o stage terminal."""
+
+    def __init__(self, key: str):
+        self._key = key
+        self._stop = threading.Event()
+        self._last: tuple[int, str, str] | None = None
+        self._thread = threading.Thread(target=self._run, daemon=True)
+        self._thread.start()
+
+    def set(self, percent: int, message: str, stage: str) -> None:
+        self._last = (percent, message, stage)
+        set_progress(self._key, percent, message, stage)
+
+    def _run(self) -> None:
+        while not self._stop.wait(60):
+            last = self._last
+            if last is not None and not self._stop.is_set():
+                set_progress(self._key, *last)
+
+    def stop(self) -> None:
+        self._stop.set()
+        self._thread.join(timeout=5)
+
+
 def _salvar_draft_sync(db: Session, parecer: Parecer, itens: list[dict]) -> int:
     """Espelho sync de salvar_draft para o worker (fase ja validada no corpo)."""
     db.execute(
@@ -813,8 +860,13 @@ def run_extracao_sync(
     mensagem do stage `completed` — e por ele que o frontend o recupera.
     """
     key = progress_key_extracao(parecer_id)
+    hb = _ProgressoHeartbeat(key)
     try:
-        with Session(_get_sync_engine()) as db:
+        # expire_on_commit=False: fazemos commit entre as chamadas LLM para NAO
+        # segurar transacao aberta por minutos (idle-in-transaction em Postgres
+        # gerenciado mata a conexao e perderia todo o trabalho no commit final),
+        # sem perder os atributos ja carregados de `parecer`.
+        with Session(_get_sync_engine(), expire_on_commit=False) as db:
             parecer = db.execute(
                 select(Parecer).where(Parecer.id == uuid.UUID(parecer_id))
             ).scalar_one_or_none()
@@ -826,10 +878,11 @@ def run_extracao_sync(
                     "Apos a analise, use a revisao de especificacao."
                 )
 
-            set_progress(key, 5, "Lendo documentos de engenharia...", "lendo_documento")
+            hb.set(5, "Lendo documentos de engenharia...", "lendo_documento")
             texto_eng = _load_eng_text_sync(db, parecer.id)
+            db.commit()  # fecha a transacao de leitura antes do LLM longo
 
-            set_progress(key, 20, "Extraindo requisitos do documento...", "extraindo")
+            hb.set(20, "Extraindo requisitos do documento...", "extraindo")
             data = _call_extracao_llm(texto_eng, parecer, perfil_analise, escopo, feedback)
 
             # Passe 2 (ajuste #12): requisitos amarrados a documentos ANEXOS da
@@ -842,8 +895,8 @@ def run_extracao_sync(
             if anexos and data["requisitos"]:
                 relevantes = _anexos_citados(data["requisitos"], anexos)
                 if relevantes:
-                    set_progress(
-                        key, 55, "Desdobrando amarrações com os anexos...", "amarracoes"
+                    hb.set(
+                        55, "Desdobrando amarrações com os anexos...", "amarracoes"
                     )
                     for nome, texto in relevantes:
                         texto_final, aviso = _montar_texto_anexo_sync(
@@ -857,21 +910,22 @@ def run_extracao_sync(
                         anexos_para_passe.append((nome, texto_final))
                         if aviso:
                             avisos_anexos.append(aviso)
+                    db.commit()  # fecha a transacao dos SELECTs antes do LLM
                     data = _resolver_amarracoes_sync(data, anexos_para_passe, parecer)
+            db.commit()  # nada pendente; nao segurar transacao pela revisao
 
             # Revisao por um segundo LLM (auditor independente) + UMA rodada de
             # correcao. Falha em qualquer etapa mantem o resultado que ja existia
             # — a contagem final e garantida pelo corte em codigo dentro de
             # _call_extracao_llm, entao nao ha re-revisao.
-            set_progress(key, 75, "Revisando a lista com o agente revisor...", "revisando")
+            hb.set(75, "Revisando a lista com o agente revisor...", "revisando")
             veredito = _revisar_extracao_sync(
                 texto_eng, data, anexos_para_passe, parecer,
                 perfil_analise, escopo, feedback,
             )
             if veredito and veredito["problemas"]:
                 n_problemas = len(veredito["problemas"])
-                set_progress(
-                    key,
+                hb.set(
                     85,
                     f"Aplicando correções ({n_problemas} apontamento(s) do revisor)...",
                     "corrigindo",
@@ -884,17 +938,34 @@ def run_extracao_sync(
                         "pontos, mantendo o restante como esta:\n"
                         + json.dumps(veredito["problemas"], ensure_ascii=False)
                     ).strip()
-                    data_corrigida = _call_extracao_llm(
-                        texto_eng, parecer, perfil_analise, escopo, feedback_correcao
+                    # O texto do revisor pode conter "todos"/"tudo" — congela a
+                    # decisao do teto na do feedback ORIGINAL do usuario, senao a
+                    # correcao derrubaria a trava dura de max_itens.
+                    quer_tudo_original = _quer_lista_completa(
+                        normalize_analysis_profile(perfil_analise), feedback
                     )
-                    if anexos_para_passe and data_corrigida["requisitos"]:
+                    data_corrigida = _call_extracao_llm(
+                        texto_eng,
+                        parecer,
+                        perfil_analise,
+                        escopo,
+                        feedback_correcao,
+                        forcar_quer_tudo=quer_tudo_original,
+                    )
+                    if not data_corrigida.get("requisitos"):
+                        # Correcao que devolve lista vazia NUNCA substitui uma
+                        # lista boa — seria zerar o draft silenciosamente.
+                        raise RuntimeError(
+                            "rodada de correcao devolveu lista vazia"
+                        )
+                    if anexos_para_passe:
                         data_corrigida = _resolver_amarracoes_sync(
                             data_corrigida, anexos_para_passe, parecer
                         )
                     data = data_corrigida
                     data["resumo"] = (
                         (data.get("resumo") or "").strip()
-                        + f" | Lista revisada e corrigida automaticamente "
+                        + f" | Lista re-extraída após revisão automática "
                         f"({n_problemas} apontamento(s) do revisor)."
                     ).strip(" |")
                 except Exception:
@@ -925,11 +996,21 @@ def run_extracao_sync(
                     + f" | Atenção: anexo(s) sem texto legível: {', '.join(ilegiveis)}."
                 ).strip(" |")
 
+            # A extracao rodou por minutos com o usuario livre na UI: recarrega
+            # a fase DO BANCO antes de transicionar/salvar. Sem isso, um W1
+            # aprovado durante a extracao (fase ja em ANALISE) seria regredido
+            # para REQUISITOS pelo valor stale em memoria.
+            db.refresh(parecer)
+            if parecer.fase_caso not in _FASES_APROVACAO:
+                raise ValueError(
+                    f"Caso avancou para a fase {parecer.fase_caso} durante a "
+                    "extração — rascunho descartado para não sobrescrever o ciclo."
+                )
             if parecer.fase_caso == "SETUP":
                 parecer.fase_caso = "REQUISITOS"
 
             # Persiste o rascunho: sobrevive a recargas e fica visivel na tabela
-            set_progress(key, 95, "Salvando rascunho de requisitos...", "salvando")
+            hb.set(95, "Salvando rascunho de requisitos...", "salvando")
             salvos = _salvar_draft_sync(db, parecer, data["requisitos"])
             db.commit()
 
@@ -937,12 +1018,16 @@ def run_extracao_sync(
                 "Draft de requisitos salvo: %d itens (parecer %s)", salvos, parecer_id
             )
             resumo_final = (data.get("resumo") or "").strip() or "Extração concluída."
+            hb.stop()  # nunca deixar o heartbeat reescrever por cima do terminal
             set_progress(key, 100, resumo_final, "completed")
             return {"total_itens": salvos, "resumo": resumo_final}
     except Exception as e:
         logger.exception("Extracao de requisitos falhou (parecer %s)", parecer_id)
+        hb.stop()
         set_progress(key, 100, str(e)[:500] or "Erro na extração.", "error")
         return {"error": str(e)[:500]}
+    finally:
+        hb.stop()  # idempotente — garante o encerramento da thread
 
 
 def start_extracao_in_background(

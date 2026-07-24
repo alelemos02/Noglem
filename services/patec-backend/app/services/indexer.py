@@ -13,7 +13,7 @@ import asyncio
 import logging
 import uuid
 
-from sqlalchemy import create_engine, delete
+from sqlalchemy import create_engine, delete, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
@@ -60,6 +60,14 @@ def index_document_sync(documento_id: str) -> int:
     """
     engine = _get_sync_engine()
     with Session(engine) as db:
+        # Serializa indexacoes concorrentes do MESMO documento (task de upload
+        # vs indexacao inline do passe de amarracoes): sem o lock, dois
+        # delete+insert intercalados duplicam todos os chunks. O lock e liberado
+        # no fim da transacao (commit/rollback).
+        db.execute(
+            text("SELECT pg_advisory_xact_lock(hashtext(:doc_id))"),
+            {"doc_id": str(documento_id)},
+        )
         documento = db.get(Documento, uuid.UUID(documento_id))
         if not documento or not (documento.texto_extraido or "").strip():
             logger.warning(

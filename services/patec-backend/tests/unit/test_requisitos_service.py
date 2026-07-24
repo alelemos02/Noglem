@@ -182,6 +182,21 @@ class TestExtracaoNormalizacao:
 
         assert data["total_itens"] == 10
 
+    def test_forcar_quer_tudo_false_ignora_todos_no_feedback(self):
+        # Rodada de correção do revisor: o texto do revisor pode conter "todos"
+        # e NÃO pode liberar o teto — a decisão é congelada no feedback original.
+        with _mock_llm_response(self._resposta_com_n_itens(30)):
+            data = _call_extracao_llm(
+                "texto",
+                _ParecerStub(),
+                "custom_10",
+                None,
+                "REVISAO AUTOMATICA: o desdobramento omitiu todos os itens do cap 2",
+                forcar_quer_tudo=False,
+            )
+
+        assert data["total_itens"] == 10
+
     def test_dentro_do_teto_nao_anota_resumo(self):
         with _mock_llm_response(self._resposta_com_n_itens(3)):
             data = _call_extracao_llm("texto", _ParecerStub(), "custom_5", None, None)

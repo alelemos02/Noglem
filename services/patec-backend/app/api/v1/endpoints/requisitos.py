@@ -33,7 +33,9 @@ _VALID_PROFILE_RE = re.compile(
 
 # Progresso sem stage terminal e mais novo que isso bloqueia um novo disparo
 # (409). Mais velho = task morta (worker caiu sem gravar stage error) — libera.
-_EXTRACAO_STALE_SECONDS = 15 * 60
+# Pode ser curto porque o worker bate heartbeat a cada 60s durante as etapas
+# longas (task viva NUNCA envelhece além de ~2min).
+_EXTRACAO_STALE_SECONDS = 4 * 60
 _STAGES_TERMINAIS = {"completed", "error"}
 
 
@@ -99,9 +101,20 @@ async def extrair(
             )
 
     set_progress(key, 2, "Extração enfileirada para processamento...", "queued")
-    task_id = requisitos_service.start_extracao_in_background(
-        str(parecer_id), perfil, escopo, feedback
-    )
+    try:
+        task_id = requisitos_service.start_extracao_in_background(
+            str(parecer_id), perfil, escopo, feedback
+        )
+    except Exception:
+        # Broker fora do ar: sem isto a chave 'queued' recem-gravada travaria
+        # novas tentativas no 409 por 15min sem nenhuma task rodando.
+        set_progress(
+            key, 100, "Falha ao enfileirar a extração. Tente novamente.", "error"
+        )
+        raise HTTPException(
+            status_code=502,
+            detail="Falha ao enfileirar a extração. Tente novamente em instantes.",
+        )
 
     await registrar_auditoria(
         db, current_user, "extrair_requisitos", "parecer",
@@ -137,6 +150,7 @@ async def progresso_extracao(
         percent=progresso.get("percent"),
         message=progresso.get("message"),
         stage=progresso.get("stage"),
+        updated_at=progresso.get("updated_at"),
     )
 
 

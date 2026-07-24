@@ -47,6 +47,9 @@ class ExtracaoProgressoResponse(BaseModel):
     percent: int | None = None
     message: str | None = None
     stage: str | None = None
+    # Epoch (s) do ultimo set_progress — o worker mantem fresco via heartbeat;
+    # permite ao frontend detectar progresso "morto" (worker caiu sem terminal).
+    updated_at: float | None = None
 
 
 class AprovarRequisitosRequest(BaseModel):
