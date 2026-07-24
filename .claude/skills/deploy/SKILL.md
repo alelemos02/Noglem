@@ -29,7 +29,20 @@ Rode `git status` e `git diff --stat` e classifique o que vai subir:
 | Frontend Next.js (`src/`, etc.) | **Vercel** | push em `alelemos02/Noglem` |
 | `backend/` | **Railway** (backend central) | push em `main` |
 | `services/rag-backend/` | **Railway** (RAG) | push em `main` |
-| `services/patec-backend/` | **Railway** (PATEC) | push em `main` |
+| `services/patec-backend/` | **Railway** (PATEC: `patec-worker` e `conhecimento-api`) | push em `main` |
+| `services/patec-backend/` | **Railway** (PATEC: `patec-api`) | **MANUAL** — o push NÃO dispara este serviço |
+
+**⚠️ patec-api NÃO tem auto-deploy** (constatado em 2026-07-24: push atualizou
+worker e conhecimento-api, mas a API ficou 10 dias atrás). Sempre que
+`services/patec-backend/` mudar, após o push rode:
+
+```bash
+cd services/patec-backend && railway up --service patec-api --detach
+```
+
+e confirme com `railway deployment list --service patec-api` (topo = SUCCESS
+recente). A validação ao vivo é `curl https://patec-api-production.up.railway.app/health`
++ conferir que uma rota nova da mudança responde auth (401/403) e não 404.
 
 ## 1. Pré-checagem
 

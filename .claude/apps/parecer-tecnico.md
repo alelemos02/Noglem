@@ -201,8 +201,11 @@ revisando → corrigindo → salvando → completed/error`. **O resumo da extra�
 na mensagem do stage `completed`.** Frontend: `requisitos.extracaoProgresso()` no
 poller consolidado (ramo condicionado ao estado `extracting`, não ao step),
 ProgressWidget no lugar do spinner, recuperação pós-F5 lendo o progresso ativo.
-**Mexeu na extração = deploy do worker** (`railway up` no serviço worker), não só
-da patec-api.
+**Deploy do PATEC tem pegadinha**: o push em `main` auto-deploya `patec-worker`
+e `conhecimento-api`, mas **`patec-api` NÃO tem auto-deploy** — após o push,
+rode `railway up --service patec-api --detach` de `services/patec-backend/`
+(ver a skill /deploy). A extração roda no worker, mas os endpoints
+(202/progresso) vivem na patec-api: os DOIS precisam estar na mesma revisão.
 
 **Escopo ≠ feedback (2026-07-20):** `ExtracaoRequest` tem `escopo` (recorte
 "só o capítulo 2" — ativa a REGRA FORTE, NUNCA libera o teto) e `feedback`
